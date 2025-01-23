@@ -37,6 +37,15 @@ function MultiAgentRDEVecEnv(envs::Vector{<:AbstractRDEEnv{T}}) where {T<:Abstra
     
     MultiAgentRDEVecEnv{T}(envs, n_envs, n_agents_per_env, observations, rewards, dones, infos, reset_infos)
 end
+
+function Base.show(io::IO, env::MultiAgentRDEVecEnv)
+    println(io, "MultiAgentRDEVecEnv with $(env.n_envs) environments:")
+    for i in 1:env.n_envs
+        println(io, "  Environment $i:")
+        show(io, env.envs[i])
+    end
+end
+
 function env_indices(i::Int, n_agents_per_env::Int)
     return (1+(i-1)*n_agents_per_env):(i*n_agents_per_env)
 end

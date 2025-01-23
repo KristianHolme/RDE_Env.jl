@@ -26,6 +26,15 @@ mutable struct RDEEnvCache{T<:AbstractFloat}
     end
 end
 
+function Base.show(io::IO, cache::RDEEnvCache)
+    println(io, "RDEEnvCache{$(eltype(cache.circ_u))} with:")
+    println(io, "  circ_u: $(typeof(cache.circ_u)) of size $(length(cache.circ_u))")
+    println(io, "  circ_λ: $(typeof(cache.circ_λ)) of size $(length(cache.circ_λ))")
+    println(io, "  prev_u: $(typeof(cache.prev_u)) of size $(length(cache.prev_u))")
+    println(io, "  prev_λ: $(typeof(cache.prev_λ)) of size $(length(cache.prev_λ))")
+    println(io, "  action: $(typeof(cache.action)) of size $(size(cache.action))")
+end
+
 """
     RDEEnv{T<:AbstractFloat} <: AbstractRDEEnv
 
@@ -132,8 +141,17 @@ end
 RDEEnv(; kwargs...) = RDEEnv{Float32}(; kwargs...)
 RDEEnv(params::RDEParam{T}; kwargs...) where {T<:AbstractFloat} = RDEEnv{T}(; params=params, kwargs...)
 
-
-
+function Base.show(io::IO, env::RDEEnv)
+    println(io, "RDEEnv:")
+    println(io, "  dt: $(env.dt)")
+    println(io, "  t: $(env.t)")
+    println(io, "  truncated: $(env.truncated)")
+    println(io, "  terminated: $(env.terminated)")
+    println(io, "  action type: $(env.action_type)")
+    println(io, "  observation strategy: $(env.observation_strategy)")
+    println(io, "  reward type: $(env.reward_type)")
+    println(io, "  steps taken: $(env.steps_taken)")
+end
 
 
 """

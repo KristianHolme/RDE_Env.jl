@@ -34,6 +34,14 @@ function RDEVecEnv(envs::Vector{E}) where {E<:AbstractEnv}
     RDEVecEnv{E}(envs, n_envs, observations, rewards, dones, infos, reset_infos)
 end
 
+function Base.show(io::IO, env::RDEVecEnv)
+    println(io, "RDEVecEnv with $(env.n_envs) environments:")
+    for i in 1:env.n_envs
+        println(io, "  Environment $i:")
+        show(io, env.envs[i])
+    end
+end
+
 # CommonRLInterface implementations
 function CommonRLInterface.reset!(env::RDEVecEnv)
     Threads.@threads for i in 1:env.n_envs
@@ -48,8 +56,9 @@ function CommonRLInterface.observe(env::RDEVecEnv)
     copy(env.observations)
 end
 
-function CommonRLInterface.act!(env::RDEVecEnv, actions::AbstractMatrix)
+function CommonRLInterface.act!(env::RDEVecEnv, actions::AbstractArray)
     @debug "VecEnv act! starting threaded loop, actions size: $(size(actions))"
+    @assert size(actions, 2) == env.n_envs && size(actions, 1) == action_dim(env.envs[1].action_type) "Action size mismatch"
     Threads.@threads for i in 1:env.n_envs
         # Step environment
         env.rewards[i] = CommonRLInterface.act!(env.envs[i], @view actions[:, i])

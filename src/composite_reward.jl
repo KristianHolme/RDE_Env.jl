@@ -7,6 +7,10 @@ mutable struct CompositeReward <: AbstractRDEReward
     end
 end
 
+function Base.show(io::IO, rt::CompositeReward)
+    print(io, "CompositeReward(target_shock_count=$(rt.target_shock_count), lowest_action_magnitude_reward=$(rt.lowest_action_magnitude_reward))")
+end
+
 function set_reward!(env::AbstractRDEEnv{T}, rt::CompositeReward) where T
     N = env.prob.params.N
     dx = env.prob.x[2] - env.prob.x[1]

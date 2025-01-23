@@ -5,6 +5,10 @@
     lowest_action_magnitude_reward::Float32 = 1f0 #reward will be \in [lowest_action_magnitude_reward, 1]
 end
 
+function Base.show(io::IO, rt::MultiSectionReward)
+    print(io, "MultiSectionReward(n_sections=$(rt.n_sections), target_shock_count=$(rt.target_shock_count), lowest_action_magnitude_reward=$(rt.lowest_action_magnitude_reward))")
+end
+
 function set_reward!(env::AbstractRDEEnv, rt::MultiSectionReward)
     common_reward = global_reward(env, rt)
     N = env.prob.params.N
