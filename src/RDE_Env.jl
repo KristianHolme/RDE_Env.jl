@@ -71,7 +71,7 @@ module RDE_Env
             env = RDEEnv(;
                 dt=0.01,
                 params=RDEParam(;N=512, tmax=0.05),
-                τ_smooth=0.01,
+                τ_smooth=0.001,
                 momentum=0.8,
                 observation_strategy=FourierObservation(8),
                 action_type=ScalarPressureAction()
@@ -82,12 +82,13 @@ module RDE_Env
             # Test vectorized environment
             envs = [RDEEnv(;
                 dt=0.01,
+                τ_smooth=0.001,
                 params=RDEParam(;N=512, tmax=0.05),
                 observation_strategy=FourierObservation(8)
             ) for _ in 1:2]
             vec_env = RDEVecEnv(envs)
             reset!(vec_env)
-            actions = rand(2) .- 0.5
+            actions = rand(Float32, 1, 2) .- 0.5
             step!(vec_env, actions)
             
         catch e
