@@ -25,6 +25,18 @@ struct PolicyRunData{T<:AbstractFloat}
     states::Vector{Vector{T}} #states at each time point
 end
 
+function Base.show(io::IO, data::PolicyRunData)
+    println(io, "PolicyRunData:")
+    println(io, "  action_ts: $(typeof(data.action_ts))")
+    println(io, "  ss: $(typeof(data.ss))")
+    println(io, "  u_ps: $(typeof(data.u_ps))")
+    println(io, "  rewards: $(typeof(data.rewards))")
+    println(io, "  energy_bal: $(typeof(data.energy_bal))")
+    println(io, "  chamber_p: $(typeof(data.chamber_p))")
+    println(io, "  state_ts: $(typeof(data.state_ts))")
+    println(io, "  states: $(typeof(data.states))")
+end
+
 """
     run_policy(π::Policy, env::RDEEnv{T}; saves_per_action=1) where {T}
 
@@ -60,9 +72,11 @@ function run_policy(π::Policy, env::RDEEnv{T}; saves_per_action=1) where {T}
     
     # Initialize vectors for action data
     ts = Vector{T}(undef, max_steps)
-    ss = Vector{T}(undef, max_steps)
-    u_ps = Vector{T}(undef, max_steps)
-    rewards = Vector{T}(undef, max_steps)
+    ss, u_ps = get_init_control_data(env, env.action_type, max_steps)
+    # ss = Vector{T}(undef, max_steps)
+    # u_ps = Vector{T}(undef, max_steps)
+    rewards = get_init_rewards(env, env.reward_type, max_steps)
+    # rewards = Vector{T}(undef, max_steps)
     
     # For saves_per_action > 0, we need more space for state data
     max_state_points = if saves_per_action == 0
@@ -81,9 +95,23 @@ function run_policy(π::Policy, env::RDEEnv{T}; saves_per_action=1) where {T}
     
     function log!(step)
         ts[step] = env.t
-        ss[step] = mean(env.prob.cache.s_current)
-        u_ps[step] = mean(env.prob.cache.u_p_current)
-        rewards[step] = env.reward
+        if ss isa Matrix
+            section_length = size(ss, 1)
+            ss[:,step] = section_reduction(env.prob.cache.s_current, section_length)
+        elseif ss isa Vector
+            ss[step] = mean(env.prob.cache.s_current)
+        end
+        if u_ps isa Matrix
+            section_length = size(u_ps, 1)
+            u_ps[:,step] = section_reduction(env.prob.cache.u_p_current, section_length)
+        elseif u_ps isa Vector
+            u_ps[step] = mean(env.prob.cache.u_p_current)
+        end
+        if rewards isa Matrix
+            rewards[:,step] = env.reward
+        else
+            rewards[step] = env.reward
+        end
 
         step_states = env.prob.sol.u[2:end]
         step_ts = env.prob.sol.t[2:end]
@@ -135,6 +163,35 @@ function run_policy(π::Policy, env::RDEEnv{T}; saves_per_action=1) where {T}
     return PolicyRunData{T}(ts, ss, u_ps, rewards, energy_bal, chamber_p, state_ts, states)
 end
 
+
+function get_init_rewards(env::RDEEnv{T}, reward_type::AbstractRDEReward, max_steps::Int) where {T}
+    return Vector{T}(undef, max_steps)
+end
+
+function get_init_rewards(env::RDEEnv{T}, reward_type::MultiSectionReward, max_steps::Int) where {T}
+    # n_section = reward_type.n_sections
+    return Matrix{T}(undef, reward_type.n_sections, max_steps)
+end
+
+function get_init_control_data(env::RDEEnv{T}, action_type::AbstractActionType, max_steps::Int) where {T}
+    return Vector{T}(undef, max_steps), Vector{T}(undef, max_steps)
+end
+
+function get_init_control_data(env::RDEEnv{T}, action_type::VectorPressureAction, max_steps::Int) where {T}
+    return Vector{T}(undef, max_steps), Matrix{T}(undef, action_type.n_sections, max_steps)
+end
+
+function section_reduction(v::Vector{T}, sections::Int) where {T}
+    N = length(v)
+    if N % sections != 0
+        @warn "Vector length $N is not divisible by section length $sections"
+    end
+    section_length = Int(round(N // sections))
+    m = reshape(v, section_length, :)
+    return mean(m, dims=1)
+end
+
+
 """
     ConstantRDEPolicy <: Policy
 
@@ -179,8 +236,8 @@ SinusoidalRDEPolicy(env::RDEEnv{T}; w_1::T=1.0, w_2::T=2.0) where {T<:AbstractFl
 """
 struct SinusoidalRDEPolicy{T<:AbstractFloat} <: Policy
     env::RDEEnv{T}
-    w_1::T  # Phase speed parameter for first action
-    w_2::T  # Phase speed parameter for second action
+    w_1::T  
+    w_2::T  
 
     function SinusoidalRDEPolicy(env::RDEEnv{T}; w_1::T=1.0, w_2::T=2.0) where {T<:AbstractFloat}
         new{T}(env, w_1, w_2)
