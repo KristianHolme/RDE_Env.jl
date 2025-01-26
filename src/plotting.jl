@@ -72,8 +72,8 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
     u_data = @lift(states[$time_idx][1:N])
     λ_data = @lift(states[$time_idx][N+1:end])
     # @info sparse_to_dense_ind(ts, sparse_ts, 3)
-    s = @lift(ss[sparse_to_dense_ind(state_ts, action_ts, $time_idx)])
-    u_p = @lift(u_ps[sparse_to_dense_ind(state_ts, action_ts, $time_idx)])
+    # s = @lift(ss[sparse_to_dense_ind(state_ts, action_ts, $time_idx)])
+    # u_p = @lift(u_ps[sparse_to_dense_ind(state_ts, action_ts, $time_idx)])
     
     fig = Figure(size=(1000,900))
     upper_area = fig[1,1] = GridLayout()
@@ -88,10 +88,7 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
 
     RDE.main_plotting(main_layout, env.prob.x, u_data, λ_data, 
                 env.prob.params;
-                # u_max = Observable(maximum([maximum(spst) for spst in sparse_states])),
                 u_max = Observable(3),
-                s = s,
-                u_p = u_p,
                 include_subfunctions = false,
                 kwargs...)
 
@@ -125,8 +122,16 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
     hidespines!(ax_u_p)
     hidexdecorations!(ax_u_p)
     hideydecorations!(ax_u_p, ticklabels=false, ticks=false, label=false)
-    lines!(ax_s, action_ts, ss, color=:forestgreen)
-    lines!(ax_u_p, action_ts, u_ps, color=:royalblue)
+    if ss isa Matrix
+        lines!.(Ref(ax_s), Ref(action_ts), collect(eachrow(ss)), color=:forestgreen)
+    else
+        lines!(ax_s, action_ts, ss, color=:forestgreen)
+    end
+    if u_ps isa Matrix
+        lines!.(Ref(ax_u_p), Ref(action_ts), collect(eachrow(u_ps)), color=:royalblue)
+    else
+        lines!(ax_u_p, action_ts, u_ps, color=:royalblue)
+    end
     #Time indicator
     vlines!(ax_s, fine_time, color=:green, alpha=0.5)
 
