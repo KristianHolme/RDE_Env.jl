@@ -31,14 +31,7 @@ module RDE_Env
     export CompositeObservation
     export compute_observation, get_init_observation
 
-    # Environment
-    include("RLenv.jl")
-    export RDEEnv, RDEEnvCache
-    export reset!, act!, observe, state, terminated
-
-    include("policies.jl")
-    export Policy, StepwiseRDEPolicy, RandomRDEPolicy, ConstantRDEPolicy, SinusoidalRDEPolicy
-
+   
 
     # Rewards
     include("rewards.jl")
@@ -47,6 +40,14 @@ module RDE_Env
     export AbstractRDEReward, ShockSpanReward, ShockPreservingReward, ShockPreservingSymmetryReward
     export CompositeReward, ConstantTargetReward, MultiSectionReward
     export set_reward!, set_termination_reward!
+
+    # Environment
+    include("RLenv.jl")
+    export RDEEnv, RDEEnvCache
+    export reset!, act!, observe, state, terminated
+
+    include("policies.jl")
+    export Policy, StepwiseRDEPolicy, RandomRDEPolicy, ConstantRDEPolicy, SinusoidalRDEPolicy
 
     # Vectorized environments
     include("vec_env.jl")
