@@ -122,15 +122,15 @@ using POMDPs
             # Run policy and collect rewards
             CommonRLInterface.reset!(env)
             rewards = Float32[]
-            truncations = Int[]
+            terminations = Int[]
             for step in 1:n_steps
                 if env.done
                     break
                 end
                 action = POMDPs.action(policy, nothing)
                 push!(rewards, CommonRLInterface.act!(env, action))
-                if env.truncated
-                    push!(truncations, step)
+                if env.terminated
+                    push!(terminations, step)
                 end
                 @test !isnan(env.reward)
                 @test !isinf(env.reward)
@@ -142,8 +142,8 @@ using POMDPs
             @test !any(isinf.(rewards))
             
             # Test truncation behavior
-            if !isempty(truncations)
-                @test all(rewards[truncations] .≈ -2.0)  # All truncated steps should have penalty reward
+            if !isempty(terminations)
+                @test all(rewards[terminations] .≈ -2.0)  # All truncated steps should have penalty reward
             end
         end
 
