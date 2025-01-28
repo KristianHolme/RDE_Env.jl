@@ -16,9 +16,9 @@ Container for data collected during policy execution.
 """
 struct PolicyRunData{T<:AbstractFloat}
     action_ts::Vector{T} #time points for actions
-    ss::Vector{T} #control parameter s at each action
-    u_ps::Vector{T} #control parameter u_p at each action
-    rewards::Vector{T} #rewards at each action
+    ss::Union{Vector{T}, Vector{Vector{T}}} #control parameter s at each action
+    u_ps::Union{Vector{T}, Vector{Vector{T}}} #control parameter u_p at each action
+    rewards::Union{Vector{T}, Vector{Vector{T}}} #rewards at each action
     energy_bal::Vector{T} #energy balance at each state
     chamber_p::Vector{T} #chamber pressure at each state
     state_ts::Vector{T} #time points for states
@@ -69,6 +69,7 @@ function run_policy(π::Policy, env::RDEEnv{T}; saves_per_action=1) where {T}
     reset!(env)
     dt = env.dt
     max_steps = ceil(env.prob.params.tmax / dt) + 1 |> Int
+    N = env.prob.params.N
     
     # Initialize vectors for action data
     ts = Vector{T}(undef, max_steps)
@@ -95,20 +96,20 @@ function run_policy(π::Policy, env::RDEEnv{T}; saves_per_action=1) where {T}
     
     function log!(step)
         ts[step] = env.t
-        if ss isa Matrix
-            section_length = size(ss, 1)
-            ss[:,step] = section_reduction(env.prob.cache.s_current, section_length)
-        elseif ss isa Vector
+        if eltype(ss) <: AbstractVector
+            sections = env.action_type.n_sections
+            ss[step] = section_reduction(env.prob.cache.s_current, sections)
+        elseif eltype(ss) <: Number
             ss[step] = mean(env.prob.cache.s_current)
         end
-        if u_ps isa Matrix
-            section_length = size(u_ps, 1)
-            u_ps[:,step] = section_reduction(env.prob.cache.u_p_current, section_length)
-        elseif u_ps isa Vector
+        if eltype(u_ps) <: AbstractVector
+            sections = env.action_type.n_sections
+            u_ps[step] = section_reduction(env.prob.cache.u_p_current, sections)
+        elseif eltype(u_ps) <: Number
             u_ps[step] = mean(env.prob.cache.u_p_current)
         end
-        if rewards isa Matrix
-            rewards[:,step] = env.reward
+        if eltype(rewards) <: AbstractVector
+            rewards[step] = env.reward
         else
             rewards[step] = env.reward
         end
@@ -170,7 +171,7 @@ end
 
 function get_init_rewards(env::RDEEnv{T}, reward_type::MultiSectionReward, max_steps::Int) where {T}
     # n_section = reward_type.n_sections
-    return Matrix{T}(undef, reward_type.n_sections, max_steps)
+    return Vector{Vector{T}}(undef, max_steps)
 end
 
 function get_init_control_data(env::RDEEnv{T}, action_type::AbstractActionType, max_steps::Int) where {T}
@@ -178,7 +179,7 @@ function get_init_control_data(env::RDEEnv{T}, action_type::AbstractActionType, 
 end
 
 function get_init_control_data(env::RDEEnv{T}, action_type::VectorPressureAction, max_steps::Int) where {T}
-    return Vector{T}(undef, max_steps), Matrix{T}(undef, action_type.n_sections, max_steps)
+    return Vector{T}(undef, max_steps), Vector{Vector{T}}(undef, max_steps)
 end
 
 function section_reduction(v::Vector{T}, sections::Int) where {T}
@@ -188,7 +189,7 @@ function section_reduction(v::Vector{T}, sections::Int) where {T}
     end
     section_length = Int(round(N // sections))
     m = reshape(v, section_length, :)
-    return mean(m, dims=1)
+    return vec(mean(m, dims=1))
 end
 
 

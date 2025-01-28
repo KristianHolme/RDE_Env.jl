@@ -15,7 +15,7 @@ module RDE_Env
     using POMDPs
     using POMDPTools
     using PrecompileTools
-
+    using ProgressMeter
 
     include("types.jl")
     # Actions

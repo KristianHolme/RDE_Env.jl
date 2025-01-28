@@ -58,6 +58,7 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
     states = data.states
 
     N = env.prob.params.N
+    L = env.prob.params.L
 
 
     function sparse_to_dense_ind(dense_time::Vector, sparse_time::Vector, dense_ind::Int)
@@ -108,7 +109,11 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
     # Add rewards and shocks
     ax_rewards = Axis(metrics_action_area[1,2], title="Rewards", ylabel="r")
     hidexdecorations!(ax_rewards, grid = false)
-    lines!(ax_rewards, action_ts, rewards)
+    if eltype(rewards) <: AbstractVector
+        lines!.(Ref(ax_rewards), Ref(action_ts), eachrow(stack(rewards)), color=:orange)
+    else
+        lines!(ax_rewards, action_ts, rewards, color=:orange)
+    end
     vlines!(ax_rewards, fine_time, color=:green, alpha=0.5)
 
     ax_shocks = Axis(metrics_action_area[2,2], title="Shocks", xlabel="t")
@@ -122,13 +127,13 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
     hidespines!(ax_u_p)
     hidexdecorations!(ax_u_p)
     hideydecorations!(ax_u_p, ticklabels=false, ticks=false, label=false)
-    if ss isa Matrix
-        lines!.(Ref(ax_s), Ref(action_ts), collect(eachrow(ss)), color=:forestgreen)
+    if eltype(ss) <: AbstractVector
+        lines!.(Ref(ax_s), Ref(action_ts), eachrow(stack(ss)), color=:forestgreen)
     else
         lines!(ax_s, action_ts, ss, color=:forestgreen)
     end
-    if u_ps isa Matrix
-        lines!.(Ref(ax_u_p), Ref(action_ts), collect(eachrow(u_ps)), color=:royalblue)
+    if eltype(u_ps) <: AbstractVector
+        lines!.(Ref(ax_u_p), Ref(action_ts), eachrow(stack(u_ps)), color=:royalblue)
     else
         lines!(ax_u_p, action_ts, u_ps, color=:royalblue)
     end
@@ -139,6 +144,18 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
     if player_controls
         play_ctrl_area = fig[4,1] = GridLayout()
         RDE.plot_controls(play_ctrl_area, time_idx, length(state_ts))
+    end
+
+    if eltype(u_ps) <: AbstractVector
+        u_p_t = @lift(u_ps[$time_idx])
+        max_u_p = maximum(maximum.(u_ps))
+        ax_live_u_p = Axis(main_layout[1,1][3,1], ylabel="u_p", yaxisposition = :left,
+                            limits=((nothing, (-0.1,max(max_u_p*1.1, 1e-3)))))
+        sections = env.action_type.n_sections
+        section_size = N ÷ sections
+        start = 1 + section_size ÷ 2
+        u_p_pts = collect(start:section_size:N)/N * L
+        stairs!(ax_live_u_p, u_p_pts, u_p_t, step=:center)
     end
 
     fig
