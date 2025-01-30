@@ -203,17 +203,29 @@ function plot_shifted_history(us::AbstractArray, x::AbstractArray,
     linkxaxes!(ax, ax2)
 
     if u_ps !== nothing
+        u_p_minimum = minimum(minimum.(u_ps))
+        u_p_maximum = maximum(maximum.(u_ps))
         ax3 = Axis(fig[end+1,1], xlabel="t", ylabel="u_p", 
-                    limits=(nothing, (minimum(u_ps)-0.05, maximum(u_ps)*1.05)),
+                    limits=(nothing, (u_p_minimum-0.05, u_p_maximum*1.05)),
                     xautolimitmargin=(0.0, 0.0))
-        lines!(ax3, ts, u_ps)
+        if eltype(u_ps) <: AbstractVector
+            lines!.(Ref(ax3), Ref(ts), eachrow(stack(u_ps)), color=:royalblue)
+        else
+            lines!(ax3, ts, u_ps, color=:royalblue)
+        end
         linkxaxes!(ax, ax3)
     end
     if rewards !== nothing
+        rewards_minimum = minimum(minimum.(rewards))
+        rewards_maximum = maximum(maximum.(rewards))
         ax4 = Axis(fig[end+1,1], xlabel="t", ylabel="Reward", 
-                    limits=(nothing, (minimum(rewards)-0.05, maximum(rewards)*1.05)),
+                    limits=(nothing, (rewards_minimum-0.05, rewards_maximum*1.05)),
                     xautolimitmargin=(0.0, 0.0))
-        lines!(ax4, ts, rewards)
+        if eltype(rewards) <: AbstractVector
+            lines!.(Ref(ax4), Ref(ts), eachrow(stack(rewards)), color=:orange)
+        else
+            lines!(ax4, ts, rewards, color=:orange)
+        end
         linkxaxes!(ax, ax4)
     end
     autolimits!(ax) 
