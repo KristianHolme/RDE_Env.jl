@@ -46,6 +46,9 @@ The plot includes:
 function plot_policy_data(env::RDEEnv, data::PolicyRunData; 
         time_idx = Observable(1),
         player_controls=true,
+        rewards_and_shocks=true,
+        energy_and_chamber_pressure=true,
+        control_history=true,
         kwargs...)
     action_ts = data.action_ts
     ss = data.ss
@@ -61,7 +64,7 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
     L = env.prob.params.L
 
 
-    function sparse_to_dense_ind(dense_time::Vector, sparse_time::Vector, dense_ind::Int)
+    function dense_to_sparse_ind(dense_time::Vector, sparse_time::Vector, dense_ind::Int)
         dense_val = dense_time[dense_ind]
         sparse_ind = argmin(abs.(sparse_time .- dense_val))
         # @info sparse_ind dense_ind sp_val "$(dense_time[dense_ind])"
@@ -79,13 +82,16 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
     fig = Figure(size=(1000,900))
     upper_area = fig[1,1] = GridLayout()
     main_layout = fig[2,1] = GridLayout()
-    metrics_action_area = fig[3,1] = GridLayout()
+    if control_history || energy_and_chamber_pressure || rewards_and_shocks
+        metrics_action_area = fig[3,1] = GridLayout()
+    end
     
+    if control_history || energy_and_chamber_pressure || rewards_and_shocks
+        rowsize!(fig.layout, 3, Auto(0.5))
+    end
 
-    rowsize!(fig.layout, 3, Auto(0.5))
 
-
-    label = Label(upper_area[1,1], text=@lift("Time: $(round(state_ts[$time_idx], digits=2))"), tellwidth=false)
+    label = Label(upper_area[1,1], text=@lift("Time: $(round(state_ts[$time_idx], digits=1))"), tellwidth=false)
 
     RDE.main_plotting(main_layout, env.prob.x, u_data, λ_data, 
                 env.prob.params;
@@ -95,50 +101,65 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
 
 
     fine_time = @lift(state_ts[$time_idx])
-    
-    ax_eb = Axis(metrics_action_area[1,1], title="Energy balance", ylabel="Ė")
-    hidexdecorations!(ax_eb, grid = false)
-    lines!(ax_eb, state_ts, energy_bal)
-    vlines!(ax_eb, fine_time, color=:green, alpha=0.5)
+    sparse_time_idx = @lift(dense_to_sparse_ind(state_ts, action_ts, $time_idx))
+    sparse_time = @lift(action_ts[$sparse_time_idx])
 
-    # Add chamber pressure
-    ax_cp = Axis(metrics_action_area[2,1], title="Chamber pressure", xlabel="t", ylabel="̄u²")
-    lines!(ax_cp, state_ts, chamber_p)
-    vlines!(ax_cp, fine_time, color=:green, alpha=0.5)
+    if energy_and_chamber_pressure
+        ax_eb = Axis(metrics_action_area[1,end+1], title="Energy balance", ylabel="Ė")
+        hidexdecorations!(ax_eb, grid = false)
+        lines!(ax_eb, state_ts, energy_bal)
+        vlines!(ax_eb, fine_time, color=:green, alpha=0.5)
 
-    # Add rewards and shocks
-    ax_rewards = Axis(metrics_action_area[1,2], title="Rewards", ylabel="r")
-    hidexdecorations!(ax_rewards, grid = false)
-    if eltype(rewards) <: AbstractVector
-        lines!.(Ref(ax_rewards), Ref(action_ts), eachrow(stack(rewards)), color=:orange)
-    else
-        lines!(ax_rewards, action_ts, rewards, color=:orange)
+        # Add chamber pressure
+        ax_cp = Axis(metrics_action_area[2,end], title="Chamber pressure", xlabel="t", ylabel="̄u²")
+        lines!(ax_cp, state_ts, chamber_p)
+        vlines!(ax_cp, fine_time, color=:green, alpha=0.5)
     end
-    vlines!(ax_rewards, fine_time, color=:green, alpha=0.5)
 
-    ax_shocks = Axis(metrics_action_area[2,2], title="Shocks", xlabel="t")
-    dx = env.prob.x[2] - env.prob.x[1]
-    us, = RDE.split_sol(states)
-    lines!(ax_shocks, state_ts, RDE.count_shocks.(us, dx))
-    vlines!(ax_shocks, fine_time, color=:green, alpha=0.5)
+    if rewards_and_shocks
+        # Add rewards and shocks
+        ax_rewards = Axis(metrics_action_area[1,end+1], title="Rewards", ylabel="r")
+        hidexdecorations!(ax_rewards, grid = false)
+        if eltype(rewards) <: AbstractVector
+            lines!.(Ref(ax_rewards), Ref(action_ts), eachrow(stack(rewards)), color=:orange)
+        else
+            lines!(ax_rewards, action_ts, rewards, color=:orange)
+        end
+        vlines!(ax_rewards, fine_time, color=:green, alpha=0.5)
 
-    ax_s = Axis(metrics_action_area[1:2,3], xlabel="t", ylabel="s", yticklabelcolor=:forestgreen)
-    ax_u_p = Axis(metrics_action_area[1:2,3], ylabel="u_p", yaxisposition = :right, yticklabelcolor=:royalblue)
-    hidespines!(ax_u_p)
-    hidexdecorations!(ax_u_p)
-    hideydecorations!(ax_u_p, ticklabels=false, ticks=false, label=false)
-    if eltype(ss) <: AbstractVector
-        lines!.(Ref(ax_s), Ref(action_ts), eachrow(stack(ss)), color=:forestgreen)
-    else
-        lines!(ax_s, action_ts, ss, color=:forestgreen)
+        ax_shocks = Axis(metrics_action_area[2,end], title="Shocks", xlabel="t")
+        dx = env.prob.x[2] - env.prob.x[1]
+        us, = RDE.split_sol(states)
+        lines!(ax_shocks, state_ts, RDE.count_shocks.(us, dx))
+        vlines!(ax_shocks, fine_time, color=:green, alpha=0.5)
     end
-    if eltype(u_ps) <: AbstractVector
-        lines!.(Ref(ax_u_p), Ref(action_ts), eachrow(stack(u_ps)), color=:royalblue)
-    else
-        lines!(ax_u_p, action_ts, u_ps, color=:royalblue)
+
+    if energy_and_chamber_pressure || rewards_and_shocks
+        ax_s = Axis(metrics_action_area[1:2,end+1], xlabel="t", ylabel="s", yticklabelcolor=:forestgreen)
+        ax_u_p = Axis(metrics_action_area[1:2,end], ylabel="u_p", yaxisposition = :right, yticklabelcolor=:royalblue)
+    elseif control_history
+        # When other plots are disabled, use the full width
+        ax_s = Axis(metrics_action_area[1:2,1], xlabel="t", ylabel="s", yticklabelcolor=:forestgreen)
+        ax_u_p = Axis(metrics_action_area[1:2,1], ylabel="u_p", yaxisposition = :right, yticklabelcolor=:royalblue)
     end
-    #Time indicator
-    vlines!(ax_s, fine_time, color=:green, alpha=0.5)
+
+    if control_history
+        hidespines!(ax_u_p)
+        hidexdecorations!(ax_u_p)
+        hideydecorations!(ax_u_p, ticklabels=false, ticks=false, label=false)
+        if eltype(ss) <: AbstractVector
+            lines!.(Ref(ax_s), Ref(action_ts), eachrow(stack(ss)), color=:forestgreen)
+        else
+            lines!(ax_s, action_ts, ss, color=:forestgreen)
+        end
+        if eltype(u_ps) <: AbstractVector
+            lines!.(Ref(ax_u_p), Ref(action_ts), eachrow(stack(u_ps)), color=:royalblue)
+        else
+            lines!(ax_u_p, action_ts, u_ps, color=:royalblue)
+        end
+        #Time indicator
+        vlines!(ax_s, fine_time, color=:darkgreen, alpha=0.5)
+    end
 
     # @show length(sparse_ts)
     if player_controls
@@ -147,7 +168,7 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
     end
 
     if eltype(u_ps) <: AbstractVector
-        u_p_t = @lift(u_ps[$time_idx])
+        u_p_t = @lift(u_ps[$sparse_time_idx])
         max_u_p = maximum(maximum.(u_ps))
         ax_live_u_p = Axis(main_layout[1,1][3,1], ylabel="u_p", yaxisposition = :left,
                             limits=((nothing, (-0.1,max(max_u_p*1.1, 1e-3)))))
@@ -157,7 +178,7 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
         u_p_pts = collect(start:section_size:N)/N * L
         stairs!(ax_live_u_p, u_p_pts, u_p_t, step=:center)
     end
-
+    resize_to_layout!(fig)
     fig
 end
 
@@ -238,10 +259,10 @@ function animate_policy(π::P, env::RDEEnv; kwargs...) where P <: Policy
 end
 
 function animate_policy_data(data::PolicyRunData, env::RDEEnv;
-        dir_path="./videos/", fname="policy", format=".mp4", fps=25)
+        dir_path="./videos/", fname="policy", format=".mp4", fps=25, kwargs...)
     time_idx = Observable(1)
     time_steps = length(data.state_ts)
-    fig = plot_policy_data(env, data; time_idx, player_controls=false, show_mouse_vlines=false)
+    fig = plot_policy_data(env, data; time_idx, player_controls=false, show_mouse_vlines=false, kwargs...)
 
     if !isdir(dir_path)
         mkdir(dir_path)
