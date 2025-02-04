@@ -38,7 +38,7 @@ module RDE_Env
     include("composite_reward.jl")
     include("multisection_reward.jl")
     export AbstractRDEReward, ShockSpanReward, ShockPreservingReward, ShockPreservingSymmetryReward
-    export CompositeReward, ConstantTargetReward, MultiSectionReward
+    export CompositeReward, ConstantTargetReward, MultiSectionReward, PeriodicityReward
     export set_reward!, set_termination_reward!
 
     # Environment

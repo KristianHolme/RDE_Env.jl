@@ -65,4 +65,11 @@ mutable struct ShockPreservingSymmetryReward <: AbstractRDEReward
     end
 end
 
+mutable struct PeriodicityReward <: AbstractRDEReward
+    cache::Vector{Float32}
+    function PeriodicityReward(;N::Int = 512)
+        return new(zeros(Float32, N))
+    end
+end
+
 function set_reward! end

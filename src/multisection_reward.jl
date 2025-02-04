@@ -67,11 +67,11 @@ function global_reward(env::AbstractRDEEnv{T}, rt::MultiSectionReward) where T
         shock_spacing_reward = 1f0
     end
 
-    @debug "span_reward: $span_reward" 
-    @debug "abs_span_reward: $abs_span_reward"
-    @debug "periodicity_reward: $periodicity_reward"
-    @debug "shock_reward: $shock_reward"
-    @debug "shock_spacing_reward: $shock_spacing_reward"
+    @logmsg LogLevel(-10000) "span_reward: $span_reward" 
+    @logmsg LogLevel(-10000) "abs_span_reward: $abs_span_reward"
+    @logmsg LogLevel(-10000) "periodicity_reward: $periodicity_reward"
+    @logmsg LogLevel(-10000) "shock_reward: $shock_reward"
+    @logmsg LogLevel(-10000) "shock_spacing_reward: $shock_spacing_reward"
 
     reward = abs_span_reward*exp(span_reward + periodicity_reward + shock_reward + shock_spacing_reward - 4f0)
     return reward

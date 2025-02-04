@@ -174,26 +174,26 @@ Take an action in the environment.
 """
 function CommonRLInterface.act!(env::RDEEnv{T}, action; saves_per_action::Int=0) where {T<:AbstractFloat}
     # Store current state before taking action
-    @debug "Starting act! for environment on thread $(Threads.threadid())"
+    @logmsg LogLevel(-10000) "Starting act! for environment on thread $(Threads.threadid())"
     N = env.prob.params.N
     env.cache.prev_u .= @view env.state[1:N]
     env.cache.prev_λ .= @view env.state[N+1:end]
-    @debug "Stored previous state" prev_u=env.cache.prev_u prev_λ=env.cache.prev_λ
+    @logmsg LogLevel(-10000) "Stored previous state" prev_u=env.cache.prev_u prev_λ=env.cache.prev_λ
 
     t_span = (env.t, env.t + env.dt)
-    @debug "Set time span" t_span=t_span
+    @logmsg LogLevel(-10000) "Set time span" t_span=t_span
     env.prob.cache.control_time = env.t
-    @debug "Set control time" control_time=env.prob.cache.control_time
+    @logmsg LogLevel(-10000) "Set control time" control_time=env.prob.cache.control_time
 
     prev_controls = [env.prob.cache.s_current, env.prob.cache.u_p_current]
     c = [env.prob.cache.s_current, env.prob.cache.u_p_current]
     c_max = [env.smax, env.u_pmax]
-    @debug "Initial controls" prev_controls=prev_controls c_max=c_max
+    @logmsg LogLevel(-10000) "Initial controls" prev_controls=prev_controls c_max=c_max
 
     normalized_standard_actions = get_standard_normalized_actions(env.action_type, action)
     env.cache.action[:,1] = normalized_standard_actions[1]
     env.cache.action[:,2] = normalized_standard_actions[2]
-    @debug "Normalized actions" actions=normalized_standard_actions
+    @logmsg LogLevel(-10000) "Normalized actions" actions=normalized_standard_actions
     
     for i in 1:2
         a = normalized_standard_actions[i]
@@ -210,7 +210,7 @@ function CommonRLInterface.act!(env::RDEEnv{T}, action; saves_per_action::Int=0)
     env.prob.cache.s_current = c[1]
     env.prob.cache.u_p_current = c[2]
 
-    @debug "taking action $action at time $(env.t), controls: $(mean.(prev_controls)) to $(mean.(c))"
+    @logmsg LogLevel(-10000) "taking action $action at time $(env.t), controls: $(mean.(prev_controls)) to $(mean.(c))"
 
     prob_ode = ODEProblem{true, SciMLBase.FullSpecialize}(RDE_RHS!, env.state, t_span, env.prob)
     
@@ -227,7 +227,7 @@ function CommonRLInterface.act!(env::RDEEnv{T}, action; saves_per_action::Int=0)
         if any(isnan.(sol.u[end]))
             @warn "NaN state detected"
         end
-        @debug "ODE solver failed, controls: $(mean(prev_controls)) to $(mean(c))"
+        @logmsg LogLevel(-10000) "ODE solver failed, controls: $(mean(prev_controls)) to $(mean(c))"
         env.terminated = true
         env.done = true
         set_termination_reward!(env, -2.0)
@@ -246,13 +246,13 @@ function CommonRLInterface.act!(env::RDEEnv{T}, action; saves_per_action::Int=0)
         if env.terminated #maybe reward caused termination
             set_termination_reward!(env, -2.0)
             env.done = true;
-            @debug "termination caused by reward"
+            @logmsg LogLevel(-10000) "termination caused by reward"
             @logmsg LogLevel(-500) "terminated, t=$(env.t), from reward?"
         end
         if env.t ≥ env.prob.params.tmax
             env.done = true
             env.truncated = true 
-            @debug "tmax reached, t=$(env.t)"
+            @logmsg LogLevel(-10000) "tmax reached, t=$(env.t)"
             env.info["Truncation.Reason"] = "tmax reached"
         end
     end
@@ -262,7 +262,7 @@ function CommonRLInterface.act!(env::RDEEnv{T}, action; saves_per_action::Int=0)
         @info "info: $(env.info)"
         @logmsg LogLevel(-500) sol.retcode
     end
-    @debug "End of step reward: $(env.reward)"
+    @logmsg LogLevel(-10000) "End of step reward: $(env.reward)"
     return env.reward
 end
 
@@ -282,7 +282,7 @@ end
 
 function CommonRLInterface.clone(env::RDEEnv)
     env2 = deepcopy(env)
-    @debug "env is copied!"
+    @logmsg LogLevel(-10000) "env is copied!"
     return env2
 end
 

@@ -52,11 +52,11 @@ function set_reward!(env::AbstractRDEEnv{T}, rt::CompositeReward) where T
         shock_spacing_reward = 1f0
     end
 
-    @debug "span_reward: $span_reward" typeof(span_reward)
-    @debug "abs_span_reward: $abs_span_reward" typeof(abs_span_reward)
-    @debug "periodicity_reward: $periodicity_reward" typeof(periodicity_reward)
-    @debug "shock_reward: $shock_reward" typeof(shock_reward)
-    @debug "shock_spacing_reward: $shock_spacing_reward" typeof(shock_spacing_reward)
+    @logmsg LogLevel(-10000) "span_reward: $span_reward" typeof(span_reward)
+    @logmsg LogLevel(-10000) "abs_span_reward: $abs_span_reward" typeof(abs_span_reward)
+    @logmsg LogLevel(-10000) "periodicity_reward: $periodicity_reward" typeof(periodicity_reward)
+    @logmsg LogLevel(-10000) "shock_reward: $shock_reward" typeof(shock_reward)
+    @logmsg LogLevel(-10000) "shock_spacing_reward: $shock_spacing_reward" typeof(shock_spacing_reward)
 
     reward = abs_span_reward*exp(span_reward + periodicity_reward + shock_reward + shock_spacing_reward - 4f0)
     if rt.lowest_action_magnitude_reward < 1f0

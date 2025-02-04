@@ -57,12 +57,12 @@ function CommonRLInterface.observe(env::RDEVecEnv)
 end
 
 function CommonRLInterface.act!(env::RDEVecEnv, actions::AbstractArray)
-    @debug "VecEnv act! starting threaded loop, actions size: $(size(actions))"
+    @logmsg LogLevel(-10000) "VecEnv act! starting threaded loop, actions size: $(size(actions))"
     @assert size(actions, 2) == env.n_envs && size(actions, 1) == action_dim(env.envs[1].action_type) "Action size mismatch"
     Threads.@threads for i in 1:env.n_envs
         # Step environment
         env.rewards[i] = CommonRLInterface.act!(env.envs[i], @view actions[:, i])
-        @debug "VecEnv act! done with env $i, starting termination check"
+        @logmsg LogLevel(-10000) "VecEnv act! done with env $i, starting termination check"
         # Check termination
         if CommonRLInterface.terminated(env.envs[i])
             env.dones[i] = true
@@ -77,9 +77,9 @@ function CommonRLInterface.act!(env::RDEVecEnv, actions::AbstractArray)
         end
         
         # Update observation
-        @debug "VecEnv act! done with env $i, starting observation update"
+        @logmsg LogLevel(-10000) "VecEnv act! done with env $i, starting observation update"
         env.observations[:, i] .= CommonRLInterface.observe(env.envs[i])
-        @debug "VecEnv act! done with env $i, observation update done"
+        @logmsg LogLevel(-10000) "VecEnv act! done with env $i, observation update done"
     end
     
     copy(env.rewards)
@@ -105,9 +105,9 @@ Step all environments in parallel with the given actions.
 Returns (observations, rewards, dones, infos) matching the Stable Baselines API.
 """
 function step!(env::RDEVecEnv, actions::AbstractArray)
-    @debug "VecEnv act!, actions size: $(size(actions))"
+    @logmsg LogLevel(-10000) "VecEnv act!, actions size: $(size(actions))"
     CommonRLInterface.act!(env, actions)
-    @debug "VecEnv act! done, returning stuff"
+    @logmsg LogLevel(-10000) "VecEnv act! done, returning stuff"
     return (
         CommonRLInterface.observe(env),
         copy(env.rewards),

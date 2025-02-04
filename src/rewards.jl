@@ -78,3 +78,44 @@ function set_reward!(env::AbstractRDEEnv, rt::ShockPreservingSymmetryReward)
     env.reward = 1f0 - (maxerr-0.1f0)/0.5f0
     nothing
 end
+
+function set_reward!(env::AbstractRDEEnv, rt::PeriodicityReward)
+    u, = RDE.split_sol_view(env.state)
+    N = env.prob.params.N
+    dx = env.prob.x[2] - env.prob.x[1]
+    L = env.prob.params.L
+    shock_inds = RDE.shock_indices(u, dx)
+    shocks = length(shock_inds)
+
+    cache = rt.cache
+    if shocks > 1
+        shift_steps = N ÷ shocks
+        errs = zeros(shocks-1)
+        for i in 1:(shocks-1)
+            cache .= u
+            RDE.apply_periodic_shift!(cache, u, shift_steps * i)
+            errs[i] = norm(u - cache)/sqrt(N)
+        end
+        maxerr = maximum(errs)
+        periodicity_reward = 1f0 - (max(maxerr-0.08f0, 0f0)/sqrt(3f0))
+    else
+        periodicity_reward = 1f0
+    end
+
+
+    if shocks > 1
+        optimal_spacing = L/shocks
+        shock_spacing = mod.(RDE.periodic_diff(shock_inds), N) .* dx
+        shock_spacing_reward = 1f0 - maximum(abs.((shock_spacing .- optimal_spacing)./optimal_spacing))
+    else
+        shock_spacing_reward = 1f0
+    end
+
+
+    env.reward = (Float32(periodicity_reward + shock_spacing_reward))/2f0
+    nothing
+end
+
+function Base.show(io::IO, rt::PeriodicityReward)
+    print(io, "PeriodicityReward(N=$(length(rt.cache)))")
+end

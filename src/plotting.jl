@@ -104,21 +104,25 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
     sparse_time_idx = @lift(dense_to_sparse_ind(state_ts, action_ts, $time_idx))
     sparse_time = @lift(action_ts[$sparse_time_idx])
 
+    metrics_action_Area_plots = 0
+
     if energy_and_chamber_pressure
-        ax_eb = Axis(metrics_action_area[1,end+1], title="Energy balance", ylabel="Ė")
+        metrics_action_Area_plots += 1
+        ax_eb = Axis(metrics_action_area[1,metrics_action_Area_plots], title="Energy balance", ylabel="Ė")
         hidexdecorations!(ax_eb, grid = false)
         lines!(ax_eb, state_ts, energy_bal)
         vlines!(ax_eb, fine_time, color=:green, alpha=0.5)
 
         # Add chamber pressure
-        ax_cp = Axis(metrics_action_area[2,end], title="Chamber pressure", xlabel="t", ylabel="̄u²")
+        ax_cp = Axis(metrics_action_area[2,metrics_action_Area_plots], title="Chamber pressure", xlabel="t", ylabel="̄u²")
         lines!(ax_cp, state_ts, chamber_p)
         vlines!(ax_cp, fine_time, color=:green, alpha=0.5)
     end
 
     if rewards_and_shocks
+        metrics_action_Area_plots += 1
         # Add rewards and shocks
-        ax_rewards = Axis(metrics_action_area[1,end+1], title="Rewards", ylabel="r")
+        ax_rewards = Axis(metrics_action_area[1,metrics_action_Area_plots], title="Rewards", ylabel="r")
         hidexdecorations!(ax_rewards, grid = false)
         if eltype(rewards) <: AbstractVector
             lines!.(Ref(ax_rewards), Ref(action_ts), eachrow(stack(rewards)), color=:orange)
@@ -127,20 +131,17 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
         end
         vlines!(ax_rewards, fine_time, color=:green, alpha=0.5)
 
-        ax_shocks = Axis(metrics_action_area[2,end], title="Shocks", xlabel="t")
+        ax_shocks = Axis(metrics_action_area[2,metrics_action_Area_plots], title="Shocks", xlabel="t")
         dx = env.prob.x[2] - env.prob.x[1]
         us, = RDE.split_sol(states)
         lines!(ax_shocks, state_ts, RDE.count_shocks.(us, dx))
         vlines!(ax_shocks, fine_time, color=:green, alpha=0.5)
     end
 
-    if energy_and_chamber_pressure || rewards_and_shocks
-        ax_s = Axis(metrics_action_area[1:2,end+1], xlabel="t", ylabel="s", yticklabelcolor=:forestgreen)
-        ax_u_p = Axis(metrics_action_area[1:2,end], ylabel="u_p", yaxisposition = :right, yticklabelcolor=:royalblue)
-    elseif control_history
-        # When other plots are disabled, use the full width
-        ax_s = Axis(metrics_action_area[1:2,1], xlabel="t", ylabel="s", yticklabelcolor=:forestgreen)
-        ax_u_p = Axis(metrics_action_area[1:2,1], ylabel="u_p", yaxisposition = :right, yticklabelcolor=:royalblue)
+    if energy_and_chamber_pressure
+        metrics_action_Area_plots += 1
+        ax_s = Axis(metrics_action_area[1:2,metrics_action_Area_plots], xlabel="t", ylabel="s", yticklabelcolor=:forestgreen)
+        ax_u_p = Axis(metrics_action_area[1:2,metrics_action_Area_plots], ylabel="u_p", yaxisposition = :right, yticklabelcolor=:royalblue)
     end
 
     if control_history
@@ -203,10 +204,10 @@ Create a space-time plot of the solution in a moving reference frame.
   - Pressure values over time (if provided)
 """
 function plot_shifted_history(us::AbstractArray, x::AbstractArray,
-         ts::AbstractArray, c::Union{Real, AbstractArray}; u_ps=nothing, rewards=nothing, target_shock_count=nothing)
+         ts::AbstractArray, c::Union{Real, AbstractArray}=1.65; u_ps=nothing, rewards=nothing, target_shock_count=nothing)
     shifted_us = Array.(RDE.shift_inds(us, x, ts, c))
 
-    fig = Figure(size=(1800, 600))
+    fig = Figure(size=(1200, 600))
     ax = Axis(fig[1,1], title="u(x+ct, t)", xlabel="t",
             ylabel="x", yzoomlock=true, ypanlock=true,
             limits=(extrema(ts), extrema(x)), xautolimitmargin=(0.0, 0.0))
@@ -251,6 +252,11 @@ function plot_shifted_history(us::AbstractArray, x::AbstractArray,
     end
     autolimits!(ax) 
     fig
+end
+
+function plot_shifted_history(data::PolicyRunData, x::AbstractArray, c::Union{Real, AbstractArray}=1.65; kwargs...)
+    us, = RDE.split_sol(data.states)
+    plot_shifted_history(us, x, data.state_ts, c; u_ps=data.u_ps, rewards=data.rewards, kwargs...)
 end
 
 function animate_policy(π::P, env::RDEEnv; kwargs...) where P <: Policy

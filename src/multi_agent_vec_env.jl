@@ -72,13 +72,13 @@ function CommonRLInterface.act!(env::MultiAgentRDEVecEnv, actions::AbstractArray
     if length(actions) == num_envs*num_agents
         actions = reshape(actions, num_agents, num_envs)
     end
-    @debug "VecEnv act! starting threaded loop, actions size: $(size(actions))"
+    @logmsg LogLevel(-10000) "VecEnv act! starting threaded loop, actions size: $(size(actions))"
     Threads.@threads for i in 1:num_envs
         # Step environment
         env_inds = env_indices(i, num_agents)
-        @debug "action size: $(size(actions))"
+        @logmsg LogLevel(-10000) "action size: $(size(actions))"
         env.rewards[env_inds] = CommonRLInterface.act!(env.envs[i], @view actions[:, i])
-        @debug "VecEnv act! done with env $i, starting termination check"
+        @logmsg LogLevel(-10000) "VecEnv act! done with env $i, starting termination check"
         # Check termination
         if CommonRLInterface.terminated(env.envs[i])
             env.dones[env_inds] .= true
@@ -95,9 +95,9 @@ function CommonRLInterface.act!(env::MultiAgentRDEVecEnv, actions::AbstractArray
         end
         
         # Update observation
-        @debug "VecEnv act! done with env $i, starting observation update"
+        @logmsg LogLevel(-10000) "VecEnv act! done with env $i, starting observation update"
         env.observations[:, env_indices(i, num_agents)] .= CommonRLInterface.observe(env.envs[i])
-        @debug "VecEnv act! done with env $i, observation update done"
+        @logmsg LogLevel(-10000) "VecEnv act! done with env $i, observation update done"
     end
     
     copy(env.rewards)
@@ -115,9 +115,9 @@ Step all environments in parallel with the given actions.
 Returns (observations, rewards, dones, infos) matching the Stable Baselines API.
 """
 function step!(env::MultiAgentRDEVecEnv, actions::AbstractArray)
-    @debug "VecEnv act!, actions size: $(size(actions))"
+    @logmsg LogLevel(-10000) "VecEnv act!, actions size: $(size(actions))"
     CommonRLInterface.act!(env, actions)
-    @debug "VecEnv act! done, returning stuff"
+    @logmsg LogLevel(-10000) "VecEnv act! done, returning stuff"
     return (
         CommonRLInterface.observe(env),
         copy(env.rewards),
