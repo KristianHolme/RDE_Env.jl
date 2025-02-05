@@ -25,8 +25,6 @@ module RDE_Env
 
     # Observation strategies
     include("observations.jl")
-    include("composite_observation.jl")
-    include("multisection_observation.jl")
     export AbstractObservationStrategy, FourierObservation, StateObservation, SampledStateObservation, MultiSectionObservation
     export CompositeObservation
     export compute_observation, get_init_observation
@@ -35,8 +33,6 @@ module RDE_Env
 
     # Rewards
     include("rewards.jl")
-    include("composite_reward.jl")
-    include("multisection_reward.jl")
     export AbstractRDEReward, ShockSpanReward, ShockPreservingReward, ShockPreservingSymmetryReward
     export CompositeReward, ConstantTargetReward, MultiSectionReward, PeriodicityReward
     export set_reward!, set_termination_reward!

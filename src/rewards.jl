@@ -119,3 +119,129 @@ end
 function Base.show(io::IO, rt::PeriodicityReward)
     print(io, "PeriodicityReward(N=$(length(rt.cache)))")
 end
+
+
+@kwdef mutable struct MultiSectionReward <: AbstractRDEReward
+    n_sections::Int = 4
+    target_shock_count::Int = 3
+    cache::Vector{Float32} = zeros(Float32, 512)
+    lowest_action_magnitude_reward::Float32 = 1f0 #reward will be \in [lowest_action_magnitude_reward, 1]
+    span_reward::Bool = false
+end
+
+function Base.show(io::IO, rt::MultiSectionReward)
+    print(io, "MultiSectionReward(n_sections=$(rt.n_sections), target_shock_count=$(rt.target_shock_count), lowest_action_magnitude_reward=$(rt.lowest_action_magnitude_reward))")
+end
+
+function set_reward!(env::AbstractRDEEnv, rt::MultiSectionReward)
+    common_reward = global_reward(env, rt; span_reward=rt.span_reward)
+    N = env.prob.params.N
+    n_sections = rt.n_sections
+    points_per_section = N ÷ n_sections
+    first_element_in_sections = collect(1:points_per_section:N)
+    
+    α = rt.lowest_action_magnitude_reward
+    full_engine_pressure_action = env.cache.action[:, 2]
+    section_actions = full_engine_pressure_action[first_element_in_sections]
+    action_magnitudes = abs.(section_actions)
+    individual_modifiers = 1f0 .- action_magnitudes .* (1f0-α)
+    individual_rewards = common_reward .* individual_modifiers
+    env.reward = individual_rewards
+    nothing
+end
+
+function global_reward(env::AbstractRDEEnv{T}, rt::MultiSectionReward;span_reward=false) where T
+    N = env.prob.params.N
+    dx = env.prob.x[2] - env.prob.x[1]
+    L = env.prob.params.L
+    u = env.state[1:N]
+    target_shock_count = rt.target_shock_count  
+    
+    span = maximum(u) - minimum(u)
+    if span_reward
+        target_span = 2f0 .- 0.3f0.*target_shock_count
+        span_reward = 1f0 - (max(target_span - span, 0f0)/target_span)
+    else
+        span_reward = 1f0
+    end
+    abs_span_punishment_threshold = 0.08f0
+    abs_span_reward = RDE.smooth_g(span/abs_span_punishment_threshold)
+ 
+
+    if target_shock_count > 1
+        errs = zeros(T, target_shock_count-1)
+        cache = rt.cache
+        shift_steps = N ÷ target_shock_count
+        for i in 1:(target_shock_count-1)
+            cache .= u
+            RDE.apply_periodic_shift!(cache, u, shift_steps * i)
+            errs[i] = norm(u - cache)/sqrt(N)
+        end
+        maxerr = maximum(errs)
+        periodicity_reward = 1f0 - (max(maxerr-0.08f0, 0f0)/sqrt(3f0))
+    else
+        periodicity_reward = 1f0
+    end
+
+    shock_inds = RDE.shock_indices(u, dx)
+    shocks = T(length(shock_inds))
+    shock_reward = 1f0 - (abs(shocks - target_shock_count)/target_shock_count)
+    if shocks > 0
+        # optimal_spacing = L/shocks
+        optimal_spacing = L/target_shock_count
+        shock_spacing = mod.(RDE.periodic_diff(shock_inds), N) .* dx
+        shock_spacing_reward = 1f0 - maximum(abs.((shock_spacing .- optimal_spacing)./optimal_spacing))
+    else
+        shock_spacing_reward = 1f0
+    end
+
+    @logmsg LogLevel(-10000) "span_reward: $span_reward" 
+    @logmsg LogLevel(-10000) "abs_span_reward: $abs_span_reward"
+    @logmsg LogLevel(-10000) "periodicity_reward: $periodicity_reward"
+    @logmsg LogLevel(-10000) "shock_reward: $shock_reward"
+    @logmsg LogLevel(-10000) "shock_spacing_reward: $shock_spacing_reward"
+
+    reward = abs_span_reward*exp(span_reward + periodicity_reward + shock_reward + shock_spacing_reward - 4f0)
+    return reward
+end
+
+
+mutable struct CompositeReward <: AbstractRDEReward
+    target_shock_count::Int
+    cache::Vector{Float32}
+    lowest_action_magnitude_reward::Float32 #reward will be \in [lowest_action_magnitude_reward, 1]
+    span_reward::Bool
+    function CompositeReward(;target_shock_count::Int=4, lowest_action_magnitude_reward::Float32=1f0, span_reward::Bool=false)
+        return new(target_shock_count, zeros(Float32, 512), lowest_action_magnitude_reward, span_reward)
+    end
+end
+
+function Base.show(io::IO, rt::CompositeReward)
+    print(io, "CompositeReward(target_shock_count=$(rt.target_shock_count), lowest_action_magnitude_reward=$(rt.lowest_action_magnitude_reward))")
+end
+
+function set_reward!(env::AbstractRDEEnv{T}, rt::CompositeReward) where T
+    N = env.prob.params.N
+
+    reward = global_reward(env, rt; span_reward=rt.span_reward)
+    if rt.lowest_action_magnitude_reward < 1f0
+        action_magnitude_inv = 1f0 - maximum(abs.(env.cache.action))
+        α = rt.lowest_action_magnitude_reward
+        reward *= α + (1f0 - α)*action_magnitude_inv
+    end
+    env.reward = reward
+    nothing
+end
+
+
+struct ConstantTargetReward <: AbstractRDEReward
+    target::Float32
+    function ConstantTargetReward(;target::Float32=0.64f0)
+        return new(target)
+    end
+end
+
+function set_reward!(env::AbstractRDEEnv{T}, rt::ConstantTargetReward) where T
+    env.reward = -abs(rt.target - mean(env.prob.cache.u_p_current)) + T(1.0)
+    nothing
+end
