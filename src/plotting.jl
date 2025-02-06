@@ -204,7 +204,10 @@ Create a space-time plot of the solution in a moving reference frame.
   - Pressure values over time (if provided)
 """
 function plot_shifted_history(us::AbstractArray, x::AbstractArray,
-         ts::AbstractArray, c::Union{Real, AbstractArray}=1.65; u_ps=nothing, rewards=nothing, target_shock_count=nothing)
+                            ts::AbstractArray, c::Union{Real, AbstractArray}=1.65;
+                            u_ps=nothing, rewards=nothing, 
+                            target_shock_count=nothing,
+                            action_ts=ts)
     shifted_us = Array.(RDE.shift_inds(us, x, ts, c))
 
     fig = Figure(size=(1200, 600))
@@ -231,9 +234,9 @@ function plot_shifted_history(us::AbstractArray, x::AbstractArray,
                     limits=(nothing, (u_p_minimum-0.05, u_p_maximum*1.05)),
                     xautolimitmargin=(0.0, 0.0))
         if eltype(u_ps) <: AbstractVector
-            lines!.(Ref(ax3), Ref(ts), eachrow(stack(u_ps)), color=:royalblue)
+            lines!.(Ref(ax3), Ref(action_ts), eachrow(stack(u_ps)), color=:royalblue)
         else
-            lines!(ax3, ts, u_ps, color=:royalblue)
+            lines!(ax3, action_ts, u_ps, color=:royalblue)
         end
         linkxaxes!(ax, ax3)
     end
@@ -244,9 +247,9 @@ function plot_shifted_history(us::AbstractArray, x::AbstractArray,
                     limits=(nothing, (rewards_minimum-0.05, rewards_maximum*1.05)),
                     xautolimitmargin=(0.0, 0.0))
         if eltype(rewards) <: AbstractVector
-            lines!.(Ref(ax4), Ref(ts), eachrow(stack(rewards)), color=:orange)
+            lines!.(Ref(ax4), Ref(action_ts), eachrow(stack(rewards)), color=:orange)
         else
-            lines!(ax4, ts, rewards, color=:orange)
+            lines!(ax4, action_ts, rewards, color=:orange)
         end
         linkxaxes!(ax, ax4)
     end
@@ -254,9 +257,20 @@ function plot_shifted_history(us::AbstractArray, x::AbstractArray,
     fig
 end
 
-function plot_shifted_history(data::PolicyRunData, x::AbstractArray, c::Union{Real, AbstractArray}=1.65; kwargs...)
+function plot_shifted_history(data::PolicyRunData, x::AbstractArray, c=:auto; kwargs...)
     us, = RDE.split_sol(data.states)
-    plot_shifted_history(us, x, data.state_ts, c; u_ps=data.u_ps, rewards=data.rewards, kwargs...)
+    saves_per_action = length(data.state_ts) ÷ length(data.action_ts)
+    if c == :auto
+        counts = RDE.count_shocks.(us, x[2] - x[1])
+        u_ps = data.u_ps
+        if saves_per_action > 1
+            u_ps = repeat(u_ps, inner=saves_per_action)
+        end
+        speeds = RDE.predict_speed.(u_ps, counts)
+        c = speeds[1:end-1]
+    end
+    plot_shifted_history(us, x, data.state_ts, c; 
+        u_ps=data.u_ps, rewards=data.rewards, action_ts=data.action_ts, kwargs...)
 end
 
 function animate_policy(π::P, env::RDEEnv; kwargs...) where P <: Policy
