@@ -1,4 +1,5 @@
 using RDE
+using RDE_Env
 using GLMakie
 
 env = RDEEnv(dt=0.1f0);
