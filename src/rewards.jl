@@ -121,7 +121,7 @@ function Base.show(io::IO, rt::PeriodicityReward)
 end
 
 
-@kwdef mutable struct MultiSectionReward <: AbstractRDEReward
+@kwdef mutable struct MultiSectionReward <: CachedCompositeReward
     n_sections::Int = 4
     target_shock_count::Int = 3
     cache::Vector{Float32} = zeros(Float32, 512)
@@ -150,7 +150,7 @@ function set_reward!(env::AbstractRDEEnv, rt::MultiSectionReward)
     nothing
 end
 
-function global_reward(env::AbstractRDEEnv{T}, rt::MultiSectionReward;span_reward=false) where T
+function global_reward(env::AbstractRDEEnv{T}, rt::CachedCompositeReward;span_reward=false) where T
     N = env.prob.params.N
     dx = env.prob.x[2] - env.prob.x[1]
     L = env.prob.params.L
@@ -206,7 +206,7 @@ function global_reward(env::AbstractRDEEnv{T}, rt::MultiSectionReward;span_rewar
 end
 
 
-mutable struct CompositeReward <: AbstractRDEReward
+mutable struct CompositeReward <: CachedCompositeReward
     target_shock_count::Int
     cache::Vector{Float32}
     lowest_action_magnitude_reward::Float32 #reward will be \in [lowest_action_magnitude_reward, 1]

@@ -42,6 +42,8 @@ function get_init_observation end
 
 abstract type AbstractRDEReward end 
 
+abstract type CachedCompositeReward <: AbstractRDEReward end
+
 @kwdef struct ShockSpanReward <: AbstractRDEReward 
     target_shock_count::Int = 3
     span_scale::Float32 = 4.0f0
