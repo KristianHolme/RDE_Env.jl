@@ -198,6 +198,7 @@ end
 
 @kwdef mutable struct CompositeObservation <: AbstractObservationStrategy
     fft_terms::Int = 8
+    target_shock_count::Int = 4
 end
 
 function compute_observation(env::AbstractRDEEnv, strategy::CompositeObservation)
@@ -219,7 +220,7 @@ function compute_observation(env::AbstractRDEEnv, strategy::CompositeObservation
     dx = env.prob.x[2] - env.prob.x[1]
     max_shocks = 6f0
     normalized_shocks = RDE.count_shocks(current_u, dx)/max_shocks
-    normalized_target_shock_count = env.reward_type.target_shock_count/max_shocks
+    normalized_target_shock_count = strategy.target_shock_count/max_shocks
     span = maximum(current_u) - minimum(current_u)
     normalized_span = span/3f0
     return vcat(u_obs, 

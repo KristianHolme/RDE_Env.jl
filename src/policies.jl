@@ -1,4 +1,3 @@
-
 """
     PolicyRunData{T<:AbstractFloat}
 
@@ -347,6 +346,46 @@ function POMDPs.action(π::RandomRDEPolicy, state)
         return action2
     else
         @error "Unknown action type $(typeof(π.env.action_type)) for RandomRDEPolicy"
+    end
+end
+
+"""
+    DelayedPolicy{T<:AbstractFloat} <: Policy
+
+A policy wrapper that delays the start of another policy until a specified time.
+Before the start time, returns zero actions.
+
+# Fields
+- `policy::Policy`: The policy to be delayed
+- `start_time::T`: Time at which to start using the wrapped policy
+- `env::RDEEnv{T}`: RDE environment (needed to access current time)
+
+# Example
+```julia
+base_policy = RandomRDEPolicy(env)
+delayed_policy = DelayedPolicy(base_policy, 100.0f0, env)
+```
+"""
+struct DelayedPolicy{T<:AbstractFloat} <: Policy
+    policy::Policy
+    start_time::T
+    env::RDEEnv{T}
+end
+
+function POMDPs.action(π::DelayedPolicy, s)
+    t = π.env.t
+    if t < π.start_time
+        if π.env.action_type isa ScalarAreaScalarPressureAction
+            return [0.0f0, 0.0f0]
+        elseif π.env.action_type isa ScalarPressureAction
+            return 0.0f0
+        elseif π.env.action_type isa VectorPressureAction
+            return zeros(Float32, π.env.action_type.n_sections)
+        else
+            @error "Unknown action type $(typeof(π.env.action_type)) for DelayedPolicy"
+        end
+    else
+        return POMDPs.action(π.policy, s)
     end
 end
 
