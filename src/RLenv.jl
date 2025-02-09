@@ -215,10 +215,12 @@ function CommonRLInterface.act!(env::RDEEnv{T}, action; saves_per_action::Int=0)
     prob_ode = ODEProblem{true, SciMLBase.FullSpecialize}(RDE_RHS!, env.state, t_span, env.prob)
     
     if saves_per_action == 0
-        sol = OrdinaryDiffEq.solve(prob_ode, Tsit5(), save_on=false, isoutofdomain=RDE.outofdomain, verbose=env.verbose)
+        sol = OrdinaryDiffEq.solve(prob_ode, Tsit5(), save_on=false, 
+                                   isoutofdomain=RDE.outofdomain, verbose=env.verbose)
     else
         saveat = env.dt / saves_per_action
-        sol = OrdinaryDiffEq.solve(prob_ode, Tsit5(), saveat=saveat, isoutofdomain=RDE.outofdomain, verbose=env.verbose)
+        sol = OrdinaryDiffEq.solve(prob_ode, Tsit5(), saveat=saveat, 
+                                   isoutofdomain=RDE.outofdomain, verbose=env.verbose)
     end
 
     
