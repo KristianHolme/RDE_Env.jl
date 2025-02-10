@@ -108,7 +108,7 @@ mutable struct RDEEnv{T<:AbstractFloat} <: AbstractRDEEnv{T}
         u_pmax=1.2,
         params::RDEParam{T}=RDEParam{T}(),
         momentum=0.0,
-        τ_smooth=0.1,
+        τ_smooth=0.01,
         observation_strategy::AbstractObservationStrategy=FourierObservation(16),
         action_type::AbstractActionType=ScalarPressureAction(),
         reward_type::AbstractRDEReward=ShockSpanReward(target_shock_count=3),
