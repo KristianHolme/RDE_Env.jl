@@ -157,15 +157,7 @@ function global_reward(env::AbstractRDEEnv{T}, rt::CachedCompositeReward;span_re
     u = env.state[1:N]
     target_shock_count = rt.target_shock_count  
     
-    span = maximum(u) - minimum(u)
-    if span_reward
-        target_span = 2f0 .- 0.3f0.*target_shock_count
-        span_reward = 1f0 - (max(target_span - span, 0f0)/target_span)
-    else
-        span_reward = 1f0
-    end
-    abs_span_punishment_threshold = 0.08f0
-    abs_span_reward = RDE.smooth_g(span/abs_span_punishment_threshold)
+    
  
 
     if target_shock_count > 1
@@ -186,7 +178,7 @@ function global_reward(env::AbstractRDEEnv{T}, rt::CachedCompositeReward;span_re
     shock_inds = RDE.shock_indices(u, dx)
     shocks = T(length(shock_inds))
     shock_reward = 1f0 - (abs(shocks - target_shock_count)/target_shock_count)
-    if shocks > 0
+    if shocks > 1
         # optimal_spacing = L/shocks
         optimal_spacing = L/target_shock_count
         shock_spacing = mod.(RDE.periodic_diff(shock_inds), N) .* dx
@@ -195,13 +187,19 @@ function global_reward(env::AbstractRDEEnv{T}, rt::CachedCompositeReward;span_re
         shock_spacing_reward = 1f0
     end
 
+    span = maximum(u) - minimum(u)
+    abs_span_punishment_threshold = 0.08f0
+    target_span = 2.0f0 - 0.3f0*shocks #based on actual shocks to avoid agent reaching for 1 shock with big span isntead of  more shocks
+    span_reward = span/target_span
+    low_span_punishment = RDE.smooth_g(span/abs_span_punishment_threshold)
+
+    @logmsg LogLevel(-10000) "low_span_punishment: $low_span_punishment"
     @logmsg LogLevel(-10000) "span_reward: $span_reward" 
-    @logmsg LogLevel(-10000) "abs_span_reward: $abs_span_reward"
     @logmsg LogLevel(-10000) "periodicity_reward: $periodicity_reward"
     @logmsg LogLevel(-10000) "shock_reward: $shock_reward"
     @logmsg LogLevel(-10000) "shock_spacing_reward: $shock_spacing_reward"
 
-    reward = abs_span_reward*exp(span_reward + periodicity_reward + shock_reward + shock_spacing_reward - 4f0)
+    reward = low_span_punishment*exp(span_reward + periodicity_reward + shock_reward + shock_spacing_reward - 4f0)
     return reward
 end
 
@@ -211,7 +209,7 @@ mutable struct CompositeReward <: CachedCompositeReward
     cache::Vector{Float32}
     lowest_action_magnitude_reward::Float32 #reward will be \in [lowest_action_magnitude_reward, 1]
     span_reward::Bool
-    function CompositeReward(;target_shock_count::Int=4, lowest_action_magnitude_reward::Float32=1f0, span_reward::Bool=false)
+    function CompositeReward(;target_shock_count::Int=4, lowest_action_magnitude_reward::Float32=1f0, span_reward::Bool=true)
         return new(target_shock_count, zeros(Float32, 512), lowest_action_magnitude_reward, span_reward)
     end
 end
@@ -227,8 +225,10 @@ function set_reward!(env::AbstractRDEEnv{T}, rt::CompositeReward) where T
     if rt.lowest_action_magnitude_reward < 1f0
         action_magnitude_inv = 1f0 - maximum(abs.(env.cache.action))
         α = rt.lowest_action_magnitude_reward
+        @logmsg LogLevel(-10000) "action_magnitude factor: $(α + (1f0 - α)*action_magnitude_inv)" maximum(abs.(env.cache.action))
         reward *= α + (1f0 - α)*action_magnitude_inv
     end
+    @logmsg LogLevel(-10000) "set_reward!: $reward"
     env.reward = reward
     nothing
 end
