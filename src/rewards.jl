@@ -126,7 +126,7 @@ end
     target_shock_count::Int = 3
     cache::Vector{Float32} = zeros(Float32, 512)
     lowest_action_magnitude_reward::Float32 = 1f0 #reward will be \in [lowest_action_magnitude_reward, 1]
-    span_reward::Bool = false
+    weights::Vector{Float32} = [0.25f0, 0.25f0, 0.25f0, 0.25f0]
 end
 
 function Base.show(io::IO, rt::MultiSectionReward)
@@ -134,7 +134,7 @@ function Base.show(io::IO, rt::MultiSectionReward)
 end
 
 function set_reward!(env::AbstractRDEEnv, rt::MultiSectionReward)
-    common_reward = global_reward(env, rt; span_reward=rt.span_reward)
+    common_reward = global_reward(env, rt)
     N = env.prob.params.N
     n_sections = rt.n_sections
     points_per_section = N ÷ n_sections
@@ -150,7 +150,7 @@ function set_reward!(env::AbstractRDEEnv, rt::MultiSectionReward)
     nothing
 end
 
-function global_reward(env::AbstractRDEEnv{T}, rt::CachedCompositeReward;span_reward=false) where T
+function global_reward(env::AbstractRDEEnv{T}, rt::CachedCompositeReward) where T
     N = env.prob.params.N
     dx = env.prob.x[2] - env.prob.x[1]
     L = env.prob.params.L
@@ -183,23 +183,25 @@ function global_reward(env::AbstractRDEEnv{T}, rt::CachedCompositeReward;span_re
         optimal_spacing = L/target_shock_count
         shock_spacing = mod.(RDE.periodic_diff(shock_inds), N) .* dx
         shock_spacing_reward = 1f0 - maximum(abs.((shock_spacing .- optimal_spacing)./optimal_spacing))
-    else
+    elseif shocks == 1 && target_shock_count == 1
         shock_spacing_reward = 1f0
+    else
+        shock_spacing_reward = 0f0
     end
 
     span = maximum(u) - minimum(u)
     abs_span_punishment_threshold = 0.08f0
     target_span = 2.0f0 - 0.3f0*shocks #based on actual shocks to avoid agent reaching for 1 shock with big span isntead of  more shocks
-    span_reward = span/target_span
+    span_reward = min(span/target_span, 2f0)
     low_span_punishment = RDE.smooth_g(span/abs_span_punishment_threshold)
 
-    @logmsg LogLevel(-10000) "low_span_punishment: $low_span_punishment"
-    @logmsg LogLevel(-10000) "span_reward: $span_reward" 
-    @logmsg LogLevel(-10000) "periodicity_reward: $periodicity_reward"
-    @logmsg LogLevel(-10000) "shock_reward: $shock_reward"
-    @logmsg LogLevel(-10000) "shock_spacing_reward: $shock_spacing_reward"
+    @logmsg LogLevel(-500) "low_span_punishment: $low_span_punishment"
+    @logmsg LogLevel(-500) "span_reward: $span_reward" 
+    @logmsg LogLevel(-500) "periodicity_reward: $periodicity_reward"
+    @logmsg LogLevel(-500) "shock_reward: $shock_reward"
+    @logmsg LogLevel(-500) "shock_spacing_reward: $shock_spacing_reward"
 
-    reward = low_span_punishment*exp(span_reward + periodicity_reward + shock_reward + shock_spacing_reward - 4f0)
+    reward = low_span_punishment*exp([span_reward, periodicity_reward, shock_reward, shock_spacing_reward]' * rt.weights - sum(rt.weights))
     return reward
 end
 
@@ -209,8 +211,15 @@ mutable struct CompositeReward <: CachedCompositeReward
     cache::Vector{Float32}
     lowest_action_magnitude_reward::Float32 #reward will be \in [lowest_action_magnitude_reward, 1]
     span_reward::Bool
-    function CompositeReward(;target_shock_count::Int=4, lowest_action_magnitude_reward::Float32=1f0, span_reward::Bool=true)
-        return new(target_shock_count, zeros(Float32, 512), lowest_action_magnitude_reward, span_reward)
+    weights::Vector{Float32}
+    function CompositeReward(;target_shock_count::Int=4,
+                              lowest_action_magnitude_reward::Float32=1f0,
+                              span_reward::Bool=true,
+                              weights::Vector{Float32}=[0.25f0, 0.25f0, 0.25f0, 0.25f0])
+        return new(target_shock_count,
+                   zeros(Float32, 512),
+                   lowest_action_magnitude_reward,
+                   span_reward, weights)
     end
 end
 
@@ -221,7 +230,7 @@ end
 function set_reward!(env::AbstractRDEEnv{T}, rt::CompositeReward) where T
     N = env.prob.params.N
 
-    reward = global_reward(env, rt; span_reward=rt.span_reward)
+    reward = global_reward(env, rt)
     if rt.lowest_action_magnitude_reward < 1f0
         action_magnitude_inv = 1f0 - maximum(abs.(env.cache.action))
         α = rt.lowest_action_magnitude_reward
