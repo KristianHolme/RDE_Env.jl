@@ -224,6 +224,8 @@ function plot_shifted_history(us::AbstractArray, x::AbstractArray,
     lines!(ax2, ts, counts)
     if target_shock_count !== nothing
         hlines!(ax2, target_shock_count, color=:red, alpha=0.8, linestyle=:dash) #maybe change to stair if target shocks changes durin episode
+        # Adjust y limits to ensure hline is visible
+        ylims!(ax2, (ax2.limits[][2][1], max(ax2.limits[][2][2], target_shock_count * 1.05)))
     end
     linkxaxes!(ax, ax2)
 
