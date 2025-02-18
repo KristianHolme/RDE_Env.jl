@@ -8,4 +8,5 @@ using RDE_Env
     include("reward_tests.jl")
     include("RLenv_tests.jl")
     include("policy_tests.jl")
+    include("utils_tests.jl")
 end
