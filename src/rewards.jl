@@ -150,19 +150,9 @@ function set_reward!(env::AbstractRDEEnv, rt::MultiSectionReward)
     nothing
 end
 
-function global_reward(env::AbstractRDEEnv{T}, rt::CachedCompositeReward) where T
-    N = env.prob.params.N
-    dx = env.prob.x[2] - env.prob.x[1]
-    L = env.prob.params.L
-    u = env.state[1:N]
-    target_shock_count = rt.target_shock_count  
-    
-    
- 
-
+function calculate_periodicity_reward(u::AbstractVector{T}, N::Int, target_shock_count::Int, cache::AbstractVector{T}) where T
     if target_shock_count > 1
         errs = zeros(T, target_shock_count-1)
-        cache = rt.cache
         shift_steps = N ÷ target_shock_count
         for i in 1:(target_shock_count-1)
             cache .= u
@@ -170,30 +160,49 @@ function global_reward(env::AbstractRDEEnv{T}, rt::CachedCompositeReward) where 
             errs[i] = norm(u - cache)/sqrt(N)
         end
         maxerr = maximum(errs)
-        periodicity_reward = 1f0 - (max(maxerr-0.08f0, 0f0)/sqrt(3f0))
-    else
-        periodicity_reward = 1f0
+        return sigmoid_to_linear(1f0 - (max(maxerr-0.08f0, 0f0)/sqrt(3f0)))
     end
+    return one(T)
+end
 
+function calculate_shock_rewards(u::AbstractVector, dx::T, L::T, N::Int, target_shock_count::Int) where T
     shock_inds = RDE.shock_indices(u, dx)
     shocks = T(length(shock_inds))
-    shock_reward = 1f0 - (abs(shocks - target_shock_count)/target_shock_count)
+    max_shocks = T(4)
+    shock_reward = one(T) - (min(shocks/target_shock_count, (shocks-max_shocks)/(target_shock_count-max_shocks), zero(T)))
+    shock_reward = sigmoid_to_linear(shock_reward)
+    
     if shocks > 1
-        # optimal_spacing = L/shocks
         optimal_spacing = L/target_shock_count
         shock_spacing = mod.(RDE.periodic_diff(shock_inds), N) .* dx
-        shock_spacing_reward = 1f0 - maximum(abs.((shock_spacing .- optimal_spacing)./optimal_spacing))
+        shock_spacing_reward = one(T) - maximum(abs.((shock_spacing .- optimal_spacing)./optimal_spacing))
     elseif shocks == 1 && target_shock_count == 1
-        shock_spacing_reward = 1f0
+        shock_spacing_reward = one(T)
     else
-        shock_spacing_reward = 0f0
+        shock_spacing_reward = zero(T)
     end
+    shock_spacing_reward = sigmoid_to_linear(shock_spacing_reward)
+    return shock_reward, shock_spacing_reward, shocks
+end
 
+function calculate_span_rewards(u::AbstractVector, shocks::T) where T
     span = maximum(u) - minimum(u)
     abs_span_punishment_threshold = 0.08f0
-    target_span = 2.0f0 - 0.3f0*shocks #based on actual shocks to avoid agent reaching for 1 shock with big span isntead of  more shocks
-    span_reward = min(span/target_span, 2f0)
+    target_span = 2.0f0 - 0.3f0*shocks
+    span_reward = reward_sigmoid(span/target_span)
     low_span_punishment = RDE.smooth_g(span/abs_span_punishment_threshold)
+    return span_reward, low_span_punishment
+end
+
+function global_reward(env::AbstractRDEEnv{T}, rt::CachedCompositeReward) where T
+    N = env.prob.params.N
+    dx = env.prob.x[2] - env.prob.x[1]
+    L = env.prob.params.L
+    u = env.state[1:N]
+    
+    periodicity_reward = calculate_periodicity_reward(u, N, rt.target_shock_count, rt.cache)
+    shock_reward, shock_spacing_reward, shocks = calculate_shock_rewards(u, dx, L, N, rt.target_shock_count)
+    span_reward, low_span_punishment = calculate_span_rewards(u, shocks)
 
     @logmsg LogLevel(-500) "low_span_punishment: $low_span_punishment"
     @logmsg LogLevel(-500) "span_reward: $span_reward" 
@@ -201,8 +210,8 @@ function global_reward(env::AbstractRDEEnv{T}, rt::CachedCompositeReward) where 
     @logmsg LogLevel(-500) "shock_reward: $shock_reward"
     @logmsg LogLevel(-500) "shock_spacing_reward: $shock_spacing_reward"
 
-    reward = low_span_punishment*exp([span_reward, periodicity_reward, shock_reward, shock_spacing_reward]' * rt.weights - sum(rt.weights))
-    return reward
+    weighted_rewards = [span_reward, periodicity_reward, shock_reward, shock_spacing_reward]' * rt.weights / norm(rt.weights)
+    return low_span_punishment * weighted_rewards
 end
 
 
