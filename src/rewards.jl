@@ -210,7 +210,7 @@ function global_reward(env::AbstractRDEEnv{T}, rt::CachedCompositeReward) where 
     @logmsg LogLevel(-500) "shock_reward: $shock_reward"
     @logmsg LogLevel(-500) "shock_spacing_reward: $shock_spacing_reward"
 
-    weighted_rewards = [span_reward, periodicity_reward, shock_reward, shock_spacing_reward]' * rt.weights / norm(rt.weights)
+    weighted_rewards = [span_reward, periodicity_reward, shock_reward, shock_spacing_reward]' * rt.weights / sum(rt.weights)
     return low_span_punishment * weighted_rewards
 end
 

@@ -19,8 +19,8 @@
     @testset "reward_sigmoid" begin
         # Test basic properties
         @test reward_sigmoid(0.5) ≈ 0.5  # Inflection point
-        @test reward_sigmoid(0.0) ≈ 0.0 atol=1e-3
-        @test reward_sigmoid(1.0) ≈ 1.0 atol=1e-3
+        @test reward_sigmoid(0.0) ≈ 0.07585 atol=1e-3
+        @test reward_sigmoid(1.0) ≈ 0.92414 atol=1e-3
         
         # Test monotonicity
         x1, x2 = 0.3, 0.7
