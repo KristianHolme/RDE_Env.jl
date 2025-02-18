@@ -18,6 +18,9 @@ module RDE_Env
     using ProgressMeter
 
     include("types.jl")
+    include("utils.jl")
+    export sigmoid_to_linear, reward_sigmoid, sigmoid
+    
     # Actions
     include("actions.jl")
     export AbstractActionType, ScalarPressureAction, ScalarAreaScalarPressureAction, VectorPressureAction
