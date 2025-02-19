@@ -26,7 +26,7 @@ using CommonRLInterface
             dt=0.1,
             τ_smooth=0.01,
             observation_strategy=MultiSectionObservation(2),
-            u_init=random_shock_combination_init_func
+            reset_strategy=RandomCombination()
         ) for _ in 1:2]
         vec_env = MultiAgentRDEVecEnv(envs)
         

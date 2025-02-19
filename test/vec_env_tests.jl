@@ -15,7 +15,7 @@ using CommonRLInterface
     end
     
     @testset "Reset and Seed" begin
-        envs = [RDEEnv(dt=0.1, τ_smooth=0.01, u_init=random_shock_combination_init_func) for _ in 1:4]
+        envs = [RDEEnv(dt=0.1, τ_smooth=0.01, reset_strategy=RandomCombination()) for _ in 1:4]
         vec_env = RDEVecEnv(envs)
         
         # Test initial reset

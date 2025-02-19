@@ -122,7 +122,7 @@ mutable struct RDEEnv{T<:AbstractFloat} <: AbstractRDEEnv{T}
         end
 
         prob = RDEProblem(params; kwargs...)
-        prob.cache.τ_smooth = τ_smooth
+        prob.method.cache.τ_smooth = τ_smooth
 
         # Set N in action_type
         set_N!(action_type, params.N)
@@ -182,11 +182,11 @@ function CommonRLInterface.act!(env::RDEEnv{T}, action; saves_per_action::Int=0)
 
     t_span = (env.t, env.t + env.dt)
     @logmsg LogLevel(-10000) "Set time span" t_span=t_span
-    env.prob.cache.control_time = env.t
-    @logmsg LogLevel(-10000) "Set control time" control_time=env.prob.cache.control_time
+    env.prob.method.cache.control_time = env.t
+    @logmsg LogLevel(-10000) "Set control time" control_time=env.prob.method.cache.control_time
 
-    prev_controls = [env.prob.cache.s_current, env.prob.cache.u_p_current]
-    c = [env.prob.cache.s_current, env.prob.cache.u_p_current]
+    prev_controls = [env.prob.method.cache.s_current, env.prob.method.cache.u_p_current]
+    c = [env.prob.method.cache.s_current, env.prob.method.cache.u_p_current]
     c_max = [env.smax, env.u_pmax]
     @logmsg LogLevel(-10000) "Initial controls" prev_controls=prev_controls c_max=c_max
 
@@ -205,10 +205,10 @@ function CommonRLInterface.act!(env::RDEEnv{T}, action; saves_per_action::Int=0)
         c[i] = env.α .* c_prev .+ (1 - env.α) .* c_hat
     end
 
-    env.prob.cache.s_previous = env.prob.cache.s_current
-    env.prob.cache.u_p_previous = env.prob.cache.u_p_current
-    env.prob.cache.s_current = c[1]
-    env.prob.cache.u_p_current = c[2]
+    env.prob.method.cache.s_previous = env.prob.method.cache.s_current
+    env.prob.method.cache.u_p_previous = env.prob.method.cache.u_p_current
+    env.prob.method.cache.s_current = c[1]
+    env.prob.method.cache.u_p_current = c[2]
 
     @logmsg LogLevel(-10000) "taking action $action at time $(env.t), controls: $(mean.(prev_controls)) to $(mean.(c))"
 
@@ -314,7 +314,7 @@ Reset the environment to its initial state.
 """
 function CommonRLInterface.reset!(env::RDEEnv)
     env.t = 0
-    RDE.set_init_state!(env.prob)
+    RDE.reset_state_and_pressure!(env.prob, env.prob.reset_strategy)
     env.state = vcat(env.prob.u0, env.prob.λ0)
     set_termination_reward!(env, 0.0)
     env.steps_taken = 0
@@ -323,11 +323,11 @@ function CommonRLInterface.reset!(env::RDEEnv)
     env.terminated = false
     set_reward!(env, env.reward_type)
 
-    env.prob.cache.τ_smooth = env.τ_smooth
-    env.prob.cache.u_p_previous = fill(env.prob.params.u_p, env.prob.params.N)
-    env.prob.cache.u_p_current = fill(env.prob.params.u_p, env.prob.params.N)
-    env.prob.cache.s_previous = fill(env.prob.params.s, env.prob.params.N)
-    env.prob.cache.s_current = fill(env.prob.params.s, env.prob.params.N)
+    env.prob.method.cache.τ_smooth = env.τ_smooth
+    env.prob.method.cache.u_p_previous = fill(env.prob.params.u_p, env.prob.params.N)
+    env.prob.method.cache.u_p_current = fill(env.prob.params.u_p, env.prob.params.N)
+    env.prob.method.cache.s_previous = fill(env.prob.params.s, env.prob.params.N)
+    env.prob.method.cache.s_current = fill(env.prob.params.s, env.prob.params.N)
 
     # Initialize previous state
     N = env.prob.params.N

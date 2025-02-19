@@ -83,17 +83,17 @@ function interactive_control(env::RDEEnv; callback=nothing, show_observations=fa
     control_s = Observable(params.s)
     s_start = params.s
     on(control_s) do Val
-        env.prob.cache.s_current .= Val
+        env.prob.method.cache.s_current .= Val
     end
     control_u_p = Observable(params.u_p)
     u_p_start = params.u_p
     on(control_u_p) do val
-        env.prob.cache.u_p_current .= val
+        env.prob.method.cache.u_p_current .= val
     end
     time_step = Observable(env.dt)
     on(time_step) do val
         env.dt = val
-        env.prob.cache.τ_smooth = val
+        env.prob.method.cache.τ_smooth = val
     end
 
     # Interactive sliders
@@ -108,7 +108,7 @@ function interactive_control(env::RDEEnv; callback=nothing, show_observations=fa
     slider_dt = Slider(label_area[2,3], range = 0:0.001:1, startvalue = time_step[])
     on(slider_dt.value) do val
         time_step[] = val
-        env.prob.cache.τ_smooth = val
+        env.prob.method.cache.τ_smooth = val
     end
 
     time = Observable(env.t)
@@ -230,6 +230,7 @@ function interactive_control(env::RDEEnv; callback=nothing, show_observations=fa
                         reset!(env)
                         update_observables!()
                         control_s[] = s_start
+                        u_p_start = params.u_p
                         control_u_p[] = u_p_start
                         set_close_to!(slider_s, control_s[])
                         set_close_to!(slider_u_p, control_u_p[])

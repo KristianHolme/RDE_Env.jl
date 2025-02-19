@@ -204,11 +204,11 @@ function global_reward(env::AbstractRDEEnv{T}, rt::CachedCompositeReward) where 
     shock_reward, shock_spacing_reward, shocks = calculate_shock_rewards(u, dx, L, N, rt.target_shock_count)
     span_reward, low_span_punishment = calculate_span_rewards(u, shocks)
 
-    @logmsg LogLevel(-500) "low_span_punishment: $low_span_punishment"
-    @logmsg LogLevel(-500) "span_reward: $span_reward" 
-    @logmsg LogLevel(-500) "periodicity_reward: $periodicity_reward"
-    @logmsg LogLevel(-500) "shock_reward: $shock_reward"
-    @logmsg LogLevel(-500) "shock_spacing_reward: $shock_spacing_reward"
+    @logmsg LogLevel(-10000) "low_span_punishment: $low_span_punishment"
+    @logmsg LogLevel(-10000) "span_reward: $span_reward" 
+    @logmsg LogLevel(-10000) "periodicity_reward: $periodicity_reward"
+    @logmsg LogLevel(-10000) "shock_reward: $shock_reward"
+    @logmsg LogLevel(-10000) "shock_spacing_reward: $shock_spacing_reward"
 
     weighted_rewards = [span_reward, periodicity_reward, shock_reward, shock_spacing_reward]' * rt.weights / sum(rt.weights)
     return low_span_punishment * weighted_rewards
@@ -260,6 +260,6 @@ struct ConstantTargetReward <: AbstractRDEReward
 end
 
 function set_reward!(env::AbstractRDEEnv{T}, rt::ConstantTargetReward) where T
-    env.reward = -abs(rt.target - mean(env.prob.cache.u_p_current)) + T(1.0)
+    env.reward = -abs(rt.target - mean(env.prob.method.cache.u_p_current)) + T(1.0)
     nothing
 end

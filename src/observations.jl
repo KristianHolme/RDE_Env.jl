@@ -41,8 +41,8 @@ function compute_observation(env::AbstractRDEEnv{T}, strategy::FourierObservatio
     λ_obs = 2 .* λ_obs .- 1
     
     # Control parameters already naturally bounded
-    s_scaled = mean(env.prob.cache.s_current) / env.smax
-    u_p_scaled = mean(env.prob.cache.u_p_current) / env.u_pmax
+    s_scaled = mean(env.prob.method.cache.s_current) / env.smax
+    u_p_scaled = mean(env.prob.method.cache.u_p_current) / env.u_pmax
     
     return vcat(u_obs, λ_obs, s_scaled, u_p_scaled)
 end
@@ -60,8 +60,8 @@ function compute_observation(env::AbstractRDEEnv, rt::StateObservation)
     normalized_state = similar(env.state)
     normalized_state[1:N] = u ./ u_max 
     normalized_state[N+1:end] = λ ./ λ_max
-    s_scaled = mean(env.prob.cache.s_current) / env.smax
-    u_p_scaled = mean(env.prob.cache.u_p_current) / env.u_pmax
+    s_scaled = mean(env.prob.method.cache.s_current) / env.smax
+    u_p_scaled = mean(env.prob.method.cache.u_p_current) / env.u_pmax
     return vcat(normalized_state, s_scaled, u_p_scaled)
 end
 
@@ -216,7 +216,7 @@ function compute_observation(env::AbstractRDEEnv, strategy::CompositeObservation
     u_terms = fft_u[2:n_terms + 1] #the first is always one, so not useful
     u_obs = (u_terms .- minimum(u_terms)) ./ (maximum(u_terms) - minimum(u_terms) + 1f-8)
 
-    u_p_scaled = mean(env.prob.cache.u_p_current) / env.u_pmax
+    u_p_scaled = mean(env.prob.method.cache.u_p_current) / env.u_pmax
     dx = env.prob.x[2] - env.prob.x[1]
     max_shocks = 6f0
     normalized_shocks = RDE.count_shocks(current_u, dx)/max_shocks

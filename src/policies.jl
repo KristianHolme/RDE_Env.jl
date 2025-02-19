@@ -97,15 +97,15 @@ function run_policy(π::Policy, env::RDEEnv{T}; saves_per_action=1) where {T}
         ts[step] = env.t
         if eltype(ss) <: AbstractVector
             sections = env.action_type.n_sections
-            ss[step] = section_reduction(env.prob.cache.s_current, sections)
+            ss[step] = section_reduction(env.prob.method.cache.s_current, sections)
         elseif eltype(ss) <: Number
-            ss[step] = mean(env.prob.cache.s_current)
+            ss[step] = mean(env.prob.method.cache.s_current)
         end
         if eltype(u_ps) <: AbstractVector
             sections = env.action_type.n_sections
-            u_ps[step] = section_reduction(env.prob.cache.u_p_current, sections)
+            u_ps[step] = section_reduction(env.prob.method.cache.u_p_current, sections)
         elseif eltype(u_ps) <: Number
-            u_ps[step] = mean(env.prob.cache.u_p_current)
+            u_ps[step] = mean(env.prob.method.cache.u_p_current)
         end
         if eltype(rewards) <: AbstractVector
             rewards[step] = env.reward
@@ -289,7 +289,7 @@ end
 
 function POMDPs.action(π::StepwiseRDEPolicy, s)
     t = π.env.t
-    cache = π.env.prob.cache
+    cache = π.env.prob.method.cache
     past = π.ts .≤ t    
     idx = findlast(past)
     if isnothing(idx)
