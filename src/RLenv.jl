@@ -141,8 +141,8 @@ end
 RDEEnv(; kwargs...) = RDEEnv{Float32}(; kwargs...)
 RDEEnv(params::RDEParam{T}; kwargs...) where {T<:AbstractFloat} = RDEEnv{T}(; params=params, kwargs...)
 
-function Base.show(io::IO, env::RDEEnv)
-    println(io, "RDEEnv:")
+function Base.show(io::IO, env::RDEEnv{T}) where {T<:AbstractFloat}
+    println(io, "RDEEnv{$T}:")
     println(io, "  dt: $(env.dt)")
     println(io, "  t: $(env.t)")
     println(io, "  truncated: $(env.truncated)")
