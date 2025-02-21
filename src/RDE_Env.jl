@@ -19,7 +19,7 @@ module RDE_Env
 
     include("types.jl")
     include("utils.jl")
-    export sigmoid_to_linear, reward_sigmoid, sigmoid
+    export sigmoid_to_linear, reward_sigmoid, sigmoid, linear_to_sigmoid
     
     # Actions
     include("actions.jl")

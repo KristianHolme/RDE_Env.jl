@@ -122,7 +122,8 @@ mutable struct RDEEnv{T<:AbstractFloat} <: AbstractRDEEnv{T}
         end
 
         prob = RDEProblem(params; kwargs...)
-        prob.method.cache.τ_smooth = τ_smooth
+        RDE.reset_state_and_pressure!(prob, prob.reset_strategy)
+        reset_cache!(prob.method.cache, τ_smooth=τ_smooth, params=params)
 
         # Set N in action_type
         set_N!(action_type, params.N)
@@ -323,11 +324,7 @@ function CommonRLInterface.reset!(env::RDEEnv)
     env.terminated = false
     set_reward!(env, env.reward_type)
 
-    env.prob.method.cache.τ_smooth = env.τ_smooth
-    env.prob.method.cache.u_p_previous = fill(env.prob.params.u_p, env.prob.params.N)
-    env.prob.method.cache.u_p_current = fill(env.prob.params.u_p, env.prob.params.N)
-    env.prob.method.cache.s_previous = fill(env.prob.params.s, env.prob.params.N)
-    env.prob.method.cache.s_current = fill(env.prob.params.s, env.prob.params.N)
+    reset_cache!(env.prob.method.cache, τ_smooth=env.τ_smooth, params=env.prob.params)    
 
     # Initialize previous state
     N = env.prob.params.N

@@ -9,9 +9,19 @@ function reward_sigmoid(x::AbstractFloat)
 end
 
 function sigmoid_to_linear(x::AbstractFloat)
-    if x < convert(typeof(x), 0.2)
+    cutoff = convert(typeof(x), 0.5)
+    if x < cutoff
         return reward_sigmoid(x)
     else
+        return reward_sigmoid(cutoff)/cutoff * x
+    end
+end
+
+function linear_to_sigmoid(x::AbstractFloat)
+    cutoff = convert(typeof(x), 0.5)
+    if x < cutoff
         return x
+    else
+        return reward_sigmoid(x)
     end
 end
