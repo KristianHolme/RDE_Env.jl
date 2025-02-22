@@ -120,6 +120,11 @@ function Base.show(io::IO, rt::PeriodicityReward)
     print(io, "PeriodicityReward(N=$(length(rt.cache)))")
 end
 
+function action_magnitude_factor(lowest_action_magnitude_reward::AbstractFloat, action_magnitudes)
+    α = lowest_action_magnitude_reward
+    action_magnitude_inv = 1f0 .- action_magnitudes
+    return α .+ (1f0 - α) .* action_magnitude_inv
+end
 
 @kwdef mutable struct MultiSectionReward <: CachedCompositeReward
     n_sections::Int = 4
@@ -144,11 +149,13 @@ function set_reward!(env::AbstractRDEEnv, rt::MultiSectionReward)
     full_engine_pressure_action = env.cache.action[:, 2]
     section_actions = full_engine_pressure_action[first_element_in_sections]
     action_magnitudes = abs.(section_actions)
-    individual_modifiers = 1f0 .- action_magnitudes .* (1f0-α)
+    individual_modifiers = action_magnitude_factor(α, action_magnitudes)
     individual_rewards = common_reward .* individual_modifiers
     env.reward = individual_rewards
     nothing
 end
+
+
 
 function calculate_periodicity_reward(u::AbstractVector{T}, N::Int, target_shock_count::Int, cache::AbstractVector{T}) where T
     if target_shock_count > 1
@@ -248,12 +255,15 @@ function set_reward!(env::AbstractRDEEnv{T}, rt::CompositeReward) where T
     N = env.prob.params.N
 
     reward = global_reward(env, rt)
-    if rt.lowest_action_magnitude_reward < 1f0
-        action_magnitude_inv = 1f0 - maximum(abs.(env.cache.action))
-        α = rt.lowest_action_magnitude_reward
-        @logmsg LogLevel(-10000) "action_magnitude factor: $(α + (1f0 - α)*action_magnitude_inv)" maximum(abs.(env.cache.action))
-        reward *= α + (1f0 - α)*action_magnitude_inv
-    end
+    action_magnitude = maximum(abs.(env.cache.action))
+    action_magnitude_modifier = action_magnitude_factor(rt.lowest_action_magnitude_reward, action_magnitude)
+    reward *= action_magnitude_modifier
+    # if rt.lowest_action_magnitude_reward < 1f0
+    #     action_magnitude_inv = 1f0 - maximum(abs.(env.cache.action))
+    #     α = rt.lowest_action_magnitude_reward
+    #     @logmsg LogLevel(-10000) "action_magnitude factor: $(α + (1f0 - α)*action_magnitude_inv)" maximum(abs.(env.cache.action))
+    #     reward *= α + (1f0 - α)*action_magnitude_inv
+    # end
     @logmsg LogLevel(-10000) "set_reward!: $reward"
     env.reward = reward
     nothing
