@@ -170,7 +170,7 @@ end
 function calculate_shock_rewards(u::AbstractVector, dx::T, L::T, N::Int, target_shock_count::Int) where T
     shock_inds = RDE.shock_indices(u, dx)
     shocks = T(length(shock_inds))
-    @logmsg LogLevel(-1000) "shocks: $shocks"
+    @logmsg LogLevel(-10000) "shocks: $shocks"
     ϵ = T(1e-6)
     max_shocks = T(4 + ϵ)
     shock_reward = max(min(shocks/target_shock_count, (shocks-max_shocks)/(target_shock_count-max_shocks)), zero(T))
@@ -210,15 +210,15 @@ function global_reward(env::AbstractRDEEnv{T}, rt::CachedCompositeReward) where 
     shock_reward, shock_spacing_reward, shocks = calculate_shock_rewards(u, dx, L, N, rt.target_shock_count)
     span_reward, low_span_punishment = calculate_span_rewards(u, shocks)
 
-    @logmsg LogLevel(-1000) "low_span_punishment: $low_span_punishment"
-    @logmsg LogLevel(-1000) "span_reward: $span_reward" 
-    @logmsg LogLevel(-1000) "periodicity_reward: $periodicity_reward"
-    @logmsg LogLevel(-1000) "shock_reward: $shock_reward"
-    @logmsg LogLevel(-1000) "shock_spacing_reward: $shock_spacing_reward"
+    @logmsg LogLevel(-10000) "low_span_punishment: $low_span_punishment"
+    @logmsg LogLevel(-10000) "span_reward: $span_reward" 
+    @logmsg LogLevel(-10000) "periodicity_reward: $periodicity_reward"
+    @logmsg LogLevel(-10000) "shock_reward: $shock_reward"
+    @logmsg LogLevel(-10000) "shock_spacing_reward: $shock_spacing_reward"
 
     weighted_rewards = [span_reward, periodicity_reward, shock_reward, shock_spacing_reward]' * rt.weights / sum(rt.weights)
     global_reward = low_span_punishment * sum(weighted_rewards)
-    @logmsg LogLevel(-1000) "global_reward: $global_reward"
+    @logmsg LogLevel(-10000) "global_reward: $global_reward"
     return global_reward
 end
 

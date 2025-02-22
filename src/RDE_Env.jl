@@ -12,6 +12,7 @@ module RDE_Env
     using OrdinaryDiffEq
     using Makie
     using Observables
+    using Polyester
     using POMDPs
     using POMDPTools
     using PrecompileTools
@@ -32,8 +33,6 @@ module RDE_Env
     export CompositeObservation
     export compute_observation, get_init_observation
 
-   
-
     # Rewards
     include("rewards.jl")
     export AbstractRDEReward, ShockSpanReward, ShockPreservingReward, ShockPreservingSymmetryReward
@@ -53,6 +52,7 @@ module RDE_Env
     include("multi_agent_vec_env.jl")
     export RDEVecEnv, MultiAgentRDEVecEnv
     export step!, reset!, seed!
+    export ThreadingMode, POLYESTER, THREADS
 
     # Policies
     export PolicyRunData, run_policy
