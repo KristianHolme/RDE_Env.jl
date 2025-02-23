@@ -25,3 +25,9 @@ function linear_to_sigmoid(x::AbstractFloat)
         return reward_sigmoid(x)
     end
 end
+
+function pre_check_ts!(ts::AbstractArray)
+    if ts[end] ≈ ts[end-1]
+        ts[end] += eltype(ts)(1e-6)
+    end
+end

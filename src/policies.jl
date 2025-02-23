@@ -144,9 +144,9 @@ function run_policy(π::Policy, env::RDEEnv{T}; saves_per_action=1) where {T}
     end
 
     while !env.done && step < max_steps
-        step += 1
         action = POMDPs.action(π, observe(env))
         act!(env, action, saves_per_action=saves_per_action)
+        step += 1
         log!(step)
     end
     

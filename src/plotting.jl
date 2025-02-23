@@ -207,12 +207,15 @@ function plot_shifted_history(us::AbstractArray, x::AbstractArray,
                             ts::AbstractArray, c::Union{Real, AbstractArray}=1.65;
                             u_ps=nothing, rewards=nothing, 
                             target_shock_count=nothing,
-                            action_ts=ts)
+                            action_ts=ts,
+                            title=nothing)
+    pre_check_ts!(ts)
+    pre_check_ts!(action_ts)
     shifted_us = Array.(RDE.shift_inds(us, x, ts, c))
 
     fig = Figure(size=(1200, 600))
-    ax = Axis(fig[1,1], title="u(x+ct, t)", xlabel="t",
-            ylabel="x", yzoomlock=true, ypanlock=true,
+    ax = Axis(fig[1,1], title="u(ψ, t)", xlabel="t",
+            ylabel="ψ", yzoomlock=true, ypanlock=true,
             limits=(extrema(ts), extrema(x)), xautolimitmargin=(0.0, 0.0))
     hm = heatmap!(ax, ts, x, stack(shifted_us)', colorscale=identity)
     Colorbar(fig[1,2], hm)
@@ -256,6 +259,9 @@ function plot_shifted_history(us::AbstractArray, x::AbstractArray,
         linkxaxes!(ax, ax4)
     end
     autolimits!(ax) 
+    if title !== nothing
+        Label(fig[0,1], title, fontsize=20, tellwidth=false)
+    end
     fig
 end
 
