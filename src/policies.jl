@@ -64,7 +64,7 @@ policy = ConstantRDEPolicy(env)
 data = run_policy(policy, env, saves_per_action=10)
 ```
 """
-function run_policy(π::Policy, env::RDEEnv{T}; saves_per_action=1) where {T}
+function run_policy(π::Policy, env::AbstractRDEEnv{T}; saves_per_action=1) where {T}
     reset!(env)
     dt = env.dt
     max_steps = ceil(env.prob.params.tmax / dt) + 1 |> Int
@@ -369,7 +369,7 @@ delayed_policy = DelayedPolicy(base_policy, 100.0f0, env)
 struct DelayedPolicy{T<:AbstractFloat} <: Policy
     policy::Policy
     start_time::T
-    env::RDEEnv{T}
+    env::AbstractRDEEnv{T}
 end
 
 function POMDPs.action(π::DelayedPolicy, s)
