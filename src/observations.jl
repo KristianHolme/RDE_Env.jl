@@ -114,11 +114,13 @@ end
 
 @kwdef struct MultiSectionObservation <: AbstractObservationStrategy
     n_sections::Int = 4
+    target_shock_count::Int = 3
     look_ahead_speed::Float32 = 1.65f0
     minisections_per_section::Int = 8
     dt::Float32 = 0.5f0
     L::Float32 = 2f0*π
 end
+MultiSectionObservation(n::Int) = MultiSectionObservation(n_section=n)
 
 function Base.show(io::IO, obs_strategy::MultiSectionObservation)
     print(io, "MultiSectionObservation(n_sections=$(obs_strategy.n_sections), look_ahead_speed=$(obs_strategy.look_ahead_speed), minisections_per_section=$(obs_strategy.minisections_per_section), dt=$(obs_strategy.dt), L=$(obs_strategy.L))")
@@ -152,7 +154,7 @@ function compute_observation(env::AbstractRDEEnv, obs_strategy::MultiSectionObse
     # end
 
     shocks = RDE.count_shocks(current_u, dx)
-    target_shock_count = env.reward_type.target_shock_count
+    target_shock_count = obs_strategy.target_shock_count
     span = maximum(current_u) - minimum(current_u)
 
     # Pre-allocate the final matrix
