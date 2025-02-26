@@ -71,7 +71,7 @@ function set_reward!(env::AbstractRDEEnv, rt::ShockPreservingSymmetryReward)
     shift_steps = N ÷ target_shock_count
     for i in 1:(target_shock_count-1)
         cache .= u
-        RDE.apply_periodic_shift!(cache, u, shift_steps * i)
+        circshift!(cache, u, -shift_steps * i)
         errs[i] = norm(u - cache)/sqrt(N)
     end
     maxerr = maximum(errs)
@@ -93,7 +93,7 @@ function set_reward!(env::AbstractRDEEnv, rt::PeriodicityReward)
         errs = zeros(shocks-1)
         for i in 1:(shocks-1)
             cache .= u
-            RDE.apply_periodic_shift!(cache, u, shift_steps * i)
+            circshift!(cache, u, -shift_steps * i)
             errs[i] = norm(u - cache)/sqrt(N)
         end
         maxerr = maximum(errs)
@@ -130,7 +130,7 @@ end
     n_sections::Int = 4
     target_shock_count::Int = 3
     cache::Vector{Float32} = zeros(Float32, 512)
-    lowest_action_magnitude_reward::Float32 = 0.3f0 #reward will be \in [lowest_action_magnitude_reward, 1]
+    lowest_action_magnitude_reward::Float32 = 0.0f0 #reward will be \in [lowest_action_magnitude_reward, 1]
     weights::Vector{Float32} = [1f0,1f0,5f0,1f0]
 end
 
@@ -163,7 +163,7 @@ function calculate_periodicity_reward(u::AbstractVector{T}, N::Int, target_shock
         shift_steps = N ÷ target_shock_count
         for i in 1:(target_shock_count-1)
             cache .= u
-            RDE.apply_periodic_shift!(cache, u, shift_steps * i)
+            circshift!(cache, u, -shift_steps * i)
             errs[i] = norm(u - cache)/sqrt(N)
         end
         maxerr = maximum(errs)
