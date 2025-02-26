@@ -64,8 +64,8 @@ end
 
 function get_standard_normalized_actions(action_type::VectorPressureAction, action)
     @assert action_type.N > 0 "Action type N not set"
-    @assert length(action) == action_type.n_sections
-    @assert action_type.N % action_type.n_sections == 0
+    @assert length(action) == action_type.n_sections "Action length ($(length(action))) must match n_sections ($(action_type.n_sections))"
+    @assert action_type.N % action_type.n_sections == 0 "N ($N) must be divisible by n_sections ($(action_type.n_sections))"
     
     # Calculate how many points per section
     points_per_section = action_type.N ÷ action_type.n_sections
