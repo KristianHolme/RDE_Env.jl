@@ -84,9 +84,8 @@ end
 function CommonRLInterface.act!(env::MultiAgentRDEVecEnv, actions::AbstractArray)
     num_agents = env.n_agents_per_env
     num_envs = env.n_envs
-    if length(actions) == num_envs*num_agents
-        actions = reshape(actions, num_agents, num_envs)
-    end
+    @assert length(actions) == num_envs*num_agents
+    actions = reshape(actions, num_agents, num_envs)
     @logmsg LogLevel(-10000) "VecEnv act! starting threaded loop, actions size: $(size(actions))"
     
     # Choose threading macro based on mode
