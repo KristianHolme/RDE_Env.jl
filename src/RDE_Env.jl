@@ -29,9 +29,12 @@ module RDE_Env
 
     # Observation strategies
     include("observations.jl")
-    export AbstractObservationStrategy, FourierObservation, StateObservation, SampledStateObservation, MultiSectionObservation
+    export AbstractObservationStrategy, AbstractMultiAgentObservationStrategy, 
+           FourierObservation, StateObservation,
+           SampledStateObservation, MultiSectionObservation, SectionedStateObservation,
+           MultiCenteredObservation
     export CompositeObservation
-    export compute_observation, get_init_observation
+    export compute_observation, get_init_observation, compute_sectioned_observation
 
     # Rewards
     include("rewards.jl")

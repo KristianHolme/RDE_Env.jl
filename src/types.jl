@@ -21,12 +21,18 @@ function action_dim end
 
 #Observations
 abstract type AbstractObservationStrategy end
+abstract type AbstractMultiAgentObservationStrategy <: AbstractObservationStrategy end
 
 struct FourierObservation <: AbstractObservationStrategy
     fft_terms::Int
 end
 
 struct StateObservation <: AbstractObservationStrategy end
+
+@kwdef struct SectionedStateObservation <: AbstractObservationStrategy
+    minisections::Int=32
+    target_shock_count::Int=3
+end
 
 struct SampledStateObservation <: AbstractObservationStrategy 
     n_samples::Int

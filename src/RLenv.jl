@@ -9,7 +9,7 @@ Cache for RDE environment computations and state tracking.
 - `prev_u::Vector{T}`: Previous velocity field
 - `prev_λ::Vector{T}`: Previous reaction progress
 """
-mutable struct RDEEnvCache{T<:AbstractFloat}
+mutable struct RDEEnvCache{T<:AbstractFloat}#TODO remove circ
     circ_u::CircularVector{T, Vector{T}}
     circ_λ::CircularVector{T, Vector{T}}
     prev_u::Vector{T}  # Previous step's u values

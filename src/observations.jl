@@ -20,11 +20,11 @@ function compute_observation(env::AbstractRDEEnv{T}, strategy::FourierObservatio
     current_u = @view env.state[1:N]
     current_λ = @view env.state[N+1:end]
     
-    env.cache.circ_u[:] .= current_u
-    env.cache.circ_λ[:] .= current_λ
+    # env.cache.circ_u[:] .= current_u
+    # env.cache.circ_λ[:] .= current_λ
     
-    fft_u = abs.(fft(env.cache.circ_u))
-    fft_λ = abs.(fft(env.cache.circ_λ))
+    fft_u = abs.(fft(current_u)) #was circ_u
+    fft_λ = abs.(fft(current_λ)) #was circ_λ
     
     n_terms = min(strategy.fft_terms, N ÷ 2 + 1)
     
@@ -65,6 +65,37 @@ function compute_observation(env::AbstractRDEEnv, rt::StateObservation)
     return vcat(normalized_state, s_scaled, u_p_scaled)
 end
 
+function compute_sectioned_observation(env::AbstractRDEEnv, obs_strategy::AbstractObservationStrategy)
+    N = env.prob.params.N
+    current_u = @view env.state[1:N]
+    current_λ = @view env.state[N+1:end]
+    # env.cache.circ_u[:] .= current_u
+    # env.cache.circ_λ[:] .= current_λ
+    # circ_u = env.cache.circ_u
+    # circ_λ = env.cache.circ_λ
+    max_shocks = 6f0
+    max_pressure = 6f0
+
+    dx = env.prob.x[2] - env.prob.x[1]
+    minisections = obs_strategy.minisections
+    minisection_size = N ÷ minisections
+
+    minisection_observations_u = get_minisection_observations(current_u, minisection_size) ./ max_pressure
+    minisection_observations_λ = get_minisection_observations(current_λ, minisection_size)
+
+
+    shocks = RDE.count_shocks(current_u, dx) / max_shocks
+    target_shock_count = obs_strategy.target_shock_count / max_shocks
+
+    return minisection_observations_u, minisection_observations_λ, shocks, target_shock_count
+end
+function compute_observation(env::AbstractRDEEnv, strategy::SectionedStateObservation)
+    (minisection_observations_u,
+    minisection_observations_λ,
+    shocks,
+    target_shock_count) = compute_sectioned_observation(env, strategy)
+    return vcat(minisection_observations_u, minisection_observations_λ, shocks, target_shock_count)
+end
 
 function compute_observation(env::AbstractRDEEnv, strategy::SampledStateObservation)
     N = env.prob.params.N
@@ -98,13 +129,13 @@ Initialize observation vector for given strategy.
 
 # Returns
 Preallocated vector for observations
-"""#TODO fix this, use another approach to get number of elements and then init vector
-function get_init_observation(strategy::FourierObservation, N::Int)
-    n_terms = min(strategy.fft_terms, N ÷ 2 + 1)
-    return Vector{Float32}(undef, n_terms * 2 + 2)
-end
-
-function get_init_observation(::StateObservation, N::Int)
+    """#TODO fix this, use another approach to get number of elements and then init vector
+    function get_init_observation(strategy::FourierObservation, N::Int)
+        n_terms = min(strategy.fft_terms, N ÷ 2 + 1)
+        return Vector{Float32}(undef, n_terms * 2 + 2)
+    end
+    
+    function get_init_observation(::StateObservation, N::Int)
     return Vector{Float32}(undef, 2N + 2)
 end
 
@@ -112,7 +143,11 @@ function get_init_observation(strategy::SampledStateObservation, N::Int)
     return Vector{Float32}(undef, 2 * strategy.n_samples + 1)
 end
 
-@kwdef struct MultiSectionObservation <: AbstractObservationStrategy
+function get_init_observation(strategy::SectionedStateObservation, N::Int)
+    return Vector{Float32}(undef, 2 * strategy.minisections + 2)
+end
+
+@kwdef struct MultiSectionObservation <: AbstractMultiAgentObservationStrategy
     n_sections::Int = 4
     target_shock_count::Int = 3
     look_ahead_speed::Float32 = 1.65f0
@@ -129,9 +164,10 @@ end
 function compute_observation(env::AbstractRDEEnv, obs_strategy::MultiSectionObservation)
     N = env.prob.params.N
     current_u = @view env.state[1:N]
-    env.cache.circ_u[:] .= current_u
-    circ_u = env.cache.circ_u
-    circ_λ = env.cache.circ_λ
+    current_λ = @view env.state[N+1:end]
+    # env.cache.circ_u[:] .= current_u
+    # circ_u = env.cache.circ_u
+    # circ_λ = env.cache.circ_λ
     max_shocks = 6f0
     max_pressure = 6f0
 
@@ -144,8 +180,8 @@ function compute_observation(env::AbstractRDEEnv, obs_strategy::MultiSectionObse
     
     observable_minisections = get_observable_minisections(obs_strategy)
 
-    minisection_observations_u = get_minisection_observations(circ_u, minisection_size)
-    minisection_observations_λ = get_minisection_observations(circ_λ, minisection_size)
+    minisection_observations_u = get_minisection_observations(current_u, minisection_size)
+    minisection_observations_λ = get_minisection_observations(current_λ, minisection_size)
     last_minisection_in_sections = collect(m:m:m*n_sections)
 
 
@@ -191,7 +227,7 @@ end
 
 function get_minisection_observations(data, minisection_size)
     minisection_u = reshape(data, minisection_size, :)
-    minisection_observations = maximum(minisection_u, dims=1)
+    minisection_observations = vec(maximum(minisection_u, dims=1))
     return minisection_observations
 end
 
@@ -210,9 +246,9 @@ function compute_observation(env::AbstractRDEEnv, strategy::CompositeObservation
     
     current_u = @view env.state[1:N]
     
-    env.cache.circ_u[:] .= current_u
+    # env.cache.circ_u[:] .= current_u
     
-    fft_u = abs.(fft(env.cache.circ_u))
+    fft_u = abs.(fft(current_u)) #was circ_u
     
     n_terms = min(strategy.fft_terms, N ÷ 2 + 1)
     
@@ -237,4 +273,48 @@ end
 
 function get_init_observation(strategy::CompositeObservation, N::Int)
     return Vector{Float32}(undef, 2 * strategy.fft_terms + 5)
+end
+
+
+@kwdef struct MultiCenteredObservation <: AbstractMultiAgentObservationStrategy
+    n_sections::Int = 4
+    target_shock_count::Int = 4
+    minisections::Int = 32
+end
+MultiCenteredObservation(n::Int) = MultiCenteredObservation(n_sections=n)
+
+function Base.show(io::IO, obs_strategy::MultiCenteredObservation)
+    print(io, "MultiCenteredObservation(n_sections=$(obs_strategy.n_sections), target_shock_count=$(obs_strategy.target_shock_count))")
+end
+
+
+function compute_observation(env::AbstractRDEEnv, obs_strategy::MultiCenteredObservation)
+    (minisection_observations_u,
+    minisection_observations_λ,
+    shocks,
+    target_shock_count) = compute_sectioned_observation(env, obs_strategy)
+
+    obs_length = obs_strategy.minisections*2 + 2  # +2 for shocks, target_shock_count
+    n_sections = obs_strategy.n_sections
+    minisections = obs_strategy.minisections
+    minisections_per_section = minisections ÷ n_sections
+    # Pre-allocate the final matrix
+    result = Matrix{Float32}(undef, obs_length, n_sections)
+    
+    # Fill the matrix directly
+    for i in 1:n_sections
+        # Copy the observation part
+        result[1:minisections, i] .= circshift(minisection_observations_u, -minisections_per_section*(i-1))
+        result[minisections+1:minisections*2, i] .= circshift(minisection_observations_λ, -minisections_per_section*(i-1))
+        # Add the additional values
+        result[end-1, i] = shocks #is this needed?
+        result[end, i] = target_shock_count
+    end
+    
+    return result
+end
+
+function get_init_observation(obs_strategy::MultiCenteredObservation, N::Int)
+    obs_dim = obs_strategy.minisections*2 + 2
+    return Matrix{Float32}(undef, obs_dim, obs_strategy.n_sections)
 end
