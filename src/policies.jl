@@ -22,6 +22,7 @@ struct PolicyRunData{T<:AbstractFloat}
     chamber_p::Vector{T} #chamber pressure at each state
     state_ts::Vector{T} #time points for states
     states::Vector{Vector{T}} #states at each time point
+    observations::Vector{Union{Vector{T}, Matrix{T}}} #observations at each time point
 end
 
 function Base.show(io::IO, data::PolicyRunData)
@@ -34,6 +35,7 @@ function Base.show(io::IO, data::PolicyRunData)
     println(io, "  chamber_p: $(typeof(data.chamber_p))")
     println(io, "  state_ts: $(typeof(data.state_ts))")
     println(io, "  states: $(typeof(data.states))")
+    println(io, "  observations: $(typeof(data.observations))")
 end
 
 """
@@ -89,6 +91,11 @@ function run_policy(π::Policy, env::AbstractRDEEnv{T}; saves_per_action=1) wher
     chamber_p = Vector{T}(undef, max_state_points)
     states = Vector{Vector{T}}(undef, max_state_points)
     state_ts = Vector{T}(undef, max_state_points)
+    if env.observation_strategy isa AbstractMultiAgentObservationStrategy
+        observations = Vector{Matrix{T}}(undef, max_state_points)
+    else
+        observations = Vector{Vector{T}}(undef, max_state_points)
+    end
     
     step = 0
     total_state_steps = 0
@@ -112,6 +119,7 @@ function run_policy(π::Policy, env::AbstractRDEEnv{T}; saves_per_action=1) wher
         else
             rewards[step] = env.reward
         end
+        observations[step] = observe(env)
 
         step_states = env.prob.sol.u[2:end]
         step_ts = env.prob.sol.t[2:end]
@@ -159,8 +167,9 @@ function run_policy(π::Policy, env::AbstractRDEEnv{T}; saves_per_action=1) wher
     chamber_p = chamber_p[1:total_state_steps]
     state_ts = state_ts[1:total_state_steps]
     states = states[1:total_state_steps]
+    observations = observations[1:step]
 
-    return PolicyRunData{T}(ts, ss, u_ps, rewards, energy_bal, chamber_p, state_ts, states)
+    return PolicyRunData{T}(ts, ss, u_ps, rewards, energy_bal, chamber_p, state_ts, states, observations)
 end
 
 

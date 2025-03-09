@@ -49,6 +49,7 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
         rewards_and_shocks=true,
         energy_and_chamber_pressure=true,
         control_history=true,
+        observations=false,
         kwargs...)
     action_ts = data.action_ts
     ss = data.ss
@@ -83,7 +84,7 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
     upper_area = fig[1,1] = GridLayout()
     main_layout = fig[2,1] = GridLayout()
     if control_history || energy_and_chamber_pressure || rewards_and_shocks
-        metrics_action_area = fig[3,1] = GridLayout()
+        metrics_action_area = fig[end+1,1] = GridLayout()
     end
     
     if control_history || energy_and_chamber_pressure || rewards_and_shocks
@@ -178,6 +179,21 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
         start = 1 + section_size ÷ 2
         u_p_pts = collect(start:section_size:N)/N * L
         stairs!(ax_live_u_p, u_p_pts, u_p_t, step=:center)
+    end
+
+    if observations
+        observation = @lift(data.observations[$sparse_time_idx])
+        @show observation[]
+        if typeof(data.observations[1]) <: AbstractVector
+            ax_obs = Axis(fig[end+1,1], title="Observations")
+            lines!(ax_obs, 1:size(observation[], 1), observation)
+        else
+            ax_obs = Axis(fig[end+1,1], title="Observations", xlabel="index", ylabel="Agent")
+            heatmap!(ax_obs, 1:size(observation[], 1), 1:size(observation[], 2), observation)
+        end
+    end
+    on(observation) do obs
+        @show size(obs)
     end
     resize_to_layout!(fig)
     fig
