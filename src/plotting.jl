@@ -192,9 +192,6 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
             heatmap!(ax_obs, 1:size(observation[], 1), 1:size(observation[], 2), observation)
         end
     end
-    on(observation) do obs
-        @show size(obs)
-    end
     resize_to_layout!(fig)
     fig
 end
