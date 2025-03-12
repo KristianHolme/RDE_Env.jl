@@ -60,6 +60,7 @@ module RDE_Env
     # Policies
     export PolicyRunData, run_policy
     export ConstantRDEPolicy, SinusoidalRDEPolicy, StepwiseRDEPolicy, RandomRDEPolicy
+    export ScaledPolicy
 
     # Plotting
     include("plotting.jl")

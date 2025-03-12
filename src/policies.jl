@@ -247,14 +247,14 @@ struct SinusoidalRDEPolicy{T<:AbstractFloat} <: Policy
     env::RDEEnv{T}
     w_1::T  
     w_2::T  
-
+    scale::T
     function SinusoidalRDEPolicy(env::RDEEnv{T}; w_1::T=1.0, w_2::T=2.0) where {T<:AbstractFloat}
         new{T}(env, w_1, w_2)
     end
 end
 
 function POMDPs.action(π::SinusoidalRDEPolicy, s)
-    t = s[end]
+    t = π.env.t
     action1 = sin(π.w_1 * t)
     action2 = sin(π.w_2 * t)
     if π.env.action_type isa ScalarAreaScalarPressureAction 
@@ -344,6 +344,9 @@ Generates random values in [-1, 1] for each control dimension
 """
 struct RandomRDEPolicy{T<:AbstractFloat} <: Policy
     env::RDEEnv{T}
+    function RandomRDEPolicy(env::RDEEnv{T}) where {T<:AbstractFloat}
+        new{T}(env)
+    end
 end
 
 function POMDPs.action(π::RandomRDEPolicy, state)
@@ -398,4 +401,11 @@ function POMDPs.action(π::DelayedPolicy, s)
     end
 end
 
+struct ScaledPolicy{T<:AbstractFloat} <: Policy
+    policy::Policy
+    scale::T
+end
 
+function POMDPs.action(π::ScaledPolicy, s)
+    return π.scale .* POMDPs.action(π.policy, s)
+end
