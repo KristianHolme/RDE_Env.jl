@@ -239,9 +239,10 @@ mutable struct CompositeReward <: CachedCompositeReward
     function CompositeReward(;target_shock_count::Int=4,
                               lowest_action_magnitude_reward::Float32=1f0,
                               span_reward::Bool=true,
-                              weights::Vector{Float32}=[0.25f0, 0.25f0, 0.25f0, 0.25f0])
+                              weights::Vector{Float32}=[0.25f0, 0.25f0, 0.25f0, 0.25f0],
+                              N::Int=512)
         return new(target_shock_count,
-                   zeros(Float32, 512),
+                   zeros(Float32, N),
                    lowest_action_magnitude_reward,
                    span_reward, weights)
     end

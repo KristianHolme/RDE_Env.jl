@@ -227,7 +227,7 @@ end
 
 function get_minisection_observations(data, minisection_size)
     minisection_u = reshape(data, minisection_size, :)
-    minisection_observations = vec(maximum(minisection_u, dims=1))
+    minisection_observations = vec(maximum(minisection_u, dims=1))#TODO optimise??
     return minisection_observations
 end
 
