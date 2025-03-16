@@ -284,13 +284,17 @@ Policy that applies predefined control values at specified times.
 struct StepwiseRDEPolicy{T<:AbstractFloat} <: Policy
     env::RDEEnv{T}
     ts::Vector{T}  # Vector of time steps
-    c::Vector{Vector{T}}  # Vector of control actions
+    c::Union{Vector{Vector{T}}, Vector{T}}  # Vector of control actions
 
-    function StepwiseRDEPolicy(env::RDEEnv{T}, ts::Vector{T}, c::Vector{Vector{T}}) where {T<:AbstractFloat}
+    function StepwiseRDEPolicy(env::RDEEnv{T}, ts::Vector{T}, c::Union{Vector{Vector{T}}, Vector{T}}) where {T<:AbstractFloat}
         @assert length(ts) == length(c) "Length of time steps and control actions must be equal"
         @assert all(length(action) == 2 for action in c) "Each control action must have 2 elements"
         @assert issorted(ts) "Time steps must be in ascending order"
-        @assert env.action_type isa ScalarAreaScalarPressureAction "StepwiseRDEPolicy only supports ScalarAreaScalarPressureAction"
+        if env.action_type isa ScalarAreaScalarPressureAction
+            @assert eltype(c) <: Vector{T} "Control actions must be a vector of vectors"
+        else
+            @assert eltype(c) <: T "Control actions must be a vector of scalars"
+        end
         env.α = 0.0 #to assure that get_scaled_control works
         new{T}(env, ts, c)
     end
@@ -302,7 +306,7 @@ function POMDPs.action(π::StepwiseRDEPolicy, s)
     past = π.ts .≤ t    
     idx = findlast(past)
     if isnothing(idx)
-        return [0.0, 0.0]
+        return zero(π.c[1])
     end
     return get_scaled_control.([cache.s_current[1], cache.u_p_current[1]], [π.env.smax, π.env.u_pmax], π.c[idx])
 end
