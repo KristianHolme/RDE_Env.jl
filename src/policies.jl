@@ -288,9 +288,9 @@ struct StepwiseRDEPolicy{T<:AbstractFloat} <: Policy
 
     function StepwiseRDEPolicy(env::RDEEnv{T}, ts::Vector{T}, c::Union{Vector{Vector{T}}, Vector{T}}) where {T<:AbstractFloat}
         @assert length(ts) == length(c) "Length of time steps and control actions must be equal"
-        @assert all(length(action) == 2 for action in c) "Each control action must have 2 elements"
         @assert issorted(ts) "Time steps must be in ascending order"
         if env.action_type isa ScalarAreaScalarPressureAction
+            @assert all(length(action) == 2 for action in c) "Each control action must have 2 elements"
             @assert eltype(c) <: Vector{T} "Control actions must be a vector of vectors"
         else
             @assert eltype(c) <: T "Control actions must be a vector of scalars"
