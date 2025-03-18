@@ -228,6 +228,8 @@ function POMDPs.action(π::ConstantRDEPolicy, s)
     end
 end
 
+Base.show(io::IO, π::ConstantRDEPolicy) = print(io, "ConstantRDEPolicy($(typeof(π.env)))")
+
 """
     SinusoidalRDEPolicy{T<:AbstractFloat} <: Policy
 
@@ -265,6 +267,8 @@ function POMDPs.action(π::SinusoidalRDEPolicy, s)
         @error "Unknown action type $(typeof(π.env.action_type)) for SinusoidalRDEPolicy"
     end
 end
+
+Base.show(io::IO, π::SinusoidalRDEPolicy) = print(io, "SinusoidalRDEPolicy($(typeof(π.env)))")
 
 """
     StepwiseRDEPolicy{T<:AbstractFloat} <: Policy
@@ -308,8 +312,16 @@ function POMDPs.action(π::StepwiseRDEPolicy, s)
     if isnothing(idx)
         return zero(π.c[1])
     end
-    return get_scaled_control.([cache.s_current[1], cache.u_p_current[1]], [π.env.smax, π.env.u_pmax], π.c[idx])
+    if π.env.action_type isa ScalarAreaScalarPressureAction
+        return get_scaled_control.([cache.s_current[1], cache.u_p_current[1]], [π.env.smax, π.env.u_pmax], π.c[idx])
+    elseif π.env.action_type isa ScalarPressureAction
+        return get_scaled_control(cache.u_p_current[1], π.env.u_pmax, π.c[idx])
+    else
+        @error "Unknown action type $(typeof(π.env.action_type)) for StepwiseRDEPolicy"
+    end
 end
+
+Base.show(io::IO, π::StepwiseRDEPolicy) = print(io, "StepwiseRDEPolicy($(typeof(π.env)))")
 
 """
     get_scaled_control(current, max_val, target)
@@ -365,6 +377,8 @@ function POMDPs.action(π::RandomRDEPolicy, state)
     end
 end
 
+Base.show(io::IO, π::RandomRDEPolicy) = print(io, "RandomRDEPolicy($(typeof(π.env)))")
+
 """
     DelayedPolicy{T<:AbstractFloat} <: Policy
 
@@ -405,6 +419,8 @@ function POMDPs.action(π::DelayedPolicy, s)
     end
 end
 
+Base.show(io::IO, π::DelayedPolicy) = print(io, "DelayedPolicy($(π.policy), $(π.start_time))")
+
 struct ScaledPolicy{T<:AbstractFloat} <: Policy
     policy::Policy
     scale::T
@@ -413,3 +429,37 @@ end
 function POMDPs.action(π::ScaledPolicy, s)
     return π.scale .* POMDPs.action(π.policy, s)
 end
+
+Base.show(io::IO, π::ScaledPolicy) = print(io, "ScaledPolicy($(π.policy), $(π.scale))")
+
+struct LinearPolicy{T<:AbstractFloat} <: Policy
+    env::RDEEnv{T}
+    start_value::Union{Vector{T}, T}
+    end_value::Union{Vector{T}, T}
+    function LinearPolicy(env::RDEEnv{T}, start_value::Union{Vector{T}, T}, end_value::Union{Vector{T}, T}, start_time::T, end_time::T) where {T<:AbstractFloat}
+        if env.action_type isa ScalarAreaScalarPressureAction
+            @assert length(start_value) == 2 && length(end_value) == 2 "Start and end values must have 2 elements"
+        elseif env.action_type isa ScalarPressureAction
+            @assert length(start_value) == 1 && length(end_value) == 1 "Start and end values must have 1 element"
+        else
+            @error "Unknown action type $(typeof(env.action_type)) for LinearPolicy"
+        end
+        new{T}(env, start_value, end_value, start_time, end_time)
+    end
+end
+
+function POMDPs.action(π::LinearPolicy, s)
+    t = π.env.t
+    tmax = π.env.prob.params.tmax
+    if π.env.action_type isa ScalarAreaScalarPressureAction
+        target_values = π.start_value .+ (π.end_value .- π.start_value) .* t / tmax
+        return get_scaled_control.([π.env.prob.method.cache.s_current[1], π.env.prob.method.cache.u_p_current[1]], [π.env.smax, π.env.u_pmax], target_values)
+    elseif π.env.action_type isa ScalarPressureAction
+        target_value = π.start_value + (π.end_value - π.start_value) * t/tmax
+        return get_scaled_control(π.env.prob.method.cache.u_p_current[1], π.env.u_pmax, target_value)
+    else
+        @error "Unknown action type $(typeof(π.env.action_type)) for LinearPolicy"
+    end
+end
+
+Base.show(io::IO, π::LinearPolicy) = print(io, "LinearPolicy($(typeof(π.env)), $(π.start_value), $(π.end_value)")

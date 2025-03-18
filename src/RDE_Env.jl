@@ -48,7 +48,8 @@ module RDE_Env
     export reset!, act!, observe, state, terminated
 
     include("policies.jl")
-    export Policy, StepwiseRDEPolicy, RandomRDEPolicy, ConstantRDEPolicy, SinusoidalRDEPolicy, DelayedPolicy
+    export Policy, StepwiseRDEPolicy, RandomRDEPolicy, ConstantRDEPolicy, SinusoidalRDEPolicy, 
+        DelayedPolicy, LinearPolicy
 
     # Vectorized environments
     include("vec_env.jl")
