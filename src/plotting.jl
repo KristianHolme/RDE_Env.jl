@@ -278,7 +278,7 @@ function plot_shifted_history(us::AbstractArray, x::AbstractArray,
     fig
 end
 
-function plot_shifted_history(data::PolicyRunData, x::AbstractArray, c=:auto; kwargs...)
+function plot_shifted_history(data::PolicyRunData, x::AbstractArray, c=:auto; use_rewards=true, kwargs...)
     us, = RDE.split_sol(data.states)
     saves_per_action = length(data.state_ts) ÷ length(data.action_ts)
     if c == :auto
@@ -294,7 +294,7 @@ function plot_shifted_history(data::PolicyRunData, x::AbstractArray, c=:auto; kw
         c = speeds[1:end-1]
     end
     plot_shifted_history(us, x, data.state_ts, c; 
-        u_ps=data.u_ps, rewards=data.rewards, action_ts=data.action_ts, kwargs...)
+        u_ps=data.u_ps, rewards=use_rewards ? data.rewards : nothing, action_ts=data.action_ts, kwargs...)
 end
 
 function animate_policy(π::P, env::RDEEnv; kwargs...) where P <: Policy
