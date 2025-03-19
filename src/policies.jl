@@ -27,15 +27,15 @@ end
 
 function Base.show(io::IO, data::PolicyRunData)
     println(io, "PolicyRunData:")
-    println(io, "  action_ts: $(typeof(data.action_ts))")
-    println(io, "  ss: $(typeof(data.ss))")
-    println(io, "  u_ps: $(typeof(data.u_ps))")
-    println(io, "  rewards: $(typeof(data.rewards))")
-    println(io, "  energy_bal: $(typeof(data.energy_bal))")
-    println(io, "  chamber_p: $(typeof(data.chamber_p))")
-    println(io, "  state_ts: $(typeof(data.state_ts))")
-    println(io, "  states: $(typeof(data.states))")
-    println(io, "  observations: $(typeof(data.observations))")
+    println(io, "  action_ts: $(typeof(data.action_ts))($(length(data.action_ts)))")
+    println(io, "  ss: $(typeof(data.ss))($(length(data.ss)))")
+    println(io, "  u_ps: $(typeof(data.u_ps))($(length(data.u_ps)))")
+    println(io, "  rewards: $(typeof(data.rewards))($(length(data.rewards)))")
+    println(io, "  energy_bal: $(typeof(data.energy_bal))($(length(data.energy_bal)))")
+    println(io, "  chamber_p: $(typeof(data.chamber_p))($(length(data.chamber_p)))")
+    println(io, "  state_ts: $(typeof(data.state_ts))($(length(data.state_ts)))")
+    println(io, "  states: $(typeof(data.states))($(length(data.states)))")
+    println(io, "  observations: $(typeof(data.observations))($(length(data.observations)))")
 end
 
 """
@@ -69,7 +69,7 @@ data = run_policy(policy, env, saves_per_action=10)
 function run_policy(π::Policy, env::AbstractRDEEnv{T}; saves_per_action=1) where {T}
     reset!(env)
     dt = env.dt
-    max_steps = ceil(env.prob.params.tmax / dt) + 1 |> Int
+    max_steps = ceil(env.prob.params.tmax / dt) + 2 |> Int # +1 for initial state, +1 for overshoot
     N = env.prob.params.N
     
     # Initialize vectors for action data
@@ -101,29 +101,36 @@ function run_policy(π::Policy, env::AbstractRDEEnv{T}; saves_per_action=1) wher
     total_state_steps = 0
     
     function log!(step)
-        ts[step] = env.t
+        ind = step + 1
+        ts[ind] = env.t
         if eltype(ss) <: AbstractVector
             sections = env.action_type.n_sections
-            ss[step] = section_reduction(env.prob.method.cache.s_current, sections)
+            ss[ind] = section_reduction(env.prob.method.cache.s_current, sections)
         elseif eltype(ss) <: Number
-            ss[step] = mean(env.prob.method.cache.s_current)
+            ss[ind] = mean(env.prob.method.cache.s_current)
         end
         if eltype(u_ps) <: AbstractVector
             sections = env.action_type.n_sections
-            u_ps[step] = section_reduction(env.prob.method.cache.u_p_current, sections)
+            u_ps[ind] = section_reduction(env.prob.method.cache.u_p_current, sections)
         elseif eltype(u_ps) <: Number
-            u_ps[step] = mean(env.prob.method.cache.u_p_current)
+            u_ps[ind] = mean(env.prob.method.cache.u_p_current)
         end
         if eltype(rewards) <: AbstractVector
-            rewards[step] = env.reward
+            rewards[ind] = env.reward
         else
-            rewards[step] = env.reward
+            rewards[ind] = env.reward
         end
-        observations[step] = observe(env)
+        observations[ind] = observe(env)
 
-        step_states = env.prob.sol.u[2:end]
-        step_ts = env.prob.sol.t[2:end]
-        n_states = length(step_states)
+        if step > 0
+            step_states = env.prob.sol.u[2:end]
+            step_ts = env.prob.sol.t[2:end]
+            n_states = length(step_states)
+        else
+            step_states = [env.state]
+            step_ts = [env.t]
+            n_states = 1
+        end
 
         # Calculate indices for this step's data
         start_idx = total_state_steps + 1
@@ -151,6 +158,7 @@ function run_policy(π::Policy, env::AbstractRDEEnv{T}; saves_per_action=1) wher
         total_state_steps += n_states
     end
 
+    log!(step)
     while !env.done && step < max_steps
         action = POMDPs.action(π, observe(env))
         act!(env, action, saves_per_action=saves_per_action)
@@ -159,15 +167,15 @@ function run_policy(π::Policy, env::AbstractRDEEnv{T}; saves_per_action=1) wher
     end
     
     # Trim arrays to actual size
-    ts = ts[1:step]
-    ss = ss[1:step]
-    u_ps = u_ps[1:step]
-    rewards = rewards[1:step]
+    ts = ts[1:step+1]
+    ss = ss[1:step+1]
+    u_ps = u_ps[1:step+1]
+    rewards = rewards[1:step+1]
     energy_bal = energy_bal[1:total_state_steps]
     chamber_p = chamber_p[1:total_state_steps]
     state_ts = state_ts[1:total_state_steps]
     states = states[1:total_state_steps]
-    observations = observations[1:step]
+    observations = observations[1:step+1]
 
     return PolicyRunData{T}(ts, ss, u_ps, rewards, energy_bal, chamber_p, state_ts, states, observations)
 end
