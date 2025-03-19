@@ -280,7 +280,7 @@ end
 
 function plot_shifted_history(data::PolicyRunData, x::AbstractArray, c=:auto; use_rewards=true, kwargs...)
     us, = RDE.split_sol(data.states)
-    saves_per_action = length(data.state_ts) ÷ length(data.action_ts)
+    saves_per_action = (length(data.state_ts)-1) ÷ (length(data.action_ts)-1)
     if c == :auto
         counts = RDE.count_shocks.(us, x[2] - x[1])
         u_ps = data.u_ps
@@ -288,7 +288,7 @@ function plot_shifted_history(data::PolicyRunData, x::AbstractArray, c=:auto; us
             u_ps = mean.(u_ps)
         end
         if saves_per_action > 1
-            u_ps = repeat(u_ps, inner=saves_per_action)
+            u_ps = [u_ps[1]; repeat(u_ps[2:end], inner=saves_per_action)]
         end
         speeds = RDE.predict_speed.(u_ps, counts)
         c = speeds[1:end-1]
