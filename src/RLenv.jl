@@ -27,6 +27,14 @@ mutable struct RDEEnvCache{T<:AbstractFloat}#TODO remove circ
 end
 
 function Base.show(io::IO, cache::RDEEnvCache)
+    if get(io, :compact, false)::Bool
+        print(io, "RDEEnvCache{$(eltype(cache.circ_u))}")
+    else
+        print(io, "RDEEnvCache{$(eltype(cache.circ_u))}(N=$(length(cache.circ_u)))")
+    end
+end
+
+function Base.show(io::IO, ::MIME"text/plain", cache::RDEEnvCache)
     println(io, "RDEEnvCache{$(eltype(cache.circ_u))} with:")
     println(io, "  circ_u: $(typeof(cache.circ_u)) of size $(length(cache.circ_u))")
     println(io, "  circ_λ: $(typeof(cache.circ_λ)) of size $(length(cache.circ_λ))")
@@ -143,6 +151,14 @@ RDEEnv(; kwargs...) = RDEEnv{Float32}(; kwargs...)
 RDEEnv(params::RDEParam{T}; kwargs...) where {T<:AbstractFloat} = RDEEnv{T}(; params=params, kwargs...)
 
 function Base.show(io::IO, env::RDEEnv{T}) where {T<:AbstractFloat}
+    if get(io, :compact, false)::Bool
+        print(io, "RDEEnv{$T}(t=$(env.t), steps=$(env.steps_taken))")
+    else
+        print(io, "RDEEnv{$T}(t=$(env.t), steps=$(env.steps_taken), $(env.action_type))")
+    end
+end
+
+function Base.show(io::IO, ::MIME"text/plain", env::RDEEnv{T}) where {T<:AbstractFloat}
     println(io, "RDEEnv{$T}:")
     println(io, "  dt: $(env.dt)")
     println(io, "  t: $(env.t)")
@@ -153,7 +169,6 @@ function Base.show(io::IO, env::RDEEnv{T}) where {T<:AbstractFloat}
     println(io, "  reward type: $(env.reward_type)")
     println(io, "  steps taken: $(env.steps_taken)")
 end
-
 
 """
     CommonRLInterface.act!(env::RDEEnv{T}, action; saves_per_action::Int=0) where {T<:AbstractFloat}

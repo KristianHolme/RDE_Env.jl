@@ -158,7 +158,20 @@ end
 MultiSectionObservation(n::Int) = MultiSectionObservation(n_sections=n)
 
 function Base.show(io::IO, obs_strategy::MultiSectionObservation)
-    print(io, "MultiSectionObservation(n_sections=$(obs_strategy.n_sections), look_ahead_speed=$(obs_strategy.look_ahead_speed), minisections_per_section=$(obs_strategy.minisections_per_section), dt=$(obs_strategy.dt), L=$(obs_strategy.L))")
+    if get(io, :compact, false)::Bool
+        print(io, "MultiSectionObservation(n_sections=$(obs_strategy.n_sections))")
+    else
+        print(io, "MultiSectionObservation(n_sections=$(obs_strategy.n_sections), minisections_per_section=$(obs_strategy.minisections_per_section))")
+    end
+end
+
+function Base.show(io::IO, ::MIME"text/plain", obs_strategy::MultiSectionObservation)
+    println(io, "MultiSectionObservation:")
+    println(io, "  n_sections: $(obs_strategy.n_sections)")
+    println(io, "  look_ahead_speed: $(obs_strategy.look_ahead_speed)")
+    println(io, "  minisections_per_section: $(obs_strategy.minisections_per_section)")
+    println(io, "  dt: $(obs_strategy.dt)")
+    println(io, "  L: $(obs_strategy.L)")
 end
 
 function compute_observation(env::AbstractRDEEnv, obs_strategy::MultiSectionObservation)
@@ -241,6 +254,16 @@ end
     target_shock_count::Int = 4
 end
 
+function Base.show(io::IO, obs::CompositeObservation)
+    print(io, "CompositeObservation(fft_terms=$(obs.fft_terms))")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", obs::CompositeObservation)
+    println(io, "CompositeObservation:")
+    println(io, "  fft_terms: $(obs.fft_terms)")
+    println(io, "  target_shock_count: $(obs.target_shock_count)")
+end
+
 function compute_observation(env::AbstractRDEEnv, strategy::CompositeObservation)
     N = env.prob.params.N
     
@@ -284,9 +307,19 @@ end
 MultiCenteredObservation(n::Int) = MultiCenteredObservation(n_sections=n)
 
 function Base.show(io::IO, obs_strategy::MultiCenteredObservation)
-    print(io, "MultiCenteredObservation(n_sections=$(obs_strategy.n_sections), target_shock_count=$(obs_strategy.target_shock_count))")
+    if get(io, :compact, false)::Bool
+        print(io, "MultiCenteredObservation(n_sections=$(obs_strategy.n_sections))")
+    else
+        print(io, "MultiCenteredObservation(n_sections=$(obs_strategy.n_sections), target_shock_count=$(obs_strategy.target_shock_count))")
+    end
 end
 
+function Base.show(io::IO, ::MIME"text/plain", obs_strategy::MultiCenteredObservation)
+    println(io, "MultiCenteredObservation:")
+    println(io, "  n_sections: $(obs_strategy.n_sections)")
+    println(io, "  target_shock_count: $(obs_strategy.target_shock_count)")
+    println(io, "  minisections: $(obs_strategy.minisections)")
+end
 
 function compute_observation(env::AbstractRDEEnv, obs_strategy::MultiCenteredObservation)
     (minisection_observations_u,

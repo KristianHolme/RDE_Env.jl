@@ -26,6 +26,16 @@ struct PolicyRunData{T<:AbstractFloat}
 end
 
 function Base.show(io::IO, data::PolicyRunData)
+    # Compact display
+    if length(data.action_ts) == length(data.state_ts)
+        print(io, "PolicyRunData(steps: $(length(data.action_ts)))")
+    else
+        print(io, "PolicyRunData(steps: $(length(data.action_ts)), states: $(length(data.state_ts)))")
+    end
+end
+
+function Base.show(io::IO, ::MIME"text/plain", data::PolicyRunData)
+    # Detailed display (used in REPL and notebooks)
     println(io, "PolicyRunData:")
     println(io, "  action_ts: $(typeof(data.action_ts))($(length(data.action_ts)))")
     println(io, "  ss: $(typeof(data.ss))($(length(data.ss)))")
@@ -162,6 +172,10 @@ function run_policy(π::Policy, env::AbstractRDEEnv{T}; saves_per_action=1) wher
     while !env.done && step < max_steps
         action = POMDPs.action(π, observe(env))
         act!(env, action, saves_per_action=saves_per_action)
+        if env.terminated
+            @assert env.done "Env terminated but done is false"
+            break
+        end
         step += 1
         log!(step)
     end
@@ -236,7 +250,14 @@ function POMDPs.action(π::ConstantRDEPolicy, s)
     end
 end
 
-Base.show(io::IO, π::ConstantRDEPolicy) = print(io, "ConstantRDEPolicy($(typeof(π.env)))")
+function Base.show(io::IO, π::ConstantRDEPolicy)
+    print(io, "ConstantRDEPolicy()")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", π::ConstantRDEPolicy)
+    println(io, "ConstantRDEPolicy:")
+    println(io, "  env: $(typeof(π.env))")
+end
 
 """
     SinusoidalRDEPolicy{T<:AbstractFloat} <: Policy
@@ -276,7 +297,16 @@ function POMDPs.action(π::SinusoidalRDEPolicy, s)
     end
 end
 
-Base.show(io::IO, π::SinusoidalRDEPolicy) = print(io, "SinusoidalRDEPolicy($(typeof(π.env)))")
+function Base.show(io::IO, π::SinusoidalRDEPolicy)
+    print(io, "SinusoidalRDEPolicy()")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", π::SinusoidalRDEPolicy)
+    println(io, "SinusoidalRDEPolicy:")
+    println(io, "  w₁: $(π.w_1)")
+    println(io, "  w₂: $(π.w_2)")
+    println(io, "  env: $(typeof(π.env))")
+end
 
 """
     StepwiseRDEPolicy{T<:AbstractFloat} <: Policy
@@ -329,7 +359,16 @@ function POMDPs.action(π::StepwiseRDEPolicy, s)
     end
 end
 
-Base.show(io::IO, π::StepwiseRDEPolicy) = print(io, "StepwiseRDEPolicy($(typeof(π.env)))")
+function Base.show(io::IO, π::StepwiseRDEPolicy)
+    print(io, "StepwiseRDEPolicy($(length(π.ts)) steps)")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", π::StepwiseRDEPolicy)
+    println(io, "StepwiseRDEPolicy:")
+    println(io, "  steps: $(length(π.ts))")
+    println(io, "  env: $(typeof(π.env))")
+    println(io, "  time range: [$(minimum(π.ts)), $(maximum(π.ts))]")
+end
 
 """
     get_scaled_control(current, max_val, target)
@@ -385,7 +424,14 @@ function POMDPs.action(π::RandomRDEPolicy, state)
     end
 end
 
-Base.show(io::IO, π::RandomRDEPolicy) = print(io, "RandomRDEPolicy($(typeof(π.env)))")
+function Base.show(io::IO, π::RandomRDEPolicy)
+    print(io, "RandomRDEPolicy()")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", π::RandomRDEPolicy)
+    println(io, "RandomRDEPolicy:")
+    println(io, "  env: $(typeof(π.env))")
+end
 
 """
     DelayedPolicy{T<:AbstractFloat} <: Policy
@@ -427,7 +473,16 @@ function POMDPs.action(π::DelayedPolicy, s)
     end
 end
 
-Base.show(io::IO, π::DelayedPolicy) = print(io, "DelayedPolicy($(π.policy), $(π.start_time))")
+function Base.show(io::IO, π::DelayedPolicy) 
+    print(io, "DelayedPolicy(t>$(π.start_time))")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", π::DelayedPolicy)
+    println(io, "DelayedPolicy:")
+    println(io, "  start_time: $(π.start_time)")
+    println(io, "  policy: $(π.policy)")
+    println(io, "  env: $(typeof(π.env))")
+end
 
 struct ScaledPolicy{T<:AbstractFloat} <: Policy
     policy::Policy
@@ -438,7 +493,15 @@ function POMDPs.action(π::ScaledPolicy, s)
     return π.scale .* POMDPs.action(π.policy, s)
 end
 
-Base.show(io::IO, π::ScaledPolicy) = print(io, "ScaledPolicy($(π.policy), $(π.scale))")
+function Base.show(io::IO, π::ScaledPolicy)
+    print(io, "ScaledPolicy(scale=$(π.scale))")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", π::ScaledPolicy)
+    println(io, "ScaledPolicy:")
+    println(io, "  scale: $(π.scale)")
+    println(io, "  policy: $(π.policy)")
+end
 
 struct LinearPolicy{T<:AbstractFloat} <: Policy
     env::RDEEnv{T}
@@ -470,4 +533,13 @@ function POMDPs.action(π::LinearPolicy, s)
     end
 end
 
-Base.show(io::IO, π::LinearPolicy) = print(io, "LinearPolicy($(typeof(π.env)), $(π.start_value), $(π.end_value)")
+function Base.show(io::IO, π::LinearPolicy)
+    print(io, "LinearPolicy()")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", π::LinearPolicy)
+    println(io, "LinearPolicy:")
+    println(io, "  start_value: $(π.start_value)")
+    println(io, "  end_value: $(π.end_value)")
+    println(io, "  env: $(typeof(π.env))")
+end

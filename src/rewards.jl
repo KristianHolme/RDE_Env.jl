@@ -120,6 +120,11 @@ function Base.show(io::IO, rt::PeriodicityReward)
     print(io, "PeriodicityReward(N=$(length(rt.cache)))")
 end
 
+function Base.show(io::IO, ::MIME"text/plain", rt::PeriodicityReward)
+    println(io, "PeriodicityReward:")
+    println(io, "  cache size: $(length(rt.cache))")
+end
+
 function action_magnitude_factor(lowest_action_magnitude_reward::AbstractFloat, action_magnitudes)
     α = lowest_action_magnitude_reward
     action_magnitude_inv = 1f0 .- action_magnitudes
@@ -135,7 +140,16 @@ end
 end
 
 function Base.show(io::IO, rt::MultiSectionReward)
-    print(io, "MultiSectionReward(n_sections=$(rt.n_sections), target_shock_count=$(rt.target_shock_count), lowest_action_magnitude_reward=$(rt.lowest_action_magnitude_reward))")
+    print(io, "MultiSectionReward(n_sections=$(rt.n_sections))")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", rt::MultiSectionReward)
+    println(io, "MultiSectionReward:")
+    println(io, "  n_sections: $(rt.n_sections)")
+    println(io, "  target_shock_count: $(rt.target_shock_count)")
+    println(io, "  lowest_action_magnitude_reward: $(rt.lowest_action_magnitude_reward)")
+    println(io, "  weights: $(rt.weights)")
+    println(io, "  cache size: $(length(rt.cache))")
 end
 
 function set_reward!(env::AbstractRDEEnv, rt::MultiSectionReward)
@@ -249,7 +263,16 @@ mutable struct CompositeReward <: CachedCompositeReward
 end
 
 function Base.show(io::IO, rt::CompositeReward)
-    print(io, "CompositeReward(target_shock_count=$(rt.target_shock_count), lowest_action_magnitude_reward=$(rt.lowest_action_magnitude_reward))")
+    print(io, "CompositeReward(target_shock_count=$(rt.target_shock_count))")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", rt::CompositeReward)
+    println(io, "CompositeReward:")
+    println(io, "  target_shock_count: $(rt.target_shock_count)")
+    println(io, "  lowest_action_magnitude_reward: $(rt.lowest_action_magnitude_reward)")
+    println(io, "  span_reward: $(rt.span_reward)")
+    println(io, "  weights: $(rt.weights)")
+    println(io, "  cache size: $(length(rt.cache))")
 end
 
 function set_reward!(env::AbstractRDEEnv{T}, rt::CompositeReward) where T
@@ -276,6 +299,15 @@ struct ConstantTargetReward <: AbstractRDEReward
     function ConstantTargetReward(;target::Float32=0.64f0)
         return new(target)
     end
+end
+
+function Base.show(io::IO, rt::ConstantTargetReward)
+    print(io, "ConstantTargetReward(target=$(rt.target))")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", rt::ConstantTargetReward)
+    println(io, "ConstantTargetReward:")
+    println(io, "  target: $(rt.target)")
 end
 
 function set_reward!(env::AbstractRDEEnv{T}, rt::ConstantTargetReward) where T
