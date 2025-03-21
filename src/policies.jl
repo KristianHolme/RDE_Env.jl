@@ -223,6 +223,14 @@ function section_reduction(v::Vector{T}, sections::Int) where {T}
 end
 
 
+function get_env(π::Policy)
+    if hasfield(typeof(π), :env)
+        return getfield(π, :env)
+    else
+        return nothing
+    end
+end
+
 """
     ConstantRDEPolicy <: Policy
 
@@ -487,6 +495,10 @@ end
 struct ScaledPolicy{T<:AbstractFloat} <: Policy
     policy::Policy
     scale::T
+end
+
+function get_env(π::ScaledPolicy)
+    return get_env(π.policy)
 end
 
 function POMDPs.action(π::ScaledPolicy, s)
