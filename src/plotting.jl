@@ -221,6 +221,7 @@ function plot_shifted_history(us::AbstractArray, x::AbstractArray,
                             u_ps=nothing, rewards=nothing, 
                             target_shock_count=nothing,
                             action_ts=ts,
+                            plot_shocks=true,
                             title=nothing)
     pre_check_ts!(ts)
     pre_check_ts!(action_ts)
@@ -232,23 +233,24 @@ function plot_shifted_history(us::AbstractArray, x::AbstractArray,
             limits=(extrema(ts), extrema(x)), xautolimitmargin=(0.0, 0.0))
     hm = heatmap!(ax, ts, x, stack(shifted_us)', colorscale=identity)
     Colorbar(fig[1,2], hm)
-    
-    counts = RDE.count_shocks.(us, x[2] - x[1])
-    ax2 = Axis(fig[2,1], xlabel="t", ylabel="Number of shocks", 
-                limits=(nothing, (-0.05, maximum(counts)*1.05)),
-                xautolimitmargin=(0.0, 0.0))
-    lines!(ax2, ts, counts)
-    if target_shock_count !== nothing
-        hlines!(ax2, target_shock_count, color=:red, alpha=0.8, linestyle=:dash) #maybe change to stair if target shocks changes durin episode
-        # Adjust y limits to ensure hline is visible
-        ylims!(ax2, (ax2.limits[][2][1], max(ax2.limits[][2][2], target_shock_count * 1.05)))
+    if plot_shocks
+        counts = RDE.count_shocks.(us, x[2] - x[1])
+        ax2 = Axis(fig[end+1,1], xlabel="t", ylabel="Number of shocks", 
+                    limits=(nothing, (-0.05, maximum(counts)*1.05)),
+                    xautolimitmargin=(0.0, 0.0))
+        lines!(ax2, ts, counts)
+        if target_shock_count !== nothing
+            hlines!(ax2, target_shock_count, color=:red, alpha=0.8, linestyle=:dash) #maybe change to stair if target shocks changes durin episode
+            # Adjust y limits to ensure hline is visible
+            ylims!(ax2, (ax2.limits[][2][1], max(ax2.limits[][2][2], target_shock_count * 1.05)))
+        end
+        linkxaxes!(ax, ax2)
     end
-    linkxaxes!(ax, ax2)
 
     if u_ps !== nothing
         u_p_minimum = minimum(minimum.(u_ps))
         u_p_maximum = maximum(maximum.(u_ps))
-        ax3 = Axis(fig[end+1,1], xlabel="t", ylabel="u_p", 
+        ax3 = Axis(fig[end+1,1], xlabel="t", ylabel="uₚ", 
                     limits=(nothing, (u_p_minimum-0.05, u_p_maximum*1.05)),
                     xautolimitmargin=(0.0, 0.0))
         if eltype(u_ps) <: AbstractVector
