@@ -228,6 +228,7 @@ function CommonRLInterface.act!(env::RDEEnv{T}, action; saves_per_action::Int=0)
 
     @logmsg LogLevel(-10000) "taking action $action at time $(env.t), controls: $(mean.(prev_controls)) to $(mean.(c))"
 
+    #TODO use remake instead of recreating ??
     prob_ode = ODEProblem{true, SciMLBase.FullSpecialize}(RDE_RHS!, env.state, t_span, env.prob)
     
     if saves_per_action == 0
