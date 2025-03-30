@@ -555,3 +555,141 @@ function Base.show(io::IO, ::MIME"text/plain", π::LinearPolicy)
     println(io, "  end_value: $(π.end_value)")
     println(io, "  env: $(typeof(π.env))")
 end
+
+"""
+    LinearCheckpoints{T<:AbstractFloat} <: Policy
+
+Policy that applies linearly interpolated control values between specified checkpoints.
+
+# Fields
+- `env::RDEEnv{T}`: RDE environment
+- `ts::Vector{T}`: Vector of time checkpoints
+- `c::Union{Vector{Vector{T}}, Vector{T}}`: Vector of control actions at checkpoints
+
+# Notes
+- Supports both ScalarAreaScalarPressureAction and ScalarPressureAction
+- Requires sorted time checkpoints
+- Each control action must have 2 elements for ScalarAreaScalarPressureAction
+- Linear interpolation is performed between checkpoints
+"""
+struct LinearCheckpoints{T<:AbstractFloat} <: Policy
+    env::RDEEnv{T}
+    ts::Vector{T}  # Vector of time checkpoints
+    c::Union{Vector{Vector{T}}, Vector{T}}  # Vector of control actions at checkpoints
+
+    function LinearCheckpoints(env::RDEEnv{T}, ts::Vector{T}, c::Union{Vector{Vector{T}}, Vector{T}}) where {T<:AbstractFloat}
+        @assert length(ts) == length(c) "Length of time checkpoints and control actions must be equal"
+        @assert issorted(ts) "Time checkpoints must be in ascending order"
+        if env.action_type isa ScalarAreaScalarPressureAction
+            @assert all(length(action) == 2 for action in c) "Each control action must have 2 elements"
+            @assert eltype(c) <: Vector{T} "Control actions must be a vector of vectors"
+        else
+            @assert eltype(c) <: T "Control actions must be a vector of scalars"
+        end
+        env.α = 0.0 #to assure that get_scaled_control works
+        new{T}(env, ts, c)
+    end
+end
+
+function POMDPs.action(π::LinearCheckpoints, s)
+    t = π.env.t
+    cache = π.env.prob.method.cache
+    
+    # Find the checkpoints to interpolate between
+    past = π.ts .≤ t
+    idx = findlast(past)
+    
+    if isnothing(idx)
+        # Before first checkpoint, use first checkpoint value
+        return π.c[1]
+    elseif idx == length(π.ts)
+        # After last checkpoint, use last checkpoint value
+        return π.c[end]
+    end
+    
+    # Linear interpolation between checkpoints
+    t1, t2 = π.ts[idx], π.ts[idx + 1]
+    c1, c2 = π.c[idx], π.c[idx + 1]
+    
+    if π.env.action_type isa ScalarAreaScalarPressureAction
+        # Interpolate each component separately
+        target_values = c1 .+ (c2 .- c1) .* (t - t1) / (t2 - t1)
+        return get_scaled_control.([cache.s_current[1], cache.u_p_current[1]], [π.env.smax, π.env.u_pmax], target_values)
+    elseif π.env.action_type isa ScalarPressureAction
+        # Interpolate single value
+        target_value = c1 + (c2 - c1) * (t - t1) / (t2 - t1)
+        return get_scaled_control(cache.u_p_current[1], π.env.u_pmax, target_value)
+    else
+        @error "Unknown action type $(typeof(π.env.action_type)) for LinearCheckpoints"
+    end
+end
+
+function Base.show(io::IO, π::LinearCheckpoints)
+    print(io, "LinearCheckpoints($(length(π.ts)) checkpoints)")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", π::LinearCheckpoints)
+    println(io, "LinearCheckpoints:")
+    println(io, "  checkpoints: $(length(π.ts))")
+    println(io, "  env: $(typeof(π.env))")
+    println(io, "  time range: [$(minimum(π.ts)), $(maximum(π.ts))]")
+end
+
+"""
+    SawtoothPolicy{T<:AbstractFloat} <: Policy
+
+Policy that implements a sawtooth control pattern for pressure control, periodically increasing from min to max value.
+
+# Fields
+- `env::RDEEnv{T}`: RDE environment
+- `timescale::T`: Time period for one complete sawtooth cycle
+- `max_value::T`: Maximum pressure value
+- `min_value::T`: Minimum pressure value (value to drop to)
+
+# Notes
+- Only compatible with ScalarPressureAction
+- Starts from the current injection pressure and gradually increases
+"""
+struct SawtoothPolicy{T<:AbstractFloat} <: Policy
+    env::RDEEnv{T}
+    timescale::T
+    max_value::T
+    min_value::T
+
+    function SawtoothPolicy(env::RDEEnv{T}, timescale::T, max_value::T, min_value::T) where {T<:AbstractFloat}
+        @assert env.action_type isa ScalarPressureAction "SawtoothPolicy only supports ScalarPressureAction"
+        @assert timescale > 0 "Timescale must be positive"
+        @assert max_value > min_value "Max value must be greater than min value"
+        env.α = 0.0 #to assure that get_scaled_control works
+        new{T}(env, timescale, max_value, min_value)
+    end
+end
+
+function POMDPs.action(π::SawtoothPolicy, s)
+    t = π.env.t
+    cache = π.env.prob.method.cache
+    
+    # Calculate the current phase in the sawtooth cycle
+    phase = mod(t, π.timescale)
+    period_number = t ÷ π.timescale + 1 
+    # Calculate target value based on phase
+    # Linear increase from min to max
+    max_value = π.max_value
+    min_value = period_number == 1 ? π.env.prob.params.u_p : π.min_value
+    target_value = min_value + (max_value - min_value) * phase / π.timescale 
+    
+    return get_scaled_control(cache.u_p_current[1], π.env.u_pmax, target_value)
+end
+
+function Base.show(io::IO, π::SawtoothPolicy)
+    print(io, "SawtoothPolicy(timescale=$(π.timescale))")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", π::SawtoothPolicy)
+    println(io, "SawtoothPolicy:")
+    println(io, "  timescale: $(π.timescale)")
+    println(io, "  max_value: $(π.max_value)")
+    println(io, "  min_value: $(π.min_value)")
+    println(io, "  env: $(typeof(π.env))")
+end
+

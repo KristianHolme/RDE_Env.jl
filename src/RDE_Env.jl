@@ -49,7 +49,7 @@ module RDE_Env
 
     include("policies.jl")
     export Policy, StepwiseRDEPolicy, RandomRDEPolicy, ConstantRDEPolicy, SinusoidalRDEPolicy, 
-        DelayedPolicy, LinearPolicy, get_env
+        DelayedPolicy, LinearPolicy, get_env, LinearCheckpoints, SawtoothPolicy
 
     # Vectorized environments
     include("vec_env.jl")

@@ -222,12 +222,13 @@ function plot_shifted_history(us::AbstractArray, x::AbstractArray,
                             target_shock_count=nothing,
                             action_ts=ts,
                             plot_shocks=true,
-                            title=nothing)
+                            title=nothing,
+                            size=(1200, 600))
     pre_check_ts!(ts)
     pre_check_ts!(action_ts)
     shifted_us = Array.(RDE.shift_inds(us, x, ts, c))
 
-    fig = Figure(size=(1200, 600))
+    fig = Figure(size=size)
     ax = Axis(fig[1,1], title="u(ψ, t)", xlabel="t",
             ylabel="ψ", yzoomlock=true, ypanlock=true,
             limits=(extrema(ts), extrema(x)), xautolimitmargin=(0.0, 0.0))
