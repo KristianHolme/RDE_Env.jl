@@ -22,7 +22,8 @@ struct PolicyRunData{T<:AbstractFloat}
     chamber_p::Vector{T} #chamber pressure at each state
     state_ts::Vector{T} #time points for states
     states::Vector{Vector{T}} #states at each time point
-    observations::Union{Vector{Vector{T}}, Vector{Matrix{T}}} #observations at each time point
+    observations::Union{Union{Vector{Vector{T}}, Vector{Matrix{T}}}, Vector{Union{Vector{T}, Matrix{T}}}} #observations at each time point
+    # TODO:  change last type to just Union{Union{Vector{Vector{T}}, Vector{Matrix{T}}}??
 end
 
 function Base.show(io::IO, data::PolicyRunData)
