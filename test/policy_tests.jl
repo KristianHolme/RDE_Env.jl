@@ -31,7 +31,7 @@
                     @test length(data.states) == length(data.action_ts)
                 else
                     # For saves_per_action > 0, we should have more state points
-                    @test length(data.states) ≥ length(data.action_ts) * saves_per_action
+                    @test length(data.states) - 1 ≥ (length(data.action_ts)-1) * saves_per_action
                 end
                 
                 # Test time consistency

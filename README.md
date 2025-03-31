@@ -99,7 +99,7 @@ The module provides several visualization tools:
 # Basic trajectory plot
 plot_policy_data(env, data)
 
-# History with shifted waves
+# plot the whole simulation in a moving referance frame
 plot_shifted_history(data, env.prob.x)
 
 # Animated visualization

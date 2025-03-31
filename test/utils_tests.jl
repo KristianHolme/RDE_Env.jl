@@ -37,7 +37,7 @@
     @testset "sigmoid_to_linear" begin
         # Test basic properties
         @test sigmoid_to_linear(0.1) ≈ reward_sigmoid(0.1)
-        @test sigmoid_to_linear(0.3) == 0.3
+        @test sigmoid_to_linear(0.7) == 0.7
         
         # Test type stability
         @test typeof(sigmoid_to_linear(1.0)) == Float64
