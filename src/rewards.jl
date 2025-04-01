@@ -188,15 +188,18 @@ function calculate_periodicity_reward(u::AbstractVector{T}, N::Int, target_shock
     return one(T)
 end
 
+function calculate_shock_reward(shocks::T, target_shock_count::Int, max_shocks::Int) where T
+    max_shocks = max_shocks + T(1e-6)
+    shock_reward = max(min(shocks/target_shock_count, (shocks-max_shocks)/(target_shock_count-max_shocks)), zero(shocks))
+    return sigmoid_to_linear(shock_reward)
+end
+
 function calculate_shock_rewards(u::AbstractVector, dx::T, L::T, N::Int, target_shock_count::Int) where T
     shock_inds = RDE.shock_indices(u, dx)
     shocks = T(length(shock_inds))
     @logmsg LogLevel(-10000) "shocks: $shocks"
-    ϵ = T(1e-6)
-    max_shocks = T(4 + ϵ)
-    shock_reward = max(min(shocks/target_shock_count, (shocks-max_shocks)/(target_shock_count-max_shocks)), zero(T))
-    # shock_reward = shocks == target_shock_count ? one(T) : zero(T)
-    shock_reward = sigmoid_to_linear(shock_reward)
+    max_shocks = 4
+    shock_reward = calculate_shock_reward(shocks, target_shock_count, max_shocks)
 
     if shocks > 1
         optimal_spacing = L/target_shock_count

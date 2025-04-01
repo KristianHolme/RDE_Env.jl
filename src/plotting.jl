@@ -47,9 +47,11 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
         time_idx = Observable(1),
         player_controls=true,
         rewards_and_shocks=true,
-        energy_and_chamber_pressure=true,
+        energy_and_chamber_pressure=false,
         control_history=true,
         observations=false,
+        live_control=false,
+        size=(1000,900),
         kwargs...)
     action_ts = data.action_ts
     ss = data.ss
@@ -80,7 +82,7 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
     # s = @lift(ss[sparse_to_dense_ind(state_ts, action_ts, $time_idx)])
     # u_p = @lift(u_ps[sparse_to_dense_ind(state_ts, action_ts, $time_idx)])
     
-    fig = Figure(size=(1000,900))
+    fig = Figure(;size)
     upper_area = fig[1,1] = GridLayout()
     main_layout = fig[2,1] = GridLayout()
     if control_history || energy_and_chamber_pressure || rewards_and_shocks
@@ -139,13 +141,11 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
         vlines!(ax_shocks, fine_time, color=:green, alpha=0.5)
     end
 
-    if energy_and_chamber_pressure
+    if control_history
         metrics_action_Area_plots += 1
         ax_s = Axis(metrics_action_area[1:2,metrics_action_Area_plots], xlabel="t", ylabel="s", yticklabelcolor=:forestgreen)
         ax_u_p = Axis(metrics_action_area[1:2,metrics_action_Area_plots], ylabel="u_p", yaxisposition = :right, yticklabelcolor=:royalblue)
-    end
 
-    if control_history
         hidespines!(ax_u_p)
         hidexdecorations!(ax_u_p)
         hideydecorations!(ax_u_p, ticklabels=false, ticks=false, label=false)
@@ -169,7 +169,7 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
         RDE.plot_controls(play_ctrl_area, time_idx, length(state_ts))
     end
 
-    if eltype(u_ps) <: AbstractVector
+    if live_control && eltype(u_ps) <: AbstractVector
         u_p_t = @lift(u_ps[$sparse_time_idx])
         max_u_p = maximum(maximum.(u_ps))
         ax_live_u_p = Axis(main_layout[1,1][3,1], ylabel="u_p", yaxisposition = :left,
