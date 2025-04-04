@@ -127,40 +127,59 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
         # Add rewards and shocks
         ax_rewards = Axis(metrics_action_area[1,metrics_action_Area_plots], title="Rewards", ylabel="r")
         hidexdecorations!(ax_rewards, grid = false)
+        reward_color = :orange
         if eltype(rewards) <: AbstractVector
-            lines!.(Ref(ax_rewards), Ref(action_ts), eachrow(stack(rewards)), color=:orange)
+            lines!.(Ref(ax_rewards), Ref(action_ts), eachrow(stack(rewards)), color=reward_color)
+            for i in 1:length(rewards[sparse_time_idx[]])
+                scatter!(ax_rewards, sparse_time, @lift(rewards[$sparse_time_idx][i]), color=reward_color)
+            end
         else
-            lines!(ax_rewards, action_ts, rewards, color=:orange)
+            lines!(ax_rewards, action_ts, rewards, color=reward_color)
+            scatter!(ax_rewards, sparse_time, @lift(rewards[$sparse_time_idx]), color=reward_color)
         end
-        vlines!(ax_rewards, fine_time, color=:green, alpha=0.5)
+        # vlines!(ax_rewards, fine_time, color=:green, alpha=0.5)
 
         ax_shocks = Axis(metrics_action_area[2,metrics_action_Area_plots], title="Shocks", xlabel="t")
         dx = env.prob.x[2] - env.prob.x[1]
         us, = RDE.split_sol(states)
-        lines!(ax_shocks, state_ts, RDE.count_shocks.(us, dx))
-        vlines!(ax_shocks, fine_time, color=:green, alpha=0.5)
+        shocks = RDE.count_shocks.(us, dx)
+        lines!(ax_shocks, state_ts, shocks)
+        scatter!(ax_shocks, sparse_time, @lift(shocks[$time_idx]))
+        # vlines!(ax_shocks, fine_time, color=:green, alpha=0.5)
     end
 
     if control_history
         metrics_action_Area_plots += 1
-        ax_s = Axis(metrics_action_area[1:2,metrics_action_Area_plots], xlabel="t", ylabel="s", yticklabelcolor=:forestgreen)
-        ax_u_p = Axis(metrics_action_area[1:2,metrics_action_Area_plots], ylabel="u_p", yaxisposition = :right, yticklabelcolor=:royalblue)
+        plot_s = !(norm(diff(ss)) ≈ 0)
+            
+        ax_u_p = Axis(metrics_action_area[1:2,metrics_action_Area_plots], ylabel="uₚ", yticklabelcolor=:royalblue)
+        ylims!(ax_u_p, (0, env.u_pmax*1.05))
+        
+        if plot_s
+            ax_s = Axis(metrics_action_area[1:2,metrics_action_Area_plots], xlabel="t", ylabel="s", yticklabelcolor=:forestgreen, yaxisposition = :right)
+            hidespines!(ax_s)
+            hidexdecorations!(ax_s)
+            hideydecorations!(ax_s, ticklabels=false, ticks=false, label=false)
+        end
 
-        hidespines!(ax_u_p)
-        hidexdecorations!(ax_u_p)
-        hideydecorations!(ax_u_p, ticklabels=false, ticks=false, label=false)
-        if eltype(ss) <: AbstractVector
+        if eltype(ss) <: AbstractVector && plot_s
             lines!.(Ref(ax_s), Ref(action_ts), eachrow(stack(ss)), color=:forestgreen)
-        else
+        elseif plot_s
             lines!(ax_s, action_ts, ss, color=:forestgreen)
         end
+
         if eltype(u_ps) <: AbstractVector
             lines!.(Ref(ax_u_p), Ref(action_ts), eachrow(stack(u_ps)), color=:royalblue)
+            for i in 1:length(u_ps[sparse_time_idx[]])
+                scatter!(ax_u_p, sparse_time, @lift(u_ps[$sparse_time_idx][i]), color=:royalblue)
+            end
         else
             lines!(ax_u_p, action_ts, u_ps, color=:royalblue)
+            scatter!(ax_u_p, sparse_time, @lift(u_ps[$sparse_time_idx]), color=:royalblue)
         end
+
         #Time indicator
-        vlines!(ax_s, fine_time, color=:darkgreen, alpha=0.5)
+        # vlines!(ax_u_p, fine_time, color=:darkgreen, alpha=0.5)
     end
 
     # @show length(sparse_ts)
@@ -252,7 +271,7 @@ function plot_shifted_history(us::AbstractArray, x::AbstractArray,
         u_p_minimum = minimum(minimum.(u_ps))
         u_p_maximum = maximum(maximum.(u_ps))
         ax3 = Axis(fig[end+1,1], xlabel="t", ylabel="uₚ", 
-                    limits=(nothing, (u_p_minimum-0.05, u_p_maximum*1.05)),
+                    limits=(nothing, (0.0, max(u_p_maximum*1.05, 1.2))),
                     xautolimitmargin=(0.0, 0.0))
         if eltype(u_ps) <: AbstractVector
             lines!.(Ref(ax3), Ref(action_ts), eachrow(stack(u_ps)), color=:royalblue)
