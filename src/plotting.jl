@@ -169,13 +169,13 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
         end
 
         if eltype(u_ps) <: AbstractVector
-            lines!.(Ref(ax_u_p), Ref(action_ts), eachrow(stack(u_ps)), color=:royalblue)
+            stairs!.(Ref(ax_u_p), Ref(action_ts), eachrow(stack(u_ps)), color=:royalblue)
             for i in 1:length(u_ps[sparse_time_idx[]])
                 scatter!(ax_u_p, sparse_time, @lift(u_ps[$sparse_time_idx][i]), color=:royalblue)
             end
         else
             lines!(ax_u_p, action_ts, u_ps, color=:royalblue)
-            scatter!(ax_u_p, sparse_time, @lift(u_ps[$sparse_time_idx]), color=:royalblue)
+            scatter!(ax_u_p, fine_time, @lift(u_ps[$sparse_time_idx]), color=:royalblue)
         end
 
         #Time indicator
