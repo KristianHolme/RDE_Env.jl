@@ -351,3 +351,13 @@ function get_init_observation(obs_strategy::MultiCenteredObservation, N::Int)
     obs_dim = obs_strategy.minisections*2 + 2
     return Matrix{Float32}(undef, obs_dim, obs_strategy.n_sections)
 end
+
+struct MeanInjectionPressureObservation <: AbstractObservationStrategy end
+
+function compute_observation(env::AbstractRDEEnv, strategy::MeanInjectionPressureObservation)
+    return [mean(env.prob.method.cache.u_p_current)]
+end
+
+function get_init_observation(strategy::MeanInjectionPressureObservation, N::Int)
+    return Vector{Float32}(undef, 1)
+end
