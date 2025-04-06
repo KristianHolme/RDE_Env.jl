@@ -30,18 +30,25 @@ Create an interactive visualization of policy execution data.
 # Keywords
 - `time_idx::Observable{Int}=Observable(1)`: Observable for current time index
 - `player_controls::Bool=true`: Whether to include playback controls
+- `rewards_and_shocks::Bool=true`: Whether to show rewards and shock count plots
+- `energy_and_chamber_pressure::Bool=false`: Whether to show energy balance and chamber pressure plots
+- `control_history::Bool=true`: Whether to show control parameter history
+- `observations::Bool=false`: Whether to show observation data
+- `live_control::Bool=false`: Whether to enable live control interface
+- `size::Tuple{Int,Int}=(1000,900)`: Size of the figure window
 
 # Returns
 - `Figure`: Makie figure containing the visualization
 
 The plot includes:
 - Velocity and reaction progress fields
-- Energy balance
-- Chamber pressure
-- Rewards
-- Number of shocks
-- Control parameters (s and u_p)
-- Interactive time controls (if enabled)
+- Optional plots based on keyword arguments:
+  - Rewards and shock count
+  - Energy balance and chamber pressure
+  - Control parameter history (s and u_p)
+  - Observation data visualization
+  - Live control interface
+- Interactive time controls (if player_controls=true)
 """
 function plot_policy_data(env::RDEEnv, data::PolicyRunData; 
         time_idx = Observable(1),
@@ -69,7 +76,8 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
 
     function dense_to_sparse_ind(dense_time::Vector, sparse_time::Vector, dense_ind::Int)
         dense_val = dense_time[dense_ind]
-        sparse_ind = argmin(abs.(sparse_time .- dense_val))
+        sparse_ind = findlast(x-> x <= dense_val, sparse_time)
+        # sparse_ind = argmin(abs.(sparse_time .- dense_val))
         # @info sparse_ind dense_ind sp_val "$(dense_time[dense_ind])"
         return sparse_ind
     end
@@ -129,13 +137,13 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
         hidexdecorations!(ax_rewards, grid = false)
         reward_color = :orange
         if eltype(rewards) <: AbstractVector
-            lines!.(Ref(ax_rewards), Ref(action_ts), eachrow(stack(rewards)), color=reward_color)
+            stairs.(Ref(ax_rewards), Ref(action_ts), eachrow(stack(rewards)), color=reward_color)
             for i in 1:length(rewards[sparse_time_idx[]])
-                scatter!(ax_rewards, sparse_time, @lift(rewards[$sparse_time_idx][i]), color=reward_color)
+                scatter!(ax_rewards, fine_time, @lift(rewards[min($sparse_time_idx+1, length(rewards))][i]), color=reward_color)
             end
         else
-            lines!(ax_rewards, action_ts, rewards, color=reward_color)
-            scatter!(ax_rewards, sparse_time, @lift(rewards[$sparse_time_idx]), color=reward_color)
+            stairs!(ax_rewards, action_ts, rewards, color=reward_color)
+            scatter!(ax_rewards, fine_time, @lift(rewards[min($sparse_time_idx+1, length(rewards))]), color=reward_color)
         end
         # vlines!(ax_rewards, fine_time, color=:green, alpha=0.5)
 
@@ -144,7 +152,7 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
         us, = RDE.split_sol(states)
         shocks = RDE.count_shocks.(us, dx)
         lines!(ax_shocks, state_ts, shocks)
-        scatter!(ax_shocks, sparse_time, @lift(shocks[$time_idx]))
+        scatter!(ax_shocks, fine_time, @lift(shocks[$time_idx]))
         # vlines!(ax_shocks, fine_time, color=:green, alpha=0.5)
     end
 
@@ -171,11 +179,11 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
         if eltype(u_ps) <: AbstractVector
             stairs!.(Ref(ax_u_p), Ref(action_ts), eachrow(stack(u_ps)), color=:royalblue)
             for i in 1:length(u_ps[sparse_time_idx[]])
-                scatter!(ax_u_p, sparse_time, @lift(u_ps[$sparse_time_idx][i]), color=:royalblue)
+                scatter!(ax_u_p, fine_time  , @lift(u_ps[min($sparse_time_idx+1, length(u_ps))][i]), color=:royalblue)
             end
         else
-            lines!(ax_u_p, action_ts, u_ps, color=:royalblue)
-            scatter!(ax_u_p, fine_time, @lift(u_ps[$sparse_time_idx]), color=:royalblue)
+            stairs!(ax_u_p, action_ts, u_ps, color=:royalblue)
+            scatter!(ax_u_p, fine_time, @lift(u_ps[min($sparse_time_idx+1, length(u_ps))]), color=:royalblue)
         end
 
         #Time indicator
@@ -191,7 +199,7 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
     if live_control && eltype(u_ps) <: AbstractVector
         u_p_t = @lift(u_ps[$sparse_time_idx])
         max_u_p = maximum(maximum.(u_ps))
-        ax_live_u_p = Axis(main_layout[1,1][3,1], ylabel="u_p", yaxisposition = :left,
+        ax_live_u_p = Axis(main_layout[1,1][3,1], ylabel="uₚ", yaxisposition = :left,
                             limits=((nothing, (-0.1,max(max_u_p*1.1, 1e-3)))))
         sections = env.action_type.n_sections
         section_size = N ÷ sections
@@ -202,10 +210,10 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
 
     if observations
         observation = @lift(data.observations[$sparse_time_idx])
-        @show observation[]
+        # @show observation[]
         if typeof(data.observations[1]) <: AbstractVector
             ax_obs = Axis(fig[end+1,1], title="Observations")
-            lines!(ax_obs, 1:size(observation[], 1), observation)
+            barplot!(ax_obs, observation)
         else
             ax_obs = Axis(fig[end+1,1], title="Observations", xlabel="index", ylabel="Agent")
             heatmap!(ax_obs, 1:size(observation[], 1), 1:size(observation[], 2), observation)
