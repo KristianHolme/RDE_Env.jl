@@ -32,7 +32,7 @@ module RDE_Env
     export AbstractObservationStrategy, AbstractMultiAgentObservationStrategy, 
            FourierObservation, StateObservation,
            SampledStateObservation, MultiSectionObservation, SectionedStateObservation,
-           MultiCenteredObservation
+           MultiCenteredObservation, MeanInjectionPressureObservation
     export CompositeObservation
     export compute_observation, get_init_observation, compute_sectioned_observation
 
@@ -49,8 +49,8 @@ module RDE_Env
 
     include("policies.jl")
     export Policy, StepwiseRDEPolicy, RandomRDEPolicy, ConstantRDEPolicy, SinusoidalRDEPolicy, 
-        DelayedPolicy, LinearPolicy, get_env, LinearCheckpoints, SawtoothPolicy
-
+        DelayedPolicy, LinearPolicy, get_env, LinearCheckpoints, SawtoothPolicy, PIDControllerPolicy
+    export reset_pid_cache!
     # Vectorized environments
     include("vec_env.jl")
     include("multi_agent_vec_env.jl")

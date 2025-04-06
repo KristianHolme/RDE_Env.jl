@@ -694,3 +694,57 @@ function Base.show(io::IO, ::MIME"text/plain", π::SawtoothPolicy)
     println(io, "  env: $(typeof(π.env))")
 end
 
+@kwdef mutable struct PIDCache{T<:AbstractFloat}
+    integral::T = 0.0f0
+    previous_error::T = 0.0f0
+end
+
+struct PIDControllerPolicy{T<:AbstractFloat} <: Policy
+    dt::T
+    target::T
+    Kp::T
+    Ki::T
+    Kd::T
+    cache::PIDCache{T}
+    function PIDControllerPolicy(;dt::T, target::T, Kp::T, Ki::T, Kd::T) where {T<:AbstractFloat}
+        new{T}(dt, target, Kp, Ki, Kd, PIDCache{T}())
+    end
+end
+
+function POMDPs.action(π::PIDControllerPolicy, o)
+    u_p = o[1]
+    cache = π.cache
+    error = π.target - u_p
+    cache.integral += error * π.dt
+    cache.previous_error = error
+    derivative = (error - cache.previous_error) / π.dt
+    action = [π.Kp * error + π.Ki * cache.integral + π.Kd * derivative]
+    cache.previous_error = error
+
+    if action[1] > 1f0 || action[1] < -1.0f0
+        @warn "Action out of bounds: $action"
+    end
+    clamp!(action,-1.0f0, 1.0f0)
+    return action
+end
+
+function Base.show(io::IO, π::PIDControllerPolicy)
+    print(io, "PIDControllerPolicy(Kp=$(π.Kp), Ki=$(π.Ki), Kd=$(π.Kd), target=$(π.target))")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", π::PIDControllerPolicy)
+    println(io, "PIDControllerPolicy:")
+    println(io, "  Kp: $(π.Kp)")
+    println(io, "  Ki: $(π.Ki)")
+    println(io, "  Kd: $(π.Kd)")
+    println(io, "  target: $(π.target)")
+end
+
+function reset_pid_cache!(cache::PIDCache{T}) where {T<:AbstractFloat}
+    cache.integral = 0.0
+    cache.previous_error = 0.0
+end
+
+function reset_pid_cache!(pid_controller::PIDControllerPolicy)
+    reset_pid_cache!(pid_controller.cache)
+end
