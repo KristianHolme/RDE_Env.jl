@@ -110,6 +110,7 @@ mutable struct RDEEnv{T<:AbstractFloat} <: AbstractRDEEnv{T}
     verbose::Bool               # Control solver output
     info::Dict{String, Any}
     steps_taken::Int
+    ode_problem::Union{Nothing, ODEProblem}
     function RDEEnv{T}(;
         dt=1.0,
         smax=4.0,
@@ -139,11 +140,12 @@ mutable struct RDEEnv{T<:AbstractFloat} <: AbstractRDEEnv{T}
         initial_state = vcat(prob.u0, prob.λ0)
         init_observation = get_init_observation(observation_strategy, params.N)
         cache = RDEEnvCache{T}(params.N)
+        ode_problem = ODEProblem{true, SciMLBase.FullSpecialize}(RDE_RHS!, initial_state, (zero(T), dt), prob)
         return new{T}(prob, initial_state, init_observation,
                       dt, T(0.0), false, false, false, T(0.0), smax, u_pmax,
                       momentum, τ_smooth, cache,
                       action_type, observation_strategy, 
-                      reward_type, verbose, Dict{String, Any}(), 0)
+                      reward_type, verbose, Dict{String, Any}(), 0, ode_problem)
     end
 end
 
@@ -229,14 +231,15 @@ function CommonRLInterface.act!(env::RDEEnv{T}, action; saves_per_action::Int=0)
     @logmsg LogLevel(-10000) "taking action $action at time $(env.t), controls: $(mean.(prev_controls)) to $(mean.(c))"
 
     #TODO use remake instead of recreating ??
-    prob_ode = ODEProblem{true, SciMLBase.FullSpecialize}(RDE_RHS!, env.state, t_span, env.prob)
+    # prob_ode = ODEProblem{true, SciMLBase.FullSpecialize}(RDE_RHS!, env.state, t_span, env.prob)
+    env.ode_problem = remake(env.ode_problem, u0=env.state, tspan=t_span)
     
     if saves_per_action == 0
-        sol = OrdinaryDiffEq.solve(prob_ode, Tsit5(), save_on=false, 
+        sol = OrdinaryDiffEq.solve(env.ode_problem, Tsit5(), save_on=false, 
                                    isoutofdomain=RDE.outofdomain, verbose=env.verbose)
     else
         saveat = env.dt / saves_per_action
-        sol = OrdinaryDiffEq.solve(prob_ode, Tsit5(), saveat=saveat, 
+        sol = OrdinaryDiffEq.solve(env.ode_problem, Tsit5(), saveat=saveat, 
                                    isoutofdomain=RDE.outofdomain, verbose=env.verbose)
     end
 
