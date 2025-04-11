@@ -716,7 +716,6 @@ function POMDPs.action(π::PIDControllerPolicy, o)
     cache = π.cache
     error = π.target - u_p
     cache.integral += error * π.dt
-    cache.previous_error = error
     derivative = (error - cache.previous_error) / π.dt
     action = [π.Kp * error + π.Ki * cache.integral + π.Kd * derivative]
     cache.previous_error = error
