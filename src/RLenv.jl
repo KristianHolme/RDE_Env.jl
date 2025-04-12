@@ -117,7 +117,7 @@ mutable struct RDEEnv{T<:AbstractFloat} <: AbstractRDEEnv{T}
         u_pmax=1.2,
         params::RDEParam{T}=RDEParam{T}(),
         momentum=0.0,
-        τ_smooth=0.01,
+        τ_smooth=0.1,
         observation_strategy::AbstractObservationStrategy=FourierObservation(16),
         action_type::AbstractActionType=ScalarPressureAction(),
         reward_type::AbstractRDEReward=ShockSpanReward(target_shock_count=3),
@@ -190,7 +190,7 @@ Take an action in the environment.
 - Handles smooth control transitions
 - Supports multiple action types
 """
-function CommonRLInterface.act!(env::RDEEnv{T}, action; saves_per_action::Int=0) where {T<:AbstractFloat}
+function CommonRLInterface.act!(env::RDEEnv{T}, action; saves_per_action::Int=10) where {T<:AbstractFloat}
     # Store current state before taking action
     @logmsg LogLevel(-10000) "Starting act! for environment on thread $(Threads.threadid())"
     N = env.prob.params.N
@@ -344,7 +344,7 @@ function CommonRLInterface.reset!(env::RDEEnv)
     set_reward!(env, env.reward_type)
 
     reset_cache!(env.prob.method.cache, τ_smooth=env.τ_smooth, params=env.prob.params)    
-
+    env.prob.sol = nothing
     # Initialize previous state
     N = env.prob.params.N
     env.cache.prev_u .= @view env.state[1:N]

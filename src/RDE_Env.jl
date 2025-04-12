@@ -40,6 +40,7 @@ module RDE_Env
     include("rewards.jl")
     export AbstractRDEReward, ShockSpanReward, ShockPreservingReward, ShockPreservingSymmetryReward
     export CompositeReward, ConstantTargetReward, MultiSectionReward, PeriodicityReward
+    export TimeAggCompositeReward, TimeMin, TimeMax, TimeSum, TimeProd, TimeAggMultiSectionReward
     export set_reward!, set_termination_reward!
 
     # Environment

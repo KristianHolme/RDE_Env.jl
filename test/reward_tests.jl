@@ -170,4 +170,89 @@ using POMDPs
             @test all(diff(data.action_ts) .≈ dt)  # Time steps should be consistent
         end
     end
+
+    @testset "TimeAggCompositeReward" begin
+        # Create environment with TimeAggCompositeReward
+        env = RDEEnv(;
+            dt=1.0,
+            reward_type=TimeAggCompositeReward(
+                aggregation=TimeMin(),
+                target_shock_count=3,
+                lowest_action_magnitude_reward=0.5f0,
+                weights=[0.25f0, 0.25f0, 0.25f0, 0.25f0]
+            )
+        )
+        
+        # Test initial reward
+        CommonRLInterface.reset!(env)
+        @test env.reward isa Float32
+        @test !isnan(env.reward)
+        @test !isinf(env.reward)
+        
+        # Test reward with no shocks
+        env.state .= 1.0  # Constant state = no shocks
+        set_reward!(env, env.reward_type)
+        @test env.reward < 0  # Should be negative with no shocks
+        
+        # Test reward with target number of shocks
+        N = env.prob.params.N
+        env.state[1:N] .= 1.0
+        env.state[N÷4] = 2.0  # First shock
+        env.state[N÷2] = 2.0  # Second shock
+        env.state[3N÷4] = 2.0  # Third shock
+        set_reward!(env, env.reward_type)
+        @test env.reward > 0  # Should be positive with target shocks
+        
+        # Test different aggregation methods
+        for agg in [TimeMin(), TimeMax(), TimeAvg(), TimeSum(), TimeProd()]
+            env.reward_type.aggregation = agg
+            set_reward!(env, env.reward_type)
+            @test !isnan(env.reward)
+            @test !isinf(env.reward)
+        end
+    end
+
+    @testset "TimeAggMultiSectionReward" begin
+        # Create environment with TimeAggMultiSectionReward
+        env = RDEEnv(;
+            dt=1.0,
+            reward_type=TimeAggMultiSectionReward(
+                aggregation=TimeMin(),
+                n_sections=4,
+                target_shock_count=3,
+                lowest_action_magnitude_reward=0.5f0,
+                weights=[1f0, 1f0, 5f0, 1f0]
+            )
+        )
+        
+        # Test initial reward
+        CommonRLInterface.reset!(env)
+        @test env.reward isa Vector{Float32}
+        @test length(env.reward) == 4  # One reward per section
+        @test !any(isnan.(env.reward))
+        @test !any(isinf.(env.reward))
+        
+        # Test reward with no shocks
+        env.state .= 1.0  # Constant state = no shocks
+        set_reward!(env, env.reward_type)
+        @test all(env.reward .< 0)  # All sections should have negative reward with no shocks
+        
+        # Test reward with target number of shocks
+        N = env.prob.params.N
+        env.state[1:N] .= 1.0
+        env.state[N÷4] = 2.0  # First shock
+        env.state[N÷2] = 2.0  # Second shock
+        env.state[3N÷4] = 2.0  # Third shock
+        set_reward!(env, env.reward_type)
+        @test all(env.reward .> 0)  # All sections should have positive reward with target shocks
+        
+        # Test different aggregation methods
+        for agg in [TimeMin(), TimeMax(), TimeAvg(), TimeSum(), TimeProd()]
+            env.reward_type.aggregation = agg
+            set_reward!(env, env.reward_type)
+            @test !any(isnan.(env.reward))
+            @test !any(isinf.(env.reward))
+            @test length(env.reward) == 4  # Should maintain section count
+        end
+    end
 end 

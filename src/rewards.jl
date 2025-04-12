@@ -223,12 +223,8 @@ function calculate_span_rewards(u::AbstractVector, shocks::T) where T
     low_span_punishment = RDE.smooth_g(span/abs_span_punishment_threshold)
     return span_reward, low_span_punishment
 end
-
-function global_reward(env::AbstractRDEEnv{T}, rt::CachedCompositeReward) where T
-    N = env.prob.params.N
-    dx = env.prob.x[2] - env.prob.x[1]
-    L = env.prob.params.L
-    u = env.state[1:N]
+function global_reward(u::AbstractVector, L::T, dx::T, rt::CachedCompositeReward) where T
+    N = length(u)
     
     periodicity_reward = calculate_periodicity_reward(u, N, rt.target_shock_count, rt.cache)
     shock_reward, shock_spacing_reward, shocks = calculate_shock_rewards(u, dx, L, N, rt.target_shock_count)
@@ -244,6 +240,15 @@ function global_reward(env::AbstractRDEEnv{T}, rt::CachedCompositeReward) where 
     global_reward = low_span_punishment * sum(weighted_rewards)
     @logmsg LogLevel(-10000) "global_reward: $global_reward"
     return global_reward
+end
+
+function global_reward(env::AbstractRDEEnv{T}, rt::CachedCompositeReward) where T
+    N = env.prob.params.N
+    dx = env.prob.x[2] - env.prob.x[1]
+    L = env.prob.params.L
+    u = env.state[1:N]
+    
+    return global_reward(u, L, dx, rt)
 end
 
 
@@ -296,6 +301,90 @@ function set_reward!(env::AbstractRDEEnv{T}, rt::CompositeReward) where T
     nothing
 end
 
+abstract type TimeAggregation end
+struct TimeAvg <: TimeAggregation end
+struct TimeMax <: TimeAggregation end
+struct TimeMin <: TimeAggregation end
+struct TimeSum <: TimeAggregation end
+struct TimeProd <: TimeAggregation end
+
+struct TimeAggCompositeReward <: CachedCompositeReward
+    aggregation::TimeAggregation
+    target_shock_count::Int
+    cache::Vector{Float32}
+    lowest_action_magnitude_reward::Float32 #reward will be \in [lowest_action_magnitude_reward, 1]
+    span_reward::Bool
+    weights::Vector{Float32}
+    function TimeAggCompositeReward(;aggregation::TimeAggregation=TimeMin(),
+                              target_shock_count::Int=4,
+                              lowest_action_magnitude_reward::Float32=1f0,
+                              span_reward::Bool=true,
+                              weights::Vector{Float32}=[0.25f0, 0.25f0, 0.25f0, 0.25f0],
+                              N::Int=512)
+        return new(aggregation,
+                   target_shock_count,
+                   zeros(Float32, N),
+                   lowest_action_magnitude_reward,
+                   span_reward, weights)
+    end
+end
+
+function Base.show(io::IO, rt::TimeAggCompositeReward)
+    print(io, "TimeAggCompositeReward(aggregation=$(rt.aggregation), target_shock_count=$(rt.target_shock_count))")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", rt::TimeAggCompositeReward)
+    println(io, "TimeAggCompositeReward:")
+    println(io, "  aggregation: $(rt.aggregation)")
+    println(io, "  target_shock_count: $(rt.target_shock_count)")
+    println(io, "  lowest_action_magnitude_reward: $(rt.lowest_action_magnitude_reward)")
+    println(io, "  span_reward: $(rt.span_reward)")
+    println(io, "  weights: $(rt.weights)")
+    println(io, "  cache size: $(length(rt.cache))")
+end
+
+function aggregate(rewards::AbstractVector, aggregation::TimeAvg)
+    return mean(rewards)
+end
+function aggregate(rewards::AbstractVector, aggregation::TimeMax)
+    return maximum(rewards)
+end
+function aggregate(rewards::AbstractVector, aggregation::TimeMin)
+    return minimum(rewards)
+end
+function aggregate(rewards::AbstractVector, aggregation::TimeSum)
+    return sum(rewards)
+end
+function aggregate(rewards::AbstractVector, aggregation::TimeProd)
+    return prod(rewards)
+end
+
+
+function set_reward!(env::AbstractRDEEnv{T}, rt::TimeAggCompositeReward) where T
+    N = env.prob.params.N
+    dx = env.prob.x[2] - env.prob.x[1]
+    L = env.prob.params.L
+    sol = env.prob.sol
+    if !isnothing(sol)
+        us = [uλ[1:N] for uλ in sol.u[2:end]]
+        rewards = zeros(T, length(us))
+    else
+        @warn "No solution found for env at time $(env.t), step $(env.steps_taken)"
+        us = [env.state[1:N]]
+        rewards = zeros(T, 1)
+    end
+    for (i, u) in enumerate(us)
+        rewards[i] = global_reward(u, L, dx, rt)
+    end
+    agg_reward = aggregate(rewards, rt.aggregation)
+
+    action_magnitude = maximum(abs.(env.cache.action))
+    action_magnitude_modifier = action_magnitude_factor(rt.lowest_action_magnitude_reward, action_magnitude)
+    env.reward = agg_reward * action_magnitude_modifier
+    nothing
+end
+
+
 
 struct ConstantTargetReward <: AbstractRDEReward
     target::Float32
@@ -315,5 +404,62 @@ end
 
 function set_reward!(env::AbstractRDEEnv{T}, rt::ConstantTargetReward) where T
     env.reward = -abs(rt.target - mean(env.prob.method.cache.u_p_current)) + T(1.0)
+    nothing
+end
+
+@kwdef mutable struct TimeAggMultiSectionReward <: CachedCompositeReward
+    aggregation::TimeAggregation = TimeMin()
+    n_sections::Int = 4
+    target_shock_count::Int = 3
+    cache::Vector{Float32} = zeros(Float32, 512)
+    lowest_action_magnitude_reward::Float32 = 0.0f0 #reward will be \in [lowest_action_magnitude_reward, 1]
+    weights::Vector{Float32} = [1f0,1f0,5f0,1f0]
+end
+
+function Base.show(io::IO, rt::TimeAggMultiSectionReward)
+    print(io, "TimeAggMultiSectionReward(n_sections=$(rt.n_sections), aggregation=$(typeof(rt.aggregation)))")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", rt::TimeAggMultiSectionReward)
+    println(io, "TimeAggMultiSectionReward:")
+    println(io, "  aggregation: $(typeof(rt.aggregation))")
+    println(io, "  n_sections: $(rt.n_sections)")
+    println(io, "  target_shock_count: $(rt.target_shock_count)")
+    println(io, "  lowest_action_magnitude_reward: $(rt.lowest_action_magnitude_reward)")
+    println(io, "  weights: $(rt.weights)")
+    println(io, "  cache size: $(length(rt.cache))")
+end
+
+function set_reward!(env::AbstractRDEEnv, rt::TimeAggMultiSectionReward)
+    N = env.prob.params.N
+    n_sections = rt.n_sections
+    points_per_section = N ÷ n_sections
+    first_element_in_sections = collect(1:points_per_section:N)
+    
+    # Get all states from the solution
+    if !isnothing(env.prob.sol)
+        us = [uλ[1:N] for uλ in env.prob.sol.u[2:end]]
+    else
+        us = [env.state[1:N]]
+    end
+    section_rewards = zeros(Float32, n_sections, length(us))
+    
+    # Calculate rewards for each section and time step
+    for (i, u) in enumerate(us)
+        common_reward = global_reward(u, env.prob.params.L, env.prob.x[2] - env.prob.x[1], rt)
+        full_engine_pressure_action = env.cache.action[:, 2]
+        section_actions = full_engine_pressure_action[first_element_in_sections]
+        action_magnitudes = abs.(section_actions)
+        individual_modifiers = action_magnitude_factor(rt.lowest_action_magnitude_reward, action_magnitudes)
+        section_rewards[:, i] = common_reward .* individual_modifiers
+    end
+    
+    # Aggregate rewards over time for each section
+    agg_section_rewards = zeros(Float32, n_sections)
+    for i in 1:n_sections
+        agg_section_rewards[i] = aggregate(section_rewards[i, :], rt.aggregation)
+    end
+    
+    env.reward = agg_section_rewards
     nothing
 end
