@@ -131,7 +131,7 @@ function action_magnitude_factor(lowest_action_magnitude_reward::AbstractFloat, 
     return α .+ (1f0 - α) .* action_magnitude_inv
 end
 
-@kwdef mutable struct MultiSectionReward <: CachedCompositeReward
+@kwdef mutable struct MultiSectionReward <: MultiAgentCachedCompositeReward
     n_sections::Int = 4
     target_shock_count::Int = 3
     cache::Vector{Float32} = zeros(Float32, 512)
@@ -300,7 +300,6 @@ function set_reward!(env::AbstractRDEEnv{T}, rt::CompositeReward) where T
     env.reward = reward
     nothing
 end
-
 abstract type TimeAggregation end
 struct TimeAvg <: TimeAggregation end
 struct TimeMax <: TimeAggregation end
@@ -407,7 +406,7 @@ function set_reward!(env::AbstractRDEEnv{T}, rt::ConstantTargetReward) where T
     nothing
 end
 
-@kwdef mutable struct TimeAggMultiSectionReward <: CachedCompositeReward
+@kwdef mutable struct TimeAggMultiSectionReward <: MultiAgentCachedCompositeReward
     aggregation::TimeAggregation = TimeMin()
     n_sections::Int = 4
     target_shock_count::Int = 3
@@ -463,3 +462,4 @@ function set_reward!(env::AbstractRDEEnv, rt::TimeAggMultiSectionReward)
     env.reward = agg_section_rewards
     nothing
 end
+

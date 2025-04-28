@@ -200,7 +200,7 @@ function get_init_rewards(env::RDEEnv{T}, reward_type::AbstractRDEReward, max_st
     return Vector{T}(undef, max_steps)
 end
 
-function get_init_rewards(env::RDEEnv{T}, reward_type::MultiSectionReward, max_steps::Int) where {T}
+function get_init_rewards(env::RDEEnv{T}, reward_type::MultiAgentCachedCompositeReward, max_steps::Int) where {T}
     # n_section = reward_type.n_sections
     return Vector{Vector{T}}(undef, max_steps)
 end
