@@ -137,7 +137,7 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
         hidexdecorations!(ax_rewards, grid = false)
         reward_color = :orange
         if eltype(rewards) <: AbstractVector
-            stairs.(Ref(ax_rewards), Ref(action_ts), eachrow(stack(rewards)), color=reward_color)
+            stairs!.(Ref(ax_rewards), Ref(action_ts), eachrow(stack(rewards)), color=reward_color)
             for i in 1:length(rewards[sparse_time_idx[]])
                 scatter!(ax_rewards, fine_time, @lift(rewards[min($sparse_time_idx+1, length(rewards))][i]), color=reward_color)
             end
