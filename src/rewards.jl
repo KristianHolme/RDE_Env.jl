@@ -368,7 +368,7 @@ function set_reward!(env::AbstractRDEEnv{T}, rt::TimeAggCompositeReward) where T
         us = [uλ[1:N] for uλ in sol.u[2:end]]
         rewards = zeros(T, length(us))
     else
-        @warn "No solution found for env at time $(env.t), step $(env.steps_taken)"
+        @debug "No solution found for env at time $(env.t), step $(env.steps_taken)"
         us = [env.state[1:N]]
         rewards = zeros(T, 1)
     end
@@ -462,4 +462,34 @@ function set_reward!(env::AbstractRDEEnv, rt::TimeAggMultiSectionReward)
     env.reward = agg_section_rewards
     nothing
 end
+
+
+@kwdef struct TimeDiffNormReward <: AbstractRDEReward 
+    threshold::Float32 = 10f0
+    threshold_reward::Float32 = 0.1f0
+end
+
+function set_reward!(env::AbstractRDEEnv, rt::TimeDiffNormReward)
+    if isnothing(env.prob.sol)
+        env.reward = 0f0
+        return nothing
+    end
+    N = env.prob.params.N
+    us = map(v->v[1:N], env.prob.sol.u)
+    n = length(us)
+    diff_norms = zeros(Float32, Int((n^2 - n)//2))
+    ind = 1
+    ft_us = rfft.(us)
+    abs_ft_us = map(v->abs.(v), ft_us)
+    for i in 1:n, j in i+1:n
+        diff_norms[ind] = norm(abs_ft_us[i] .- abs_ft_us[j])/sqrt(N)
+        ind += 1
+    end
+    max_norm = maximum(diff_norms)
+    a = log(rt.threshold_reward) / rt.threshold
+    env.reward = exp(a*max_norm)
+    nothing
+end
+
+
 

@@ -41,6 +41,7 @@ module RDE_Env
     export AbstractRDEReward, ShockSpanReward, ShockPreservingReward, ShockPreservingSymmetryReward
     export CompositeReward, ConstantTargetReward, MultiSectionReward, PeriodicityReward
     export TimeAggCompositeReward, TimeMin, TimeMax, TimeSum, TimeProd, TimeAggMultiSectionReward
+    export TimeDiffNormReward
     export set_reward!, set_termination_reward!
 
     # Environment
