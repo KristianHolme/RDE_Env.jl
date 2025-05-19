@@ -77,7 +77,7 @@ policy = ConstantRDEPolicy(env)
 data = run_policy(policy, env, saves_per_action=10)
 ```
 """
-function run_policy(π::Policy, env::AbstractRDEEnv{T}; saves_per_action=1) where {T}
+function run_policy(π::Policy, env::AbstractRDEEnv{T}; saves_per_action=10) where {T}
     reset!(env)
     dt = env.dt
     max_steps = ceil(env.prob.params.tmax / dt) + 2 |> Int # +1 for initial state, +1 for overshoot
@@ -721,7 +721,7 @@ function POMDPs.action(π::PIDControllerPolicy, o)
     cache.previous_error = error
 
     if action[1] > 1f0 || action[1] < -1.0f0
-        @warn "Action out of bounds: $action"
+        @debug "Action out of bounds: $action"
     end
     clamp!(action,-1.0f0, 1.0f0)
     return action
