@@ -15,14 +15,14 @@ Container for data collected during policy execution.
 """
 struct PolicyRunData{T<:AbstractFloat}
     action_ts::Vector{T} #time points for actions
-    ss::Union{Vector{T}, Vector{Vector{T}}} #control parameter s at each action
-    u_ps::Union{Vector{T}, Vector{Vector{T}}} #control parameter u_p at each action
-    rewards::Union{Vector{T}, Vector{Vector{T}}} #rewards at each action
+    ss::Union{Vector{T},Vector{Vector{T}}} #control parameter s at each action
+    u_ps::Union{Vector{T},Vector{Vector{T}}} #control parameter u_p at each action
+    rewards::Union{Vector{T},Vector{Vector{T}}} #rewards at each action
     energy_bal::Vector{T} #energy balance at each state
     chamber_p::Vector{T} #chamber pressure at each state
     state_ts::Vector{T} #time points for states
     states::Vector{Vector{T}} #states at each time point
-    observations::Union{Union{Vector{Vector{T}}, Vector{Matrix{T}}}, Vector{Union{Vector{T}, Matrix{T}}}} #observations at each time point
+    observations::Union{Union{Vector{Vector{T}},Vector{Matrix{T}}},Vector{Union{Vector{T},Matrix{T}}}} #observations at each time point
     # TODO:  change last type to just Union{Union{Vector{Vector{T}}, Vector{Matrix{T}}}??
 end
 
@@ -82,7 +82,7 @@ function run_policy(π::Policy, env::AbstractRDEEnv{T}; saves_per_action=10) whe
     dt = env.dt
     max_steps = ceil(env.prob.params.tmax / dt) + 2 |> Int # +1 for initial state, +1 for overshoot
     N = env.prob.params.N
-    
+
     # Initialize vectors for action data
     ts = Vector{T}(undef, max_steps)
     ss, u_ps = get_init_control_data(env, env.action_type, max_steps)
@@ -90,14 +90,14 @@ function run_policy(π::Policy, env::AbstractRDEEnv{T}; saves_per_action=10) whe
     # u_ps = Vector{T}(undef, max_steps)
     rewards = get_init_rewards(env, env.reward_type, max_steps)
     # rewards = Vector{T}(undef, max_steps)
-    
+
     # For saves_per_action > 0, we need more space for state data
     max_state_points = if saves_per_action == 0
         max_steps  # Only save at action points
     else
         max_steps * (saves_per_action + 1)  # +1 to account for potential extra points
     end
-    
+
     energy_bal = Vector{T}(undef, max_state_points)
     chamber_p = Vector{T}(undef, max_state_points)
     states = Vector{Vector{T}}(undef, max_state_points)
@@ -107,10 +107,10 @@ function run_policy(π::Policy, env::AbstractRDEEnv{T}; saves_per_action=10) whe
     else
         observations = Vector{Vector{T}}(undef, max_state_points)
     end
-    
+
     step = 0
     total_state_steps = 0
-    
+
     function log!(step)
         ind = step + 1
         ts[ind] = env.t
@@ -146,7 +146,7 @@ function run_policy(π::Policy, env::AbstractRDEEnv{T}; saves_per_action=10) whe
         # Calculate indices for this step's data
         start_idx = total_state_steps + 1
         end_idx = total_state_steps + n_states
-        
+
         # Ensure we have enough space
         if end_idx > max_state_points
             # Extend arrays if needed
@@ -157,15 +157,15 @@ function run_policy(π::Policy, env::AbstractRDEEnv{T}; saves_per_action=10) whe
             resize!(state_ts, new_size)
             max_state_points = new_size
         end
-        
+
         # Save states and timestamps
         state_ts[start_idx:end_idx] = step_ts
         states[start_idx:end_idx] = step_states
-        
+
         # Save energy balance and chamber pressure
         energy_bal[start_idx:end_idx] = energy_balance.(step_states, Ref(env.prob.params))
         chamber_p[start_idx:end_idx] = chamber_pressure.(step_states, Ref(env.prob.params))
-        
+
         total_state_steps += n_states
     end
 
@@ -180,7 +180,7 @@ function run_policy(π::Policy, env::AbstractRDEEnv{T}; saves_per_action=10) whe
         step += 1
         log!(step)
     end
-    
+
     # Trim arrays to actual size
     ts = ts[1:step+1]
     ss = ss[1:step+1]
@@ -203,6 +203,15 @@ end
 function get_init_rewards(env::RDEEnv{T}, reward_type::MultiAgentCachedCompositeReward, max_steps::Int) where {T}
     # n_section = reward_type.n_sections
     return Vector{Vector{T}}(undef, max_steps)
+end
+
+function get_init_rewards(env::RDEEnv{T}, reward_type::MultiplicativeReward, max_steps::Int) where {T}
+    # Check if any of the component rewards is a multi-agent reward
+    if any(r isa MultiAgentCachedCompositeReward for r in reward_type.rewards)
+        return Vector{Vector{T}}(undef, max_steps)
+    else
+        return Vector{T}(undef, max_steps)
+    end
 end
 
 function get_init_control_data(env::RDEEnv{T}, action_type::AbstractActionType, max_steps::Int) where {T}
@@ -285,8 +294,8 @@ SinusoidalRDEPolicy(env::RDEEnv{T}; w_1::T=1.0, w_2::T=2.0) where {T<:AbstractFl
 """
 struct SinusoidalRDEPolicy{T<:AbstractFloat} <: Policy
     env::RDEEnv{T}
-    w_1::T  
-    w_2::T  
+    w_1::T
+    w_2::T
     scale::T
     function SinusoidalRDEPolicy(env::RDEEnv{T}; w_1::T=1.0, w_2::T=2.0) where {T<:AbstractFloat}
         new{T}(env, w_1, w_2)
@@ -297,7 +306,7 @@ function POMDPs.action(π::SinusoidalRDEPolicy, s)
     t = π.env.t
     action1 = sin(π.w_1 * t)
     action2 = sin(π.w_2 * t)
-    if π.env.action_type isa ScalarAreaScalarPressureAction 
+    if π.env.action_type isa ScalarAreaScalarPressureAction
         return [action1, action2]
     elseif π.env.action_type isa ScalarPressureAction
         return action2
@@ -335,9 +344,9 @@ Policy that applies predefined control values at specified times.
 struct StepwiseRDEPolicy{T<:AbstractFloat} <: Policy
     env::RDEEnv{T}
     ts::Vector{T}  # Vector of time steps
-    c::Union{Vector{Vector{T}}, Vector{T}}  # Vector of control actions
+    c::Union{Vector{Vector{T}},Vector{T}}  # Vector of control actions
 
-    function StepwiseRDEPolicy(env::RDEEnv{T}, ts::Vector{T}, c::Union{Vector{Vector{T}}, Vector{T}}) where {T<:AbstractFloat}
+    function StepwiseRDEPolicy(env::RDEEnv{T}, ts::Vector{T}, c::Union{Vector{Vector{T}},Vector{T}}) where {T<:AbstractFloat}
         @assert length(ts) == length(c) "Length of time steps and control actions must be equal"
         @assert issorted(ts) "Time steps must be in ascending order"
         if env.action_type isa ScalarAreaScalarPressureAction
@@ -354,7 +363,7 @@ end
 function POMDPs.action(π::StepwiseRDEPolicy, s)
     t = π.env.t
     cache = π.env.prob.method.cache
-    past = π.ts .≤ t    
+    past = π.ts .≤ t
     idx = findlast(past)
     if isnothing(idx)
         return zero(π.c[1])
@@ -482,7 +491,7 @@ function POMDPs.action(π::DelayedPolicy, s)
     end
 end
 
-function Base.show(io::IO, π::DelayedPolicy) 
+function Base.show(io::IO, π::DelayedPolicy)
     print(io, "DelayedPolicy(t>$(π.start_time))")
 end
 
@@ -518,9 +527,9 @@ end
 
 struct LinearPolicy{T<:AbstractFloat} <: Policy
     env::RDEEnv{T}
-    start_value::Union{Vector{T}, T}
-    end_value::Union{Vector{T}, T}
-    function LinearPolicy(env::RDEEnv{T}, start_value::Union{Vector{T}, T}, end_value::Union{Vector{T}, T}, start_time::T, end_time::T) where {T<:AbstractFloat}
+    start_value::Union{Vector{T},T}
+    end_value::Union{Vector{T},T}
+    function LinearPolicy(env::RDEEnv{T}, start_value::Union{Vector{T},T}, end_value::Union{Vector{T},T}, start_time::T, end_time::T) where {T<:AbstractFloat}
         if env.action_type isa ScalarAreaScalarPressureAction
             @assert length(start_value) == 2 && length(end_value) == 2 "Start and end values must have 2 elements"
         elseif env.action_type isa ScalarPressureAction
@@ -539,7 +548,7 @@ function POMDPs.action(π::LinearPolicy, s)
         target_values = π.start_value .+ (π.end_value .- π.start_value) .* t / tmax
         return get_scaled_control.([π.env.prob.method.cache.s_current[1], π.env.prob.method.cache.u_p_current[1]], [π.env.smax, π.env.u_pmax], target_values)
     elseif π.env.action_type isa ScalarPressureAction
-        target_value = π.start_value + (π.end_value - π.start_value) * t/tmax
+        target_value = π.start_value + (π.end_value - π.start_value) * t / tmax
         return get_scaled_control(π.env.prob.method.cache.u_p_current[1], π.env.u_pmax, target_value)
     else
         @error "Unknown action type $(typeof(π.env.action_type)) for LinearPolicy"
@@ -576,9 +585,9 @@ Policy that applies linearly interpolated control values between specified check
 struct LinearCheckpoints{T<:AbstractFloat} <: Policy
     env::RDEEnv{T}
     ts::Vector{T}  # Vector of time checkpoints
-    c::Union{Vector{Vector{T}}, Vector{T}}  # Vector of control actions at checkpoints
+    c::Union{Vector{Vector{T}},Vector{T}}  # Vector of control actions at checkpoints
 
-    function LinearCheckpoints(env::RDEEnv{T}, ts::Vector{T}, c::Union{Vector{Vector{T}}, Vector{T}}) where {T<:AbstractFloat}
+    function LinearCheckpoints(env::RDEEnv{T}, ts::Vector{T}, c::Union{Vector{Vector{T}},Vector{T}}) where {T<:AbstractFloat}
         @assert length(ts) == length(c) "Length of time checkpoints and control actions must be equal"
         @assert issorted(ts) "Time checkpoints must be in ascending order"
         if env.action_type isa ScalarAreaScalarPressureAction
@@ -595,11 +604,11 @@ end
 function POMDPs.action(π::LinearCheckpoints, s)
     t = π.env.t
     cache = π.env.prob.method.cache
-    
+
     # Find the checkpoints to interpolate between
     past = π.ts .≤ t
     idx = findlast(past)
-    
+
     if isnothing(idx)
         # Before first checkpoint, use first checkpoint value
         return π.c[1]
@@ -607,11 +616,11 @@ function POMDPs.action(π::LinearCheckpoints, s)
         # After last checkpoint, use last checkpoint value
         return π.c[end]
     end
-    
+
     # Linear interpolation between checkpoints
-    t1, t2 = π.ts[idx], π.ts[idx + 1]
-    c1, c2 = π.c[idx], π.c[idx + 1]
-    
+    t1, t2 = π.ts[idx], π.ts[idx+1]
+    c1, c2 = π.c[idx], π.c[idx+1]
+
     if π.env.action_type isa ScalarAreaScalarPressureAction
         # Interpolate each component separately
         target_values = c1 .+ (c2 .- c1) .* (t - t1) / (t2 - t1)
@@ -669,16 +678,16 @@ end
 function POMDPs.action(π::SawtoothPolicy, s)
     t = π.env.t
     cache = π.env.prob.method.cache
-    
+
     # Calculate the current phase in the sawtooth cycle
     phase = mod(t, π.timescale)
-    period_number = t ÷ π.timescale + 1 
+    period_number = t ÷ π.timescale + 1
     # Calculate target value based on phase
     # Linear increase from min to max
     max_value = π.max_value
     min_value = period_number == 1 ? π.env.prob.params.u_p : π.min_value
-    target_value = min_value + (max_value - min_value) * phase / π.timescale 
-    
+    target_value = min_value + (max_value - min_value) * phase / π.timescale
+
     return get_scaled_control(cache.u_p_current[1], π.env.u_pmax, target_value)
 end
 
@@ -706,7 +715,7 @@ struct PIDControllerPolicy{T<:AbstractFloat} <: Policy
     Ki::T
     Kd::T
     cache::PIDCache{T}
-    function PIDControllerPolicy(;dt::T, target::T, Kp::T, Ki::T, Kd::T) where {T<:AbstractFloat}
+    function PIDControllerPolicy(; dt::T, target::T, Kp::T, Ki::T, Kd::T) where {T<:AbstractFloat}
         new{T}(dt, target, Kp, Ki, Kd, PIDCache{T}())
     end
 end
@@ -723,7 +732,7 @@ function POMDPs.action(π::PIDControllerPolicy, o)
     if action[1] > 1f0 || action[1] < -1.0f0
         @debug "Action out of bounds: $action"
     end
-    clamp!(action,-1.0f0, 1.0f0)
+    clamp!(action, -1.0f0, 1.0f0)
     return action
 end
 
