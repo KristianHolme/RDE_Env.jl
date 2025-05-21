@@ -568,8 +568,9 @@ end
 function compute_reward(env::AbstractRDEEnv{T}, rt::MultiplicativeReward) where T
     # Simply compute all rewards and use prod to multiply them
     # Julia's prod will handle broadcasting automatically when mixing scalar and vector rewards
-    multiplied_reward = prod(rt.rewards) do r
-        compute_reward(env, r)
+    reward = compute_reward(env, rt.rewards[1])
+    for r in rt.rewards[2:end]
+        reward *= compute_reward(env, r)
     end
-    return multiplied_reward
+    return reward
 end
