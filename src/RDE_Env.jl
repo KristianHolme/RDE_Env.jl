@@ -40,9 +40,9 @@ export compute_observation, get_init_observation, compute_sectioned_observation
 include("rewards.jl")
 export AbstractRDEReward, ShockSpanReward, ShockPreservingReward, ShockPreservingSymmetryReward
 export CompositeReward, ConstantTargetReward, MultiSectionReward, PeriodicityReward
-export TimeAggCompositeReward, TimeMin, TimeMax, TimeSum, TimeProd, TimeAggMultiSectionReward
+export TimeAggCompositeReward, TimeMin, TimeAvg, TimeMax, TimeSum, TimeProd, TimeAggMultiSectionReward
 export TimeDiffNormReward, MultiplicativeReward, PeriodMinimumReward
-export set_reward!, set_termination_reward!
+export set_reward!, set_termination_reward!, compute_reward
 
 # Environment
 include("RLenv.jl")
