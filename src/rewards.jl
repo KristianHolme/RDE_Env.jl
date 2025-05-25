@@ -3,11 +3,6 @@ function compute_reward(env::AbstractRDEEnv, rt::AbstractRDEReward)
     return zero(T)
 end
 
-function compute_reward(env::AbstractRDEEnv{T}, rt::AbstractRDEReward) where T
-    @error "No reward computation implemented for type $(typeof(rt))"
-    return zero(T)
-end
-
 function set_reward!(env::AbstractRDEEnv, rt::AbstractRDEReward)
     env.reward = compute_reward(env, rt)
     nothing
@@ -494,7 +489,7 @@ struct PeriodMinimumReward <: CachedCompositeReward
     function PeriodMinimumReward(; aggregation::TimeAggregation=TimeMin(),
         target_shock_count::Int=4,
         lowest_action_magnitude_reward::Float32=1f0,
-        weights::Vector{Float32}=[0.25f0, 0.25f0, 0.25f0, 0.25f0],
+        weights::Vector{Float32}=Float32[1, 1, 5, 1],
         N::Int=512)
         return new(aggregation,
             target_shock_count,
@@ -510,7 +505,7 @@ function time_minimum_global_reward(env::AbstractRDEEnv{T}, rt::CachedCompositeR
         return zero(T)
     end
     us = map(v -> v[1:N], env.prob.sol.u)
-    rewards = Tuple{T,5}[]
+    rewards = NTuple{5,T}[]
     for u in us
         time_point_rewards = global_rewards(u, env.prob.params.L, env.prob.x[2] - env.prob.x[1], rt)
         push!(rewards, time_point_rewards)
@@ -569,8 +564,11 @@ function compute_reward(env::AbstractRDEEnv{T}, rt::MultiplicativeReward) where 
     # Simply compute all rewards and use prod to multiply them
     # Julia's prod will handle broadcasting automatically when mixing scalar and vector rewards
     reward = compute_reward(env, rt.rewards[1])
+    # @show reward
     for r in rt.rewards[2:end]
-        reward .*= compute_reward(env, r)
+        next_reward = compute_reward(env, r)
+        # @show next_reward
+        reward = next_reward .* reward
     end
     return reward
 end
