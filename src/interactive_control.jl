@@ -200,7 +200,7 @@ function interactive_control(env::RDEEnv; callback=nothing, show_observations=fa
                         set_close_to!(slider_dt, time_step[])
                     elseif key == Keyboard.right
                         try
-                            act!(env, [0.0]) #cached values are already set
+                            _act!(env, [0.0]) #cached values are already set
                             energy_bal_pts[] =  push!(energy_bal_pts[], Point2f(env.t, energy_balance(env.state, params)))
                             chamber_p_pts[] = push!(chamber_p_pts[], Point2f(env.t, chamber_pressure(env.state, params)))
                             reward_pts[] = push!(reward_pts[], Point2f(env.t, env.reward))

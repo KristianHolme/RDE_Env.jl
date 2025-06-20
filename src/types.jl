@@ -1,4 +1,5 @@
-abstract type AbstractRDEEnv{T} <: AbstractEnv where T<:AbstractFloat end
+abstract type _AbstractEnv end
+abstract type AbstractRDEEnv{T} <: _AbstractEnv where T<:AbstractFloat end
 
 abstract type AbstractActionType end
 

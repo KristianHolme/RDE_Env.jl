@@ -2,18 +2,18 @@ using Makie
 using RDE
 
 """
-    plot_policy(π::Policy, env::RDEEnv)
+    plot_policy(π::AbstractRDEPolicy, env::RDEEnv)
 
 Plot the results of running a policy in an RDE environment.
 
 # Arguments
-- `π::Policy`: Policy to evaluate
+- `π::AbstractRDEPolicy`: Policy to evaluate
 - `env::RDEEnv`: RDE environment
 
 # Returns
 - `Figure`: Makie figure containing the visualization
 """
-function plot_policy(π::Policy, env::RDEEnv)
+function plot_policy(π::AbstractRDEPolicy, env::RDEEnv)
     data = run_policy(π, env)
     plot_policy_data(env, data)
 end
@@ -327,7 +327,7 @@ function plot_shifted_history(data::PolicyRunData, x::AbstractArray, c=:auto; us
         u_ps=data.u_ps, rewards=use_rewards ? data.rewards : nothing, action_ts=data.action_ts, kwargs...)
 end
 
-function animate_policy(π::P, env::RDEEnv; kwargs...) where P <: Policy
+function animate_policy(π::P, env::RDEEnv; kwargs...) where P <: AbstractRDEPolicy
     data = run_policy(π, env;)
     animate_policy_data(data, env; kwargs...)
 end

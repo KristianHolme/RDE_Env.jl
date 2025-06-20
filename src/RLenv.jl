@@ -152,6 +152,8 @@ end
 RDEEnv(; kwargs...) = RDEEnv{Float32}(; kwargs...)
 RDEEnv(params::RDEParam{T}; kwargs...) where {T<:AbstractFloat} = RDEEnv{T}(; params=params, kwargs...)
 
+_observe(env::RDEEnv) = env.observation
+
 function Base.show(io::IO, env::RDEEnv{T}) where {T<:AbstractFloat}
     if get(io, :compact, false)::Bool
         print(io, "RDEEnv{$T}(t=$(env.t), steps=$(env.steps_taken))")
@@ -173,7 +175,7 @@ function Base.show(io::IO, ::MIME"text/plain", env::RDEEnv{T}) where {T<:Abstrac
 end
 
 """
-    CommonRLInterface.act!(env::RDEEnv{T}, action; saves_per_action::Int=0) where {T<:AbstractFloat}
+    _act!(env::RDEEnv{T}, action; saves_per_action::Int=0) where {T<:AbstractFloat}
 
 Take an action in the environment.
 
@@ -190,7 +192,7 @@ Take an action in the environment.
 - Handles smooth control transitions
 - Supports multiple action types
 """
-function CommonRLInterface.act!(env::RDEEnv{T}, action; saves_per_action::Int=10) where {T<:AbstractFloat}
+function _act!(env::RDEEnv{T}, action; saves_per_action::Int=10) where {T<:AbstractFloat}
     # Store current state before taking action
     @logmsg LogLevel(-10000) "Starting act! for environment on thread $(Threads.threadid())"
     N = env.prob.params.N
@@ -288,37 +290,8 @@ function CommonRLInterface.act!(env::RDEEnv{T}, action; saves_per_action::Int=10
     return env.reward
 end
 
-
-
-# CommonRLInterface implementations
-CommonRLInterface.state(env::RDEEnv) = vcat(env.state, env.t)
-CommonRLInterface.terminated(env::RDEEnv) = env.done
-function CommonRLInterface.observe(env::RDEEnv)
-    return compute_observation(env, env.observation_strategy)
-end
-
-function CommonRLInterface.actions(env::RDEEnv)
-    n = action_dim(env.action_type)
-    return [(-1 .. 1) for _ in 1:n]
-end
-
-function CommonRLInterface.clone(env::RDEEnv)
-    env2 = deepcopy(env)
-    @logmsg LogLevel(-10000) "env is copied!"
-    return env2
-end
-
-function CommonRLInterface.setstate!(env::RDEEnv, s)
-    env.state = s[1:end-1]
-    env.t = s[end]
-end
-
-function POMDPs.initialobs(RLEnvPOMDP, s)
-    return [CommonRLInterface.observe(RLEnvPOMDP.env)]
-end
-
 """
-    CommonRLInterface.reset!(env::RDEEnv)
+    _reset!(env::RDEEnv)
 
 Reset the environment to its initial state.
 
@@ -332,7 +305,7 @@ Reset the environment to its initial state.
 - Resets control parameters to initial values
 - Initializes previous state tracking
 """
-function CommonRLInterface.reset!(env::RDEEnv)
+function _reset!(env::RDEEnv)
     env.t = 0
     RDE.reset_state_and_pressure!(env.prob, env.prob.reset_strategy)
     env.state = vcat(env.prob.u0, env.prob.λ0)

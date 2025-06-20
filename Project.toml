@@ -23,6 +23,12 @@ Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 SciMLBase = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 
+[weakdeps]
+DRiL = "49b37b9d-a8e6-4364-9144-4677bcb8a7f0"
+
+[extensions]
+RDE_EnvDRiLExt = "DRiL"
+
 [compat]
 DomainSets = "0"
 Observables = "0"

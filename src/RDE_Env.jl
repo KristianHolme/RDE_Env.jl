@@ -47,10 +47,10 @@ export set_reward!, set_termination_reward!, compute_reward
 # Environment
 include("RLenv.jl")
 export RDEEnv, RDEEnvCache
-export reset!, act!, observe, state, terminated
+export _reset!, _act!, _observe, state, terminated
 
 include("policies.jl")
-export Policy, StepwiseRDEPolicy, RandomRDEPolicy, ConstantRDEPolicy, SinusoidalRDEPolicy,
+export AbstractRDEPolicy, StepwiseRDEPolicy, RandomRDEPolicy, ConstantRDEPolicy, SinusoidalRDEPolicy,
     DelayedPolicy, LinearPolicy, get_env, LinearCheckpoints, SawtoothPolicy, PIDControllerPolicy
 export reset_pid_cache!
 # Vectorized environments

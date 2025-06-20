@@ -53,7 +53,7 @@ function env_indices(i::Int, n_agents_per_env::Int)
 end
 
 # CommonRLInterface implementations
-function CommonRLInterface.reset!(env::MultiAgentRDEVecEnv)
+function _reset!(env::MultiAgentRDEVecEnv)
     num_agents = env.n_agents_per_env
     num_envs = env.n_envs
     
@@ -77,11 +77,11 @@ function reset_single_env!(env::MultiAgentRDEVecEnv, i::Int, num_agents::Int)
     env.reset_infos[i] = Dict{String,Any}()
 end
 
-function CommonRLInterface.observe(env::MultiAgentRDEVecEnv)
+function _observe(env::MultiAgentRDEVecEnv)
     copy(env.observations)
 end
 
-function CommonRLInterface.act!(env::MultiAgentRDEVecEnv, actions::AbstractArray)
+function _act!(env::MultiAgentRDEVecEnv, actions::AbstractArray)
     num_agents = env.n_agents_per_env
     num_envs = env.n_envs
     @assert length(actions) == num_envs*num_agents
@@ -107,7 +107,7 @@ function act_single_env!(env::MultiAgentRDEVecEnv, i::Int, num_agents::Int, acti
     # Step environment
     env_inds = env_indices(i, num_agents)
     @logmsg LogLevel(-10000) "action size: $(size(actions))"
-    env.rewards[env_inds] = CommonRLInterface.act!(env.envs[i], @view actions[:, i])
+    env.rewards[env_inds] = _act!(env.envs[i], @view actions[:, i])
     @logmsg LogLevel(-10000) "VecEnv act! done with env $i, starting termination check"
     
     # Check termination
@@ -143,7 +143,7 @@ Returns (observations, rewards, dones, infos) matching the Stable Baselines API.
 """
 function step!(env::MultiAgentRDEVecEnv, actions::AbstractArray)
     @logmsg LogLevel(-10000) "VecEnv act!, actions size: $(size(actions))"
-    CommonRLInterface.act!(env, actions)
+    _act!(env, actions)
     @logmsg LogLevel(-10000) "VecEnv act! done, returning stuff"
     return (
         CommonRLInterface.observe(env),

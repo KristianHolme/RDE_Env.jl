@@ -1,3 +1,10 @@
+abstract type AbstractRDEPolicy end
+
+"""
+    predict_action(policy::AbstractRDEPolicy, obs)
+"""
+function _predict_action end
+
 """
     PolicyRunData{T<:AbstractFloat}
 
@@ -55,7 +62,7 @@ end
 Run a policy `π` on the RDE environment and collect trajectory data.
 
 # Arguments
-- `π::Policy`: Policy to execute
+- `π::AbstractRDEPolicy`: Policy to execute
 - `env::RDEEnv{T}`: RDE environment to run the policy in
 - `saves_per_action=1`: Save full state every `saves_per_action` steps
 
@@ -77,7 +84,7 @@ policy = ConstantRDEPolicy(env)
 data = run_policy(policy, env, saves_per_action=10)
 ```
 """
-function run_policy(π::Policy, env::AbstractRDEEnv{T}; saves_per_action=10) where {T}
+function run_policy(policy::AbstractRDEPolicy, env::AbstractRDEEnv{T}; saves_per_action=10) where {T}
     reset!(env)
     dt = env.dt
     max_steps = ceil(env.prob.params.tmax / dt) + 2 |> Int # +1 for initial state, +1 for overshoot
@@ -171,8 +178,8 @@ function run_policy(π::Policy, env::AbstractRDEEnv{T}; saves_per_action=10) whe
 
     log!(step)
     while !env.done && step < max_steps
-        action = POMDPs.action(π, observe(env))
-        act!(env, action, saves_per_action=saves_per_action)
+        action = _predict_action(policy, observe(env))
+        _act!(env, action, saves_per_action=saves_per_action)
         if env.terminated
             @assert env.done "Env terminated but done is false"
             break
@@ -242,7 +249,7 @@ function get_env(π::Policy)
 end
 
 """
-    ConstantRDEPolicy <: Policy
+    ConstantRDEPolicy <: AbstractRDEPolicy
 
 Policy that maintains constant control values.
 
@@ -253,12 +260,12 @@ Policy that maintains constant control values.
 Returns [0.0, 0.0] for ScalarAreaScalarPressureAction
 Returns 0.0 for ScalarPressureAction
 """
-struct ConstantRDEPolicy <: Policy
+struct ConstantRDEPolicy <: AbstractRDEPolicy
     env::RDEEnv
     ConstantRDEPolicy(env::RDEEnv=RDEEnv()) = new(env)
 end
 
-function POMDPs.action(π::ConstantRDEPolicy, s)
+function _predict_action(π::ConstantRDEPolicy, s)
     if π.env.action_type isa ScalarAreaScalarPressureAction
         return [0.0, 0.0]
     elseif π.env.action_type isa ScalarPressureAction
@@ -278,7 +285,7 @@ function Base.show(io::IO, ::MIME"text/plain", π::ConstantRDEPolicy)
 end
 
 """
-    SinusoidalRDEPolicy{T<:AbstractFloat} <: Policy
+    SinusoidalRDEPolicy{T<:AbstractFloat} <: AbstractRDEPolicy
 
 Policy that applies sinusoidal control signals.
 
@@ -292,7 +299,7 @@ Policy that applies sinusoidal control signals.
 SinusoidalRDEPolicy(env::RDEEnv{T}; w_1::T=1.0, w_2::T=2.0) where {T<:AbstractFloat}
 ```
 """
-struct SinusoidalRDEPolicy{T<:AbstractFloat} <: Policy
+struct SinusoidalRDEPolicy{T<:AbstractFloat} <: AbstractRDEPolicy
     env::RDEEnv{T}
     w_1::T
     w_2::T
@@ -302,7 +309,7 @@ struct SinusoidalRDEPolicy{T<:AbstractFloat} <: Policy
     end
 end
 
-function POMDPs.action(π::SinusoidalRDEPolicy, s)
+function _predict_action(π::SinusoidalRDEPolicy, s)
     t = π.env.t
     action1 = sin(π.w_1 * t)
     action2 = sin(π.w_2 * t)
@@ -327,7 +334,7 @@ function Base.show(io::IO, ::MIME"text/plain", π::SinusoidalRDEPolicy)
 end
 
 """
-    StepwiseRDEPolicy{T<:AbstractFloat} <: Policy
+    StepwiseRDEPolicy{T<:AbstractFloat} <: AbstractRDEPolicy
 
 Policy that applies predefined control values at specified times.
 
@@ -341,7 +348,7 @@ Policy that applies predefined control values at specified times.
 - Requires sorted time steps
 - Each control action must have 2 elements
 """
-struct StepwiseRDEPolicy{T<:AbstractFloat} <: Policy
+struct StepwiseRDEPolicy{T<:AbstractFloat} <: AbstractRDEPolicy
     env::RDEEnv{T}
     ts::Vector{T}  # Vector of time steps
     c::Union{Vector{Vector{T}},Vector{T}}  # Vector of control actions
@@ -360,7 +367,7 @@ struct StepwiseRDEPolicy{T<:AbstractFloat} <: Policy
     end
 end
 
-function POMDPs.action(π::StepwiseRDEPolicy, s)
+function _predict_action(π::StepwiseRDEPolicy, s)
     t = π.env.t
     cache = π.env.prob.method.cache
     past = π.ts .≤ t
@@ -413,7 +420,7 @@ function get_scaled_control(current, max_val, target)
 end
 
 """
-    RandomRDEPolicy{T<:AbstractFloat} <: Policy
+    RandomRDEPolicy{T<:AbstractFloat} <: AbstractRDEPolicy
 
 Policy that applies random control values.
 
@@ -423,14 +430,14 @@ Policy that applies random control values.
 # Notes
 Generates random values in [-1, 1] for each control dimension
 """
-struct RandomRDEPolicy{T<:AbstractFloat} <: Policy
+struct RandomRDEPolicy{T<:AbstractFloat} <: AbstractRDEPolicy
     env::RDEEnv{T}
     function RandomRDEPolicy(env::RDEEnv{T}) where {T<:AbstractFloat}
         new{T}(env)
     end
 end
 
-function POMDPs.action(π::RandomRDEPolicy, state)
+function _predict_action(π::RandomRDEPolicy, state)
     action1 = 2 * rand() - 1
     action2 = 2 * rand() - 1
     if π.env.action_type isa ScalarAreaScalarPressureAction
@@ -452,7 +459,7 @@ function Base.show(io::IO, ::MIME"text/plain", π::RandomRDEPolicy)
 end
 
 """
-    DelayedPolicy{T<:AbstractFloat} <: Policy
+    DelayedPolicy{T<:AbstractFloat} <: AbstractRDEPolicy
 
 A policy wrapper that delays the start of another policy until a specified time.
 Before the start time, returns zero actions.
@@ -468,13 +475,13 @@ base_policy = RandomRDEPolicy(env)
 delayed_policy = DelayedPolicy(base_policy, 100.0f0, env)
 ```
 """
-struct DelayedPolicy{T<:AbstractFloat} <: Policy
+struct DelayedPolicy{T<:AbstractFloat} <: AbstractRDEPolicy
     policy::Policy
     start_time::T
     env::AbstractRDEEnv{T}
 end
 
-function POMDPs.action(π::DelayedPolicy, s)
+function _predict_action(π::DelayedPolicy, s)
     t = π.env.t
     if t < π.start_time
         if π.env.action_type isa ScalarAreaScalarPressureAction
@@ -502,7 +509,7 @@ function Base.show(io::IO, ::MIME"text/plain", π::DelayedPolicy)
     println(io, "  env: $(typeof(π.env))")
 end
 
-struct ScaledPolicy{T<:AbstractFloat} <: Policy
+struct ScaledPolicy{T<:AbstractFloat} <: AbstractRDEPolicy
     policy::Policy
     scale::T
 end
@@ -511,7 +518,7 @@ function get_env(π::ScaledPolicy)
     return get_env(π.policy)
 end
 
-function POMDPs.action(π::ScaledPolicy, s)
+function _predict_action(π::ScaledPolicy, s)
     return π.scale .* POMDPs.action(π.policy, s)
 end
 
@@ -525,7 +532,7 @@ function Base.show(io::IO, ::MIME"text/plain", π::ScaledPolicy)
     println(io, "  policy: $(π.policy)")
 end
 
-struct LinearPolicy{T<:AbstractFloat} <: Policy
+struct LinearPolicy{T<:AbstractFloat} <: AbstractRDEPolicy
     env::RDEEnv{T}
     start_value::Union{Vector{T},T}
     end_value::Union{Vector{T},T}
@@ -541,7 +548,7 @@ struct LinearPolicy{T<:AbstractFloat} <: Policy
     end
 end
 
-function POMDPs.action(π::LinearPolicy, s)
+function _predict_action(π::LinearPolicy, s)
     t = π.env.t
     tmax = π.env.prob.params.tmax
     if π.env.action_type isa ScalarAreaScalarPressureAction
@@ -567,7 +574,7 @@ function Base.show(io::IO, ::MIME"text/plain", π::LinearPolicy)
 end
 
 """
-    LinearCheckpoints{T<:AbstractFloat} <: Policy
+    LinearCheckpoints{T<:AbstractFloat} <: AbstractRDEPolicy
 
 Policy that applies linearly interpolated control values between specified checkpoints.
 
@@ -582,7 +589,7 @@ Policy that applies linearly interpolated control values between specified check
 - Each control action must have 2 elements for ScalarAreaScalarPressureAction
 - Linear interpolation is performed between checkpoints
 """
-struct LinearCheckpoints{T<:AbstractFloat} <: Policy
+struct LinearCheckpoints{T<:AbstractFloat} <: AbstractRDEPolicy
     env::RDEEnv{T}
     ts::Vector{T}  # Vector of time checkpoints
     c::Union{Vector{Vector{T}},Vector{T}}  # Vector of control actions at checkpoints
@@ -601,7 +608,7 @@ struct LinearCheckpoints{T<:AbstractFloat} <: Policy
     end
 end
 
-function POMDPs.action(π::LinearCheckpoints, s)
+function _predict_action(π::LinearCheckpoints, s)
     t = π.env.t
     cache = π.env.prob.method.cache
 
@@ -646,7 +653,7 @@ function Base.show(io::IO, ::MIME"text/plain", π::LinearCheckpoints)
 end
 
 """
-    SawtoothPolicy{T<:AbstractFloat} <: Policy
+    SawtoothPolicy{T<:AbstractFloat} <: AbstractRDEPolicy
 
 Policy that implements a sawtooth control pattern for pressure control, periodically increasing from min to max value.
 
@@ -660,7 +667,7 @@ Policy that implements a sawtooth control pattern for pressure control, periodic
 - Only compatible with ScalarPressureAction
 - Starts from the current injection pressure and gradually increases
 """
-struct SawtoothPolicy{T<:AbstractFloat} <: Policy
+struct SawtoothPolicy{T<:AbstractFloat} <: AbstractRDEPolicy
     env::RDEEnv{T}
     timescale::T
     max_value::T
@@ -675,7 +682,7 @@ struct SawtoothPolicy{T<:AbstractFloat} <: Policy
     end
 end
 
-function POMDPs.action(π::SawtoothPolicy, s)
+function _predict_action(π::SawtoothPolicy, s)
     t = π.env.t
     cache = π.env.prob.method.cache
 
@@ -708,7 +715,7 @@ end
     previous_error::T = 0.0f0
 end
 
-struct PIDControllerPolicy{T<:AbstractFloat} <: Policy
+struct PIDControllerPolicy{T<:AbstractFloat} <: AbstractRDEPolicy
     dt::T
     target::T
     Kp::T
@@ -720,7 +727,7 @@ struct PIDControllerPolicy{T<:AbstractFloat} <: Policy
     end
 end
 
-function POMDPs.action(π::PIDControllerPolicy, o)
+function _predict_action(π::PIDControllerPolicy, o)
     u_p = o[1]
     cache = π.cache
     error = π.target - u_p
@@ -755,4 +762,26 @@ end
 
 function reset_pid_cache!(pid_controller::PIDControllerPolicy)
     reset_pid_cache!(pid_controller.cache)
+end
+
+
+struct DRiLAgentPolicy <: AbstractRDEPolicy
+    agent::AbstractAgent
+    norm_env::Union{AbstractNormalizationEnv,Nothing}
+end
+
+function _predict_action(policy::DRiLAgentPolicy, observation)
+    if !isnothing(policy.norm_env)
+        observation = normalize_observation(policy.norm_env, observation)
+    end
+    return predict_actions(policy.agent, [observation], deterministic=true)[1]
+end
+
+function Base.show(io::IO, π::DRiLAgentPolicy)
+    print(io, "DRiLAgentPolicy(agent=$(typeof(π.agent)))")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", π::DRiLAgentPolicy)
+    println(io, "DRiLAgentPolicy:")
+    println(io, "  agent: $(typeof(π.agent))")
 end

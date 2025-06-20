@@ -57,8 +57,8 @@ using POMDPs
         # Test truncation with wrong number of shocks
         env.state .= 1.0  # Constant state = no shocks
         set_reward!(env, env.reward_type)
-        CommonRLInterface.act!(env, 0.0f0)
-        CommonRLInterface.act!(env, 0.0f0) #act twice to outrun abscence limit
+        _act!(env, 0.0f0)
+        _act!(env, 0.0f0) #act twice to outrun abscence limit
 
         @test env.terminated  # Should be terminated with wrong shock count
         @test env.reward ≈ -2.0  # Should get penalty reward
@@ -100,7 +100,7 @@ using POMDPs
             rewards = Float32[]
             for _ in 1:n_steps
                 action = POMDPs.action(policy, nothing)
-                push!(rewards, CommonRLInterface.act!(env, action))
+                push!(rewards, _act!(env, action))
                 @test !isnan(env.reward)
                 @test !isinf(env.reward)
             end
@@ -128,7 +128,7 @@ using POMDPs
                     break
                 end
                 action = POMDPs.action(policy, nothing)
-                push!(rewards, CommonRLInterface.act!(env, action))
+                push!(rewards, _act!(env, action))
                 if env.terminated
                     push!(terminations, step)
                 end
@@ -422,7 +422,7 @@ using POMDPs
             CommonRLInterface.reset!(env)
             for _ in 1:n_steps
                 action = POMDPs.action(policy, nothing)
-                CommonRLInterface.act!(env, action)
+                _act!(env, action)
                 @test !any(isnan.(env.reward))
                 @test !any(isinf.(env.reward))
             end
