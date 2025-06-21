@@ -85,7 +85,7 @@ data = run_policy(policy, env, saves_per_action=10)
 ```
 """
 function run_policy(policy::AbstractRDEPolicy, env::AbstractRDEEnv{T}; saves_per_action=10) where {T}
-    reset!(env)
+    _reset!(env)
     dt = env.dt
     max_steps = ceil(env.prob.params.tmax / dt) + 2 |> Int # +1 for initial state, +1 for overshoot
     N = env.prob.params.N
@@ -138,7 +138,7 @@ function run_policy(policy::AbstractRDEPolicy, env::AbstractRDEEnv{T}; saves_per
         else
             rewards[ind] = env.reward
         end
-        observations[ind] = observe(env)
+        observations[ind] = _observe(env)
 
         if step > 0
             step_states = env.prob.sol.u[2:end]
@@ -178,7 +178,7 @@ function run_policy(policy::AbstractRDEPolicy, env::AbstractRDEEnv{T}; saves_per
 
     log!(step)
     while !env.done && step < max_steps
-        action = _predict_action(policy, observe(env))
+        action = _predict_action(policy, _observe(env))
         _act!(env, action, saves_per_action=saves_per_action)
         if env.terminated
             @assert env.done "Env terminated but done is false"
@@ -765,23 +765,3 @@ function reset_pid_cache!(pid_controller::PIDControllerPolicy)
 end
 
 
-struct DRiLAgentPolicy <: AbstractRDEPolicy
-    agent::AbstractAgent
-    norm_env::Union{AbstractNormalizationEnv,Nothing}
-end
-
-function _predict_action(policy::DRiLAgentPolicy, observation)
-    if !isnothing(policy.norm_env)
-        observation = normalize_observation(policy.norm_env, observation)
-    end
-    return predict_actions(policy.agent, [observation], deterministic=true)[1]
-end
-
-function Base.show(io::IO, π::DRiLAgentPolicy)
-    print(io, "DRiLAgentPolicy(agent=$(typeof(π.agent)))")
-end
-
-function Base.show(io::IO, ::MIME"text/plain", π::DRiLAgentPolicy)
-    println(io, "DRiLAgentPolicy:")
-    println(io, "  agent: $(typeof(π.agent))")
-end

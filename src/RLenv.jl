@@ -121,7 +121,7 @@ mutable struct RDEEnv{T<:AbstractFloat} <: AbstractRDEEnv{T}
         observation_strategy::AbstractObservationStrategy=FourierObservation(16),
         action_type::AbstractActionType=ScalarPressureAction(),
         reward_type::AbstractRDEReward=ShockSpanReward(target_shock_count=3),
-        verbose::Bool=true,
+        verbose::Bool=false,
         kwargs...) where {T<:AbstractFloat}
 
         if τ_smooth > dt
@@ -245,7 +245,7 @@ function _act!(env::RDEEnv{T}, action; saves_per_action::Int=10) where {T<:Abstr
                                    isoutofdomain=RDE.outofdomain, verbose=env.verbose)
     end
 
-    
+    env.observation .= compute_observation(env, env.observation_strategy)
     #Check termination caused by ODE solver
     if sol.retcode != :Success || any(isnan.(sol.u[end]))
         if any(isnan.(sol.u[end]))
@@ -315,6 +315,7 @@ function _reset!(env::RDEEnv)
     env.truncated = false
     env.terminated = false
     set_reward!(env, env.reward_type)
+    env.observation .= compute_observation(env, env.observation_strategy)
 
     reset_cache!(env.prob.method.cache, τ_smooth=env.τ_smooth, params=env.prob.params)    
     env.prob.sol = nothing

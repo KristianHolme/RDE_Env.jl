@@ -49,9 +49,9 @@ end
 function _observation_space(core_env::RDEEnv, strategy::SectionedStateObservation)
     N = core_env.prob.params.N
     minisections = strategy.minisections
-    minisection_size = N ÷ minisections
-    low = [[0f0 for _ in 1:2*minisection_size]; 0f0; 0f0]
-    high = [[1f0 for _ in 1:minisection_size]; [1f0 for _ in 1:minisection_size]; 1f0; 1f0]
+    # minisection_size = N ÷ minisections
+    low = [[0f0 for _ in 1:2*minisections]; 0f0; 0f0]
+    high = [[1f0 for _ in 1:2*minisections]; 1f0; 1f0]
     return DRiL.Box(low, high)
 end
 
@@ -148,5 +148,25 @@ function DRiL.act!(env::DRiLMultiAgentRDEEnv, actions::AbstractVector)
     return rewards, terminateds, truncateds, infos
 end
 
+struct DRiLAgentPolicy <: AbstractRDEPolicy
+    agent::AbstractAgent
+    norm_env::Union{NormalizeWrapperEnv,Nothing}
+end
+
+function _predict_action(policy::DRiLAgentPolicy, observation)
+    if !isnothing(policy.norm_env)
+        observation = normalize_observation(policy.norm_env, observation)
+    end
+    return predict_actions(policy.agent, [observation], deterministic=true)[1]
+end
+
+function Base.show(io::IO, π::DRiLAgentPolicy)
+    print(io, "DRiLAgentPolicy(agent=$(typeof(π.agent)))")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", π::DRiLAgentPolicy)
+    println(io, "DRiLAgentPolicy:")
+    println(io, "  agent: $(typeof(π.agent))")
+end
 
 end #module
