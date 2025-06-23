@@ -52,7 +52,6 @@ function env_indices(i::Int, n_agents_per_env::Int)
     return (1+(i-1)*n_agents_per_env):(i*n_agents_per_env)
 end
 
-# CommonRLInterface implementations
 function _reset!(env::MultiAgentRDEVecEnv)
     num_agents = env.n_agents_per_env
     num_envs = env.n_envs
@@ -115,7 +114,7 @@ function act_single_env!(env::MultiAgentRDEVecEnv, i::Int, num_agents::Int, acti
         env.dones[env_inds] .= true
         for agent_i in 1:num_agents
             env.infos[env_inds[agent_i]]["terminal_observation"] = _observe(env.envs[i])[:, agent_i]
-            if env.envs[i].truncated  # TODO: Add truncated to CommonRLInterface?
+            if env.envs[i].truncated
                 env.infos[env_inds[agent_i]]["TimeLimit.truncated"] = true
             end
         end

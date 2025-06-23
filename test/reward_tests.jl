@@ -1,6 +1,5 @@
 using Test
 using RDE
-using CommonRLInterface
 
 @testset "Reward Interface Tests" begin
     @testset "ShockSpanReward" begin

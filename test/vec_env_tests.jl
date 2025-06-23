@@ -2,7 +2,6 @@ using Test
 using RDE
 using RDE_Env
 using Random
-using CommonRLInterface
 
 @testset "VecEnv Tests" begin
     @testset "Construction" begin

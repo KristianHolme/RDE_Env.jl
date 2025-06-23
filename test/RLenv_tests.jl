@@ -1,5 +1,3 @@
-using CommonRLInterface
-
 @testset "RDEEnv Initialization" begin
     @test begin
         params = RDEParam(;N=16, tmax = 0.01)

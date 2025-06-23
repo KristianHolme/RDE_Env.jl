@@ -1,6 +1,5 @@
 module RDE_Env
 using RDE
-using CommonRLInterface
 using CircularArrays
 using DomainSets
 using FFTW
