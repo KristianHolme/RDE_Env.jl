@@ -19,24 +19,24 @@ using CommonRLInterface
         vec_env = RDEVecEnv(envs)
         
         # Test initial reset
-        reset!(vec_env)
+        _reset!(vec_env)
         obs1 = observe(vec_env)
         @test size(obs1) == (length(observe(envs[1])), 4)
         @test !any(isnan, obs1)
         
         # Test seeding
         seed!(vec_env, 42)
-        reset!(vec_env)
+        _reset!(vec_env)
         obs2 = observe(vec_env)
         
         seed!(vec_env, 42)
-        reset!(vec_env)
+        _reset!(vec_env)
         obs3 = observe(vec_env)
         
         @test obs2 == obs3  # Same seed should give same results
         
         seed!(vec_env, 43)
-        reset!(vec_env)
+        _reset!(vec_env)
         obs4 = observe(vec_env)
         
         @test obs2 != obs4  # Different seeds should give different results
@@ -45,7 +45,7 @@ using CommonRLInterface
     @testset "Step" begin
         envs = [RDEEnv(dt=0.1, τ_smooth=0.01) for _ in 1:4]
         vec_env = RDEVecEnv(envs)
-        reset!(vec_env)
+        _reset!(vec_env)
         
         # Create test actions
         action_length = action_dim(envs[1].action_type)
@@ -71,7 +71,7 @@ using CommonRLInterface
         # Create envs with short time limit for testing termination
         envs = [RDEEnv(dt=0.1, τ_smooth=0.01, params=RDEParam(tmax=0.2)) for _ in 1:4]
         vec_env = RDEVecEnv(envs)
-        reset!(vec_env)
+        _reset!(vec_env)
         
         # Run until termination
         action_length = action_dim(envs[1].action_type)
@@ -97,7 +97,7 @@ using CommonRLInterface
     @testset "Thread Safety" begin
         envs = [RDEEnv(dt=0.1, τ_smooth=0.01) for _ in 1:8]
         vec_env = RDEVecEnv(envs)  # Use more envs to test threading
-        reset!(vec_env)
+        _reset!(vec_env)
         
         action_length = action_dim(envs[1].action_type)
         actions = zeros(Float32, action_length, 8)

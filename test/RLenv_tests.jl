@@ -1,5 +1,4 @@
 using CommonRLInterface
-using POMDPs
 
 @testset "RDEEnv Initialization" begin
     @test begin
@@ -7,15 +6,9 @@ using POMDPs
         prob = RDEProblem(params)
         sum(abs.(prob.u0)) > 0.01
     end
-
-    @test begin
-        mdp = convert(POMDPs.MDP, RDEEnv())
-        pomdp = convert(POMDPs.POMDP, RDEEnv())
-        true
-    end
     
     @test begin
-        env = RDEEnv{Float32}()
+        env = RDEEnv()
         true
     end
 end
@@ -23,7 +16,7 @@ end
 @testset "RDEEnv Policies" begin
     @test begin
         ConstPolicy = ConstantRDEPolicy()
-        data = run_policy(ConstPolicy, RDEEnv(RDEParam(;N=16, tmax = 0.1)))
+        data = run_policy(ConstPolicy, RDEEnv(RDEParam(;N=128, tmax = 0.1)))
         data isa PolicyRunData
     end
 end
@@ -35,7 +28,7 @@ end
     @testset "Fourier Observation" begin
         fft_terms = 4
         env = RDEEnv(params=params, observation_strategy=FourierObservation(fft_terms))
-        
+        _reset!(env)
         # Test initialization
         @test length(env.observation) == 2fft_terms + 2  # 2 * fft_terms + s_scaled + u_p_scaled
         
@@ -49,7 +42,7 @@ end
     
     @testset "State Observation" begin
         env = RDEEnv(params=params, observation_strategy=StateObservation())
-        
+        _reset!(env)
         # Test initialization
         @test length(env.observation) == 2N + 2  # u and λ states + s_scaled + u_p_scaled
         
@@ -69,7 +62,7 @@ end
     @testset "Sampled Observation" begin
         n_samples = 8
         env = RDEEnv(params=params, observation_strategy=SampledStateObservation(n_samples))
-        
+        _reset!(env)
         # Test initialization
         @test length(env.observation) == 2n_samples + 1  # sampled u and λ + time
         
@@ -93,6 +86,7 @@ end
             SampledStateObservation(8)
         ]
             env = RDEEnv(params=params, observation_strategy=strategy)
+            _reset!(env)
             obs1 = _observe(env)
             _reset!(env)
             obs2 = _observe(env)
@@ -106,6 +100,7 @@ end
         # Test for Float32
         @test begin
             env = RDEEnv(params=RDEParam{Float32}())
+            _reset!(env)
             obs = _observe(env)
             eltype(obs) == Float32
         end
@@ -113,6 +108,7 @@ end
         # Test for Float64
         @test begin
             env = RDEEnv(RDEParam{Float64}())
+            _reset!(env)
             obs = _observe(env)
             eltype(obs) == Float64
         end
@@ -126,6 +122,7 @@ end
             ]
                 @test begin
                     env = RDEEnv(RDEParam{T}(), observation_strategy=strategy)
+                    _reset!(env)
                     obs = _observe(env)
                     eltype(obs) == T
                 end

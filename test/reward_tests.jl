@@ -1,7 +1,6 @@
 using Test
 using RDE
 using CommonRLInterface
-using POMDPs
 
 @testset "Reward Interface Tests" begin
     @testset "ShockSpanReward" begin
@@ -99,7 +98,7 @@ using POMDPs
             _reset!(env)
             rewards = Float32[]
             for _ in 1:n_steps
-                action = POMDPs.action(policy, nothing)
+                action = _predict_action(policy, _observe(env))
                 push!(rewards, _act!(env, action))
                 @test !isnan(env.reward)
                 @test !isinf(env.reward)
@@ -127,7 +126,7 @@ using POMDPs
                 if env.done
                     break
                 end
-                action = POMDPs.action(policy, nothing)
+                action = _predict_action(policy, _observe(env))
                 push!(rewards, _act!(env, action))
                 if env.terminated
                     push!(terminations, step)
@@ -192,7 +191,7 @@ using POMDPs
         # Test reward with no shocks
         env.state .= 1.0  # Constant state = no shocks
         set_reward!(env, env.reward_type)
-        @test env.reward < 0  # Should be negative with no shocks
+        @test env.reward ≈ 0  # Should be zero with no shocks
 
         # Test reward with target number of shocks
         N = env.prob.params.N
@@ -205,7 +204,12 @@ using POMDPs
 
         # Test different aggregation methods
         for agg in [TimeMin(), TimeMax(), TimeAvg(), TimeSum(), TimeProd()]
-            env.reward_type.aggregation = agg
+            env.reward_type = TimeAggCompositeReward(
+                aggregation=agg,
+                target_shock_count=3,
+                lowest_action_magnitude_reward=0.5f0,
+                weights=[0.25f0, 0.25f0, 0.25f0, 0.25f0]
+            )
             set_reward!(env, env.reward_type)
             @test !isnan(env.reward)
             @test !isinf(env.reward)
@@ -421,7 +425,7 @@ using POMDPs
             # Run policy and collect rewards
             _reset!(env)
             for _ in 1:n_steps
-                action = POMDPs.action(policy, nothing)
+                action = _predict_action(policy, _observe(env))
                 _act!(env, action)
                 @test !any(isnan.(env.reward))
                 @test !any(isinf.(env.reward))

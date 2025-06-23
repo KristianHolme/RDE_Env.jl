@@ -222,6 +222,7 @@ end
 
 function global_rewards(u::AbstractVector{T}, L::T, dx::T, rt::CachedCompositeReward) where T<:AbstractFloat
     N = length(u)
+    @assert length(rt.cache) == N "cache length must match state length, cache length: $(length(rt.cache)), state length: $N"
 
     periodicity_reward = calculate_periodicity_reward(u, N, rt.target_shock_count, rt.cache)
     shock_reward, shock_spacing_reward, shocks = calculate_shock_rewards(u, dx, L, N, rt.target_shock_count)

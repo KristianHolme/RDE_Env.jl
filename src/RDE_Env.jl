@@ -13,7 +13,6 @@ using OrdinaryDiffEq
 using Makie
 using Observables
 using Polyester
-using POMDPs
 using POMDPTools
 using PrecompileTools
 using ProgressMeter
@@ -55,7 +54,7 @@ export _reset!, _act!, _observe, state, terminated
 include("policies.jl")
 export AbstractRDEPolicy, StepwiseRDEPolicy, RandomRDEPolicy, ConstantRDEPolicy, SinusoidalRDEPolicy,
     DelayedPolicy, LinearPolicy, get_env, LinearCheckpoints, SawtoothPolicy, PIDControllerPolicy
-export reset_pid_cache!
+export reset_pid_cache!, _predict_action
 # Vectorized environments
 include("vec_env.jl")
 include("multi_agent_vec_env.jl")
