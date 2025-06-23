@@ -20,24 +20,24 @@ using CommonRLInterface
         
         # Test initial reset
         _reset!(vec_env)
-        obs1 = observe(vec_env)
-        @test size(obs1) == (length(observe(envs[1])), 4)
+        obs1 = _observe(vec_env)
+        @test size(obs1) == (length(_observe(envs[1])), 4)
         @test !any(isnan, obs1)
         
         # Test seeding
         seed!(vec_env, 42)
         _reset!(vec_env)
-        obs2 = observe(vec_env)
+        obs2 = _observe(vec_env)
         
         seed!(vec_env, 42)
         _reset!(vec_env)
-        obs3 = observe(vec_env)
+        obs3 = _observe(vec_env)
         
         @test obs2 == obs3  # Same seed should give same results
         
         seed!(vec_env, 43)
         _reset!(vec_env)
-        obs4 = observe(vec_env)
+        obs4 = _observe(vec_env)
         
         @test obs2 != obs4  # Different seeds should give different results
     end
@@ -53,9 +53,9 @@ using CommonRLInterface
         actions[:, 1] .= 0.5  # Different action for first env
         
         # Test act!
-        rewards = act!(vec_env, actions)
-        obs = observe(vec_env)
-        dones = terminated(vec_env)
+        rewards = _act!(vec_env, actions)
+        obs = _observe(vec_env)
+        dones = vec_env.dones
         
         @test size(obs) == (length(_observe(envs[1])), 4)
         @test length(rewards) == 4
@@ -80,8 +80,8 @@ using CommonRLInterface
         n_steps = 0
         
         while !is_terminated && n_steps < 100
-            act!(vec_env, actions)
-            dones = terminated(vec_env)
+            _act!(vec_env, actions)
+            dones = vec_env.dones
             is_terminated = any(dones)
             n_steps += 1
         end

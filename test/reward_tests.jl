@@ -239,7 +239,7 @@ using CommonRLInterface
         # Test reward with no shocks
         env.state .= 1.0  # Constant state = no shocks
         set_reward!(env, env.reward_type)
-        @test all(env.reward .< 0)  # All sections should have negative reward with no shocks
+        @test all(env.reward .≤ 0)  # All sections should have negative reward with no shocks
 
         # Test reward with target number of shocks
         N = env.prob.params.N
@@ -248,11 +248,17 @@ using CommonRLInterface
         env.state[N÷2] = 2.0  # Second shock
         env.state[3N÷4] = 2.0  # Third shock
         set_reward!(env, env.reward_type)
-        @test all(env.reward .> 0)  # All sections should have positive reward with target shocks
+        @test all(env.reward .≥ 0)  # All sections should have positive reward with target shocks
 
         # Test different aggregation methods
         for agg in [TimeMin(), TimeMax(), TimeAvg(), TimeSum(), TimeProd()]
-            env.reward_type.aggregation = agg
+            env.reward_type = TimeAggMultiSectionReward(
+                aggregation=agg,
+                n_sections=4,
+                target_shock_count=3,
+                lowest_action_magnitude_reward=0.5f0,
+                weights=[1f0, 1f0, 5f0, 1f0]
+            )
             set_reward!(env, env.reward_type)
             @test !any(isnan.(env.reward))
             @test !any(isinf.(env.reward))

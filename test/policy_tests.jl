@@ -10,7 +10,7 @@
             momentum=0.0,    # No momentum for simpler testing
             observation_strategy=FourierObservation(8),
             action_type=ScalarPressureAction(),
-            reward_type = CompositeReward()
+            reward_type = CompositeReward(;N=32)
         )
         policy = RandomRDEPolicy(env)
 

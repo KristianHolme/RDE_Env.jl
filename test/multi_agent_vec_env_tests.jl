@@ -32,24 +32,24 @@ using CommonRLInterface
         
         # Test initial reset
         _reset!(vec_env)
-        obs1 = observe(vec_env)
+        obs1 = _observe(vec_env)
         @test size(obs1, 2) == 4  # 2 envs * 2 agents
         @test !any(isnan, obs1)
         
         # Test seeding produces deterministic results
         seed!(vec_env, 42)
         _reset!(vec_env)
-        obs2 = observe(vec_env)
+        obs2 = _observe(vec_env)
         
         seed!(vec_env, 42)
         _reset!(vec_env)
-        obs3 = observe(vec_env)
+        obs3 = _observe(vec_env)
         
         @test obs2 == obs3  # Same seed should give same results
         
         seed!(vec_env, 43)
         _reset!(vec_env)
-        obs4 = observe(vec_env)
+        obs4 = _observe(vec_env)
         
         @test obs2 != obs4  # Different seeds should give different results
     end
@@ -69,9 +69,9 @@ using CommonRLInterface
         actions[:, 1] .= 0.5  # Different action for first agent
         
         # Test act!
-        rewards = act!(vec_env, actions)
-        obs = observe(vec_env)
-        dones = terminated(vec_env)
+        rewards = _act!(vec_env, actions)
+        obs = _observe(vec_env)
+        dones = vec_env.dones
         
         # Check dimensions
         @test size(obs, 2) == 4  # 2 envs * 2 agents
@@ -104,8 +104,8 @@ using CommonRLInterface
         n_steps = 0
         
         while !is_terminated && n_steps < 100
-            act!(vec_env, actions)
-            dones = terminated(vec_env)
+            _act!(vec_env, actions)
+            dones = vec_env.dones
             is_terminated = any(dones)
             n_steps += 1
         end
