@@ -60,7 +60,7 @@ export reset_pid_cache!
 include("vec_env.jl")
 include("multi_agent_vec_env.jl")
 export RDEVecEnv, MultiAgentRDEVecEnv
-export step!, reset!, seed!
+export step!, seed!
 export ThreadingMode, POLYESTER, THREADS
 
 # Policies
@@ -99,7 +99,7 @@ include("displaying.jl")
             observation_strategy=FourierObservation(8)
         ) for _ in 1:2]
         vec_env = RDEVecEnv(envs)
-        reset!(vec_env)
+        _reset!(vec_env)
         actions = rand(Float32, 1, 2) .- 0.5
         step!(vec_env, actions)
 

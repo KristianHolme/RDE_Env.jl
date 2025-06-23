@@ -57,7 +57,7 @@ using CommonRLInterface
         obs = observe(vec_env)
         dones = terminated(vec_env)
         
-        @test size(obs) == (length(CommonRLInterface.observe(envs[1])), 4)
+        @test size(obs) == (length(_observe(envs[1])), 4)
         @test length(rewards) == 4
         @test length(dones) == 4
         @test !any(isnan, obs)
@@ -103,7 +103,7 @@ using CommonRLInterface
         actions = zeros(Float32, action_length, 8)
         
         # Run multiple steps in parallel
-        CommonRLInterface.act!(vec_env, actions)
+        _act!(vec_env, actions)
         
         # If we got here without errors, threading worked
         @test true

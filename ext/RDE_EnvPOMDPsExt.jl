@@ -4,7 +4,7 @@ using RDE_Env
 using POMDPs
 
 function POMDPs.initialobs(RLEnvPOMDP, s)
-    return [CommonRLInterface.observe(RLEnvPOMDP.env)]
+    return [_observe(RLEnvPOMDP.env)]
 end
 
 end

@@ -3,14 +3,14 @@
 
 A vectorized environment that runs multiple RDE environments in parallel. 
 Each environment has multiple agents, and the observations are concatenated for each agent.
-Implements the CommonRLInterface and provides a Stable Baselines compatible step! function.
+Provides a Stable Baselines compatible step! function.
 
 The environment supports two threading modes:
 - THREADS: Uses Base.Threads.@threads for parallelization
 - POLYESTER: Uses Polyester.@batch for parallelization
 """
 mutable struct MultiAgentRDEVecEnv{T<:AbstractFloat} <: AbstractRDEEnv
-    envs::Vector{RDEEnv{T}}
+    envs::Vector{RDEEnv{T, A, O, R}} where {A<:AbstractActionType, O<:AbstractObservationStrategy, R<:AbstractRDEReward}
     n_envs::Int
     n_agents_per_env::Int
     observations::Matrix{T}
@@ -28,7 +28,7 @@ Create a vectorized environment from a vector of environments.
 """
 function MultiAgentRDEVecEnv(envs::Vector{RDEEnv{T}}; threading_mode::ThreadingMode=THREADS) where {T<:AbstractFloat}
     n_envs = length(envs)
-    obs = CommonRLInterface.observe(envs[1])
+    obs = _observe(envs[1])
     obs_dim = size(obs, 1)
     n_agents_per_env = size(obs, 2)
     observations = Matrix{T}(undef, obs_dim, n_envs*n_agents_per_env)
@@ -72,8 +72,8 @@ end
 
 # Helper function to reset a single environment
 function reset_single_env!(env::MultiAgentRDEVecEnv, i::Int, num_agents::Int)
-    CommonRLInterface.reset!(env.envs[i])
-    env.observations[:, env_indices(i, num_agents)] .= CommonRLInterface.observe(env.envs[i])
+    _reset!(env.envs[i])
+    env.observations[:, env_indices(i, num_agents)] .= _observe(env.envs[i])
     env.reset_infos[i] = Dict{String,Any}()
 end
 
@@ -111,15 +111,15 @@ function act_single_env!(env::MultiAgentRDEVecEnv, i::Int, num_agents::Int, acti
     @logmsg LogLevel(-10000) "VecEnv act! done with env $i, starting termination check"
     
     # Check termination
-    if CommonRLInterface.terminated(env.envs[i])
+    if env.envs[i].terminated
         env.dones[env_inds] .= true
         for agent_i in 1:num_agents
-            env.infos[env_inds[agent_i]]["terminal_observation"] = CommonRLInterface.observe(env.envs[i])[:, agent_i]
+            env.infos[env_inds[agent_i]]["terminal_observation"] = _observe(env.envs[i])[:, agent_i]
             if env.envs[i].truncated  # TODO: Add truncated to CommonRLInterface?
                 env.infos[env_inds[agent_i]]["TimeLimit.truncated"] = true
             end
         end
-        CommonRLInterface.reset!(env.envs[i])
+        _reset!(env.envs[i])
     else
         env.dones[env_inds] .= false
         empty!.(env.infos[env_inds])
@@ -127,12 +127,8 @@ function act_single_env!(env::MultiAgentRDEVecEnv, i::Int, num_agents::Int, acti
     
     # Update observation
     @logmsg LogLevel(-10000) "VecEnv act! done with env $i, starting observation update"
-    env.observations[:, env_indices(i, num_agents)] .= CommonRLInterface.observe(env.envs[i])
+    env.observations[:, env_indices(i, num_agents)] .= _observe(env.envs[i])
     @logmsg LogLevel(-10000) "VecEnv act! done with env $i, observation update done"
-end
-
-function CommonRLInterface.terminated(env::MultiAgentRDEVecEnv) #this is SB done, not terminated
-    copy(env.dones)
 end
 
 """
@@ -146,9 +142,9 @@ function step!(env::MultiAgentRDEVecEnv, actions::AbstractArray)
     _act!(env, actions)
     @logmsg LogLevel(-10000) "VecEnv act! done, returning stuff"
     return (
-        CommonRLInterface.observe(env),
+        _observe(env),
         copy(env.rewards),
-        CommonRLInterface.terminated(env),
+        copy(env.dones),
         copy(env.infos)
     )
 end 

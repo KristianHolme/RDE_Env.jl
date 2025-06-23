@@ -4,7 +4,7 @@ A Julia module providing a reinforcement learning environment interface for the 
 
 ## Overview
 
-RDE_Env wraps the RDE simulation in a reinforcement learning environment following the CommonRLInterface.jl API. It provides:
+RDE_Env wraps the RDE simulation in a reinforcement learning environment with extensions for the DRiL.jl interface and the CommonRLInterface.jl interface. It provides:
 - Various action spaces for controlling RDE parameters
 - Multiple observation strategies
 - Customizable reward functions

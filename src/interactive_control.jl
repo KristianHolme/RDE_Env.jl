@@ -227,7 +227,7 @@ function interactive_control(env::RDEEnv; callback=nothing, show_observations=fa
                         control_u_p[] -= get_timestep_scale(control_u_p.val)
                         set_close_to!(slider_u_p, control_u_p[])
                     elseif key == Keyboard.r
-                        reset!(env)
+                        _reset!(env)
                         update_observables!()
                         control_s[] = s_start
                         u_p_start = params.u_p

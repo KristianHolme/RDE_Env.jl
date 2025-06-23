@@ -40,7 +40,7 @@ end
         @test length(env.observation) == 2fft_terms + 2  # 2 * fft_terms + s_scaled + u_p_scaled
         
         # Test observation
-        obs = CommonRLInterface.observe(env)
+        obs = _observe(env)
         @test length(obs) == 2fft_terms + 2
         @test all(-1 .<= obs[1:2fft_terms] .<= 1)  # FFT coefficients should be normalized
         @test -1 <= obs[2fft_terms+1] <= 1  # Normalized s_scaled
@@ -54,7 +54,7 @@ end
         @test length(env.observation) == 2N + 2  # u and λ states + s_scaled + u_p_scaled
         
         # Test observation
-        obs = CommonRLInterface.observe(env)
+        obs = _observe(env)
         @test length(obs) == 2N + 2
         @test all(-1 .<= obs[1:end-2] .<= 1)  # State components should be normalized
         @test 0 <= obs[end-1] <= 1  # Normalized s
@@ -74,7 +74,7 @@ end
         @test length(env.observation) == 2n_samples + 1  # sampled u and λ + time
         
         # Test observation
-        obs = CommonRLInterface.observe(env)
+        obs = _observe(env)
         @test length(obs) == 2n_samples + 1
         @test all(-1 .<= obs[1:end-1] .<= 1)  # Sampled values should be normalized
         @test 0 <= obs[end] <= 1  # Normalized time
@@ -93,9 +93,9 @@ end
             SampledStateObservation(8)
         ]
             env = RDEEnv(params=params, observation_strategy=strategy)
-            obs1 = CommonRLInterface.observe(env)
-            CommonRLInterface.reset!(env)
-            obs2 = CommonRLInterface.observe(env)
+            obs1 = _observe(env)
+            _reset!(env)
+            obs2 = _observe(env)
             @test length(obs1) == length(obs2)
             @test all(isfinite.(obs1))
             @test all(isfinite.(obs2))
@@ -106,14 +106,14 @@ end
         # Test for Float32
         @test begin
             env = RDEEnv(params=RDEParam{Float32}())
-            obs = CommonRLInterface.observe(env)
+            obs = _observe(env)
             eltype(obs) == Float32
         end
 
         # Test for Float64
         @test begin
             env = RDEEnv(RDEParam{Float64}())
-            obs = CommonRLInterface.observe(env)
+            obs = _observe(env)
             eltype(obs) == Float64
         end
 
@@ -126,7 +126,7 @@ end
             ]
                 @test begin
                     env = RDEEnv(RDEParam{T}(), observation_strategy=strategy)
-                    obs = CommonRLInterface.observe(env)
+                    obs = _observe(env)
                     eltype(obs) == T
                 end
             end

@@ -31,24 +31,24 @@ using CommonRLInterface
         vec_env = MultiAgentRDEVecEnv(envs)
         
         # Test initial reset
-        reset!(vec_env)
+        _reset!(vec_env)
         obs1 = observe(vec_env)
         @test size(obs1, 2) == 4  # 2 envs * 2 agents
         @test !any(isnan, obs1)
         
         # Test seeding produces deterministic results
         seed!(vec_env, 42)
-        reset!(vec_env)
+        _reset!(vec_env)
         obs2 = observe(vec_env)
         
         seed!(vec_env, 42)
-        reset!(vec_env)
+        _reset!(vec_env)
         obs3 = observe(vec_env)
         
         @test obs2 == obs3  # Same seed should give same results
         
         seed!(vec_env, 43)
-        reset!(vec_env)
+        _reset!(vec_env)
         obs4 = observe(vec_env)
         
         @test obs2 != obs4  # Different seeds should give different results
@@ -61,7 +61,7 @@ using CommonRLInterface
             observation_strategy=MultiSectionObservation(2)
         ) for _ in 1:2]
         vec_env = MultiAgentRDEVecEnv(envs)
-        reset!(vec_env)
+        _reset!(vec_env)
         
         # Create test actions (2 agents per env, 2 envs)
         action_length = action_dim(envs[1].action_type)
@@ -95,7 +95,7 @@ using CommonRLInterface
             observation_strategy=MultiSectionObservation(2)
         ) for _ in 1:2]
         vec_env = MultiAgentRDEVecEnv(envs)
-        reset!(vec_env)
+        _reset!(vec_env)
         
         # Run until termination
         action_length = action_dim(envs[1].action_type)
@@ -124,13 +124,13 @@ using CommonRLInterface
             observation_strategy=MultiSectionObservation(2)
         ) for _ in 1:4]
         vec_env = MultiAgentRDEVecEnv(envs)
-        reset!(vec_env)
+        _reset!(vec_env)
         
         action_length = action_dim(envs[1].action_type)
         actions = zeros(Float32, action_length, 8)  # 4 envs * 2 agents
         
         # Run multiple steps in parallel
-        CommonRLInterface.act!(vec_env, actions)
+        _act!(vec_env, actions)
         
         # If we got here without errors, threading worked
         @test true

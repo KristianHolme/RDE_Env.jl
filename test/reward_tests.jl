@@ -16,7 +16,7 @@ using POMDPs
         )
 
         # Test initial reward
-        CommonRLInterface.reset!(env)
+        _reset!(env)
         @test env.reward isa Float32
         @test !isnan(env.reward)
         @test !isinf(env.reward)
@@ -49,7 +49,7 @@ using POMDPs
         )
 
         # Test initial reward
-        CommonRLInterface.reset!(env)
+        _reset!(env)
         @test env.reward isa Float32
         @test !isnan(env.reward)
         @test !isinf(env.reward)
@@ -96,7 +96,7 @@ using POMDPs
             policy = ConstantRDEPolicy(env)
 
             # Run policy and collect rewards
-            CommonRLInterface.reset!(env)
+            _reset!(env)
             rewards = Float32[]
             for _ in 1:n_steps
                 action = POMDPs.action(policy, nothing)
@@ -120,7 +120,7 @@ using POMDPs
             policy = RandomRDEPolicy(env)
 
             # Run policy and collect rewards
-            CommonRLInterface.reset!(env)
+            _reset!(env)
             rewards = Float32[]
             terminations = Int[]
             for step in 1:n_steps
@@ -184,7 +184,7 @@ using POMDPs
         )
 
         # Test initial reward
-        CommonRLInterface.reset!(env)
+        _reset!(env)
         @test env.reward isa Float32
         @test !isnan(env.reward)
         @test !isinf(env.reward)
@@ -226,7 +226,7 @@ using POMDPs
         )
 
         # Test initial reward
-        CommonRLInterface.reset!(env)
+        _reset!(env)
         @test env.reward isa Vector{Float32}
         @test length(env.reward) == 4  # One reward per section
         @test !any(isnan.(env.reward))
@@ -277,7 +277,7 @@ using POMDPs
             )
 
             # Test initial reward
-            CommonRLInterface.reset!(env)
+            _reset!(env)
             @test env.reward isa Float32
             @test !isnan(env.reward)
             @test !isinf(env.reward)
@@ -323,7 +323,7 @@ using POMDPs
             )
 
             # Test initial reward
-            CommonRLInterface.reset!(env)
+            _reset!(env)
             @test env.reward isa Vector{Float32}
             @test length(env.reward) == 4  # Should maintain section count
             @test !any(isnan.(env.reward))
@@ -369,7 +369,7 @@ using POMDPs
             )
 
             # Test initial reward
-            CommonRLInterface.reset!(env)
+            _reset!(env)
             @test env.reward isa Vector{Float32}
             @test length(env.reward) == 4  # Should maintain section count from vector reward
             @test !any(isnan.(env.reward))
@@ -385,7 +385,7 @@ using POMDPs
                 dt=1.0,
                 reward_type=MultiplicativeReward(vector_reward, scalar_reward)
             )
-            CommonRLInterface.reset!(env2)
+            _reset!(env2)
             set_reward!(env2, env2.reward_type)
             @test all(env2.reward .≈ env.reward)  # Order shouldn't matter
 
@@ -395,7 +395,7 @@ using POMDPs
                 dt=1.0,
                 reward_type=MultiplicativeReward(scalar_reward, vector_reward, scalar_reward2)
             )
-            CommonRLInterface.reset!(env3)
+            _reset!(env3)
             set_reward!(env3, env3.reward_type)
             r3 = compute_reward(env, scalar_reward2)
             @test all(env3.reward .≈ r1 .* r2 .* r3)
@@ -419,7 +419,7 @@ using POMDPs
             policy = ConstantRDEPolicy(env)
 
             # Run policy and collect rewards
-            CommonRLInterface.reset!(env)
+            _reset!(env)
             for _ in 1:n_steps
                 action = POMDPs.action(policy, nothing)
                 _act!(env, action)
