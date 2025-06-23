@@ -19,26 +19,30 @@ using PrecompileTools
 using ProgressMeter
 
 include("types.jl")
+export AbstractRDEEnv, AbstractActionType, AbstractObservationStrategy, AbstractMultiAgentObservationStrategy,
+ AbstractRDEReward
+export action_dim, get_standard_normalized_actions, set_N!
+export compute_observation, get_init_observation
+export set_reward!
+export RDEEnv, RDEEnvCache
 include("utils.jl")
 export sigmoid_to_linear, reward_sigmoid, sigmoid, linear_to_sigmoid
 
 # Actions
 include("actions.jl")
-export AbstractActionType, ScalarPressureAction, ScalarAreaScalarPressureAction, VectorPressureAction
-export action_dim, get_standard_normalized_actions
+export ScalarPressureAction, ScalarAreaScalarPressureAction, VectorPressureAction
 
 # Observation strategies
 include("observations.jl")
-export AbstractObservationStrategy, AbstractMultiAgentObservationStrategy,
+export
     FourierObservation, StateObservation,
     SampledStateObservation, MultiSectionObservation, SectionedStateObservation,
     MultiCenteredObservation, MeanInjectionPressureObservation
-export CompositeObservation
-export compute_observation, get_init_observation, compute_sectioned_observation
+export CompositeObservation, compute_sectioned_observation
 
 # Rewards
 include("rewards.jl")
-export AbstractRDEReward, ShockSpanReward, ShockPreservingReward, ShockPreservingSymmetryReward
+export ShockSpanReward, ShockPreservingReward, ShockPreservingSymmetryReward
 export CompositeReward, ConstantTargetReward, MultiSectionReward, PeriodicityReward
 export TimeAggCompositeReward, TimeMin, TimeAvg, TimeMax, TimeSum, TimeProd, TimeAggMultiSectionReward
 export TimeDiffNormReward, MultiplicativeReward, PeriodMinimumReward
@@ -46,7 +50,6 @@ export set_reward!, set_termination_reward!, compute_reward
 
 # Environment
 include("RLenv.jl")
-export RDEEnv, RDEEnvCache
 export _reset!, _act!, _observe, state, terminated
 
 include("policies.jl")
@@ -72,14 +75,16 @@ export plot_policy_data, plot_shifted_history, plot_policy, animate_policy, anim
 include("interactive_control.jl")
 export interactive_control
 
+include("displaying.jl")
+
 @compile_workload begin
     try
         # Create and run a small environment with random policy
         env = RDEEnv(;
-            dt=0.01,
-            params=RDEParam(; N=512, tmax=0.05),
-            τ_smooth=0.001,
-            momentum=0.8,
+            dt=0.01f0,
+            params=RDEParam(; N=512, tmax=0.05f0),
+            τ_smooth=0.001f0,
+            momentum=0.8f0,
             observation_strategy=FourierObservation(8),
             action_type=ScalarPressureAction()
         )
@@ -88,9 +93,9 @@ export interactive_control
 
         # Test vectorized environment
         envs = [RDEEnv(;
-            dt=0.01,
-            τ_smooth=0.001,
-            params=RDEParam(; N=512, tmax=0.05),
+            dt=0.01f0,
+            τ_smooth=0.001f0,
+            params=RDEParam(; N=512, tmax=0.05f0),
             observation_strategy=FourierObservation(8)
         ) for _ in 1:2]
         vec_env = RDEVecEnv(envs)

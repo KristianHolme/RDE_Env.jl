@@ -84,7 +84,7 @@ policy = ConstantRDEPolicy(env)
 data = run_policy(policy, env, saves_per_action=10)
 ```
 """
-function run_policy(policy::AbstractRDEPolicy, env::AbstractRDEEnv{T}; saves_per_action=10) where {T}
+function run_policy(policy::AbstractRDEPolicy, env::RDEEnv{T}; saves_per_action=10) where {T}
     _reset!(env)
     dt = env.dt
     max_steps = ceil(env.prob.params.tmax / dt) + 2 |> Int # +1 for initial state, +1 for overshoot
@@ -478,7 +478,7 @@ delayed_policy = DelayedPolicy(base_policy, 100.0f0, env)
 struct DelayedPolicy{T<:AbstractFloat} <: AbstractRDEPolicy
     policy::Policy
     start_time::T
-    env::AbstractRDEEnv{T}
+    env::RDEEnv{T}
 end
 
 function _predict_action(π::DelayedPolicy, s)

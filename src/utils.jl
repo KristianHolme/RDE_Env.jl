@@ -1,15 +1,15 @@
-function sigmoid(x::AbstractFloat)
+function sigmoid(x::T) where T<:AbstractFloat
     return one(x)/(one(x)+exp(-x))
 end
 
-function reward_sigmoid(x::AbstractFloat)
+function reward_sigmoid(x::T) where T<:AbstractFloat
     a = 5*one(x)
-    b = convert(typeof(x), 0.5)
+    b = T(0.5)
     return sigmoid(a*(x-b))
 end
 
-function sigmoid_to_linear(x::AbstractFloat)
-    cutoff = convert(typeof(x), 0.5)
+function sigmoid_to_linear(x::T) where T<:AbstractFloat
+    cutoff = T(0.5)
     if x < cutoff
         return reward_sigmoid(x)
     else
@@ -17,8 +17,8 @@ function sigmoid_to_linear(x::AbstractFloat)
     end
 end
 
-function linear_to_sigmoid(x::AbstractFloat)
-    cutoff = convert(typeof(x), 0.5)
+function linear_to_sigmoid(x::T) where T<:AbstractFloat
+    cutoff = T(0.5)
     if x < cutoff
         return x
     else
@@ -26,8 +26,8 @@ function linear_to_sigmoid(x::AbstractFloat)
     end
 end
 
-function pre_check_ts!(ts::AbstractArray)
+function pre_check_ts!(ts::AbstractArray{T}) where T<:AbstractFloat
     if ts[end] ≈ ts[end-1]
-        ts[end] += eltype(ts)(1e-6)
+        ts[end] += T(1e-6)
     end
 end

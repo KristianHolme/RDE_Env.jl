@@ -14,7 +14,7 @@ function compute_observation(env::AbstractRDEEnv, strategy::AbstractObservationS
     @error "compute_observation not implemented for strategy $(typeof(strategy))"
 end
 
-function compute_observation(env::AbstractRDEEnv{T}, strategy::FourierObservation) where T
+function compute_observation(env::AbstractRDEEnv, strategy::FourierObservation)
     N = env.prob.params.N
     
     current_u = @view env.state[1:N]

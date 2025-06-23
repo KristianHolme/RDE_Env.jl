@@ -9,8 +9,8 @@ The environment supports two threading modes:
 - THREADS: Uses Base.Threads.@threads for parallelization
 - POLYESTER: Uses Polyester.@batch for parallelization
 """
-mutable struct MultiAgentRDEVecEnv{T<:AbstractFloat} <: AbstractRDEEnv{T}
-    envs::Vector{<:AbstractRDEEnv{T}}
+mutable struct MultiAgentRDEVecEnv{T<:AbstractFloat} <: AbstractRDEEnv
+    envs::Vector{RDEEnv{T}}
     n_envs::Int
     n_agents_per_env::Int
     observations::Matrix{T}
@@ -26,7 +26,7 @@ end
 
 Create a vectorized environment from a vector of environments.
 """
-function MultiAgentRDEVecEnv(envs::Vector{<:AbstractRDEEnv{T}}; threading_mode::ThreadingMode=THREADS) where {T<:AbstractFloat}
+function MultiAgentRDEVecEnv(envs::Vector{RDEEnv{T}}; threading_mode::ThreadingMode=THREADS) where {T<:AbstractFloat}
     n_envs = length(envs)
     obs = CommonRLInterface.observe(envs[1])
     obs_dim = size(obs, 1)

@@ -1,5 +1,5 @@
 abstract type _AbstractEnv end
-abstract type AbstractRDEEnv{T} <: _AbstractEnv where T<:AbstractFloat end
+abstract type AbstractRDEEnv <: _AbstractEnv end
 
 abstract type AbstractActionType end
 
@@ -7,42 +7,20 @@ abstract type AbstractActionType end
     N::Int = 512 #number of grid points
 end
 
-function Base.show(io::IO, a::ScalarPressureAction)
-    print(io, "ScalarPressureAction()")
-end
 
-function Base.show(io::IO, ::MIME"text/plain", a::ScalarPressureAction)
-    println(io, "ScalarPressureAction:")
-    println(io, "  N: $(a.N)")
-end
 
 @kwdef mutable struct ScalarAreaScalarPressureAction <: AbstractActionType
     N::Int = 512 #number of grid points
 end
 
-function Base.show(io::IO, a::ScalarAreaScalarPressureAction)
-    print(io, "ScalarAreaScalarPressureAction()")
-end
 
-function Base.show(io::IO, ::MIME"text/plain", a::ScalarAreaScalarPressureAction)
-    println(io, "ScalarAreaScalarPressureAction:")
-    println(io, "  N: $(a.N)")
-end
 
 @kwdef mutable struct VectorPressureAction <: AbstractActionType
     n_sections::Int = 1 #number of sections 
     N::Int = 512 #number of grid points
 end
 
-function Base.show(io::IO, a::VectorPressureAction)
-    print(io, "VectorPressureAction(n_sections=$(a.n_sections))")
-end
 
-function Base.show(io::IO, ::MIME"text/plain", a::VectorPressureAction)
-    println(io, "VectorPressureAction:")
-    println(io, "  n_sections: $(a.n_sections)")
-    println(io, "  N: $(a.N)")
-end
 
 function get_standard_normalized_actions end
 function action_dim end
@@ -51,62 +29,34 @@ function action_dim end
 #Observations
 abstract type AbstractObservationStrategy end
 abstract type AbstractMultiAgentObservationStrategy <: AbstractObservationStrategy end
+function compute_observation end
+
+function get_init_observation end
 
 struct FourierObservation <: AbstractObservationStrategy
     fft_terms::Int
 end
 
-function Base.show(io::IO, obs::FourierObservation)
-    print(io, "FourierObservation(fft_terms=$(obs.fft_terms))")
-end
 
-function Base.show(io::IO, ::MIME"text/plain", obs::FourierObservation)
-    println(io, "FourierObservation:")
-    println(io, "  fft_terms: $(obs.fft_terms)")
-end
 
 struct StateObservation <: AbstractObservationStrategy end
 
-function Base.show(io::IO, ::StateObservation)
-    print(io, "StateObservation()")
-end
 
-function Base.show(io::IO, ::MIME"text/plain", ::StateObservation)
-    println(io, "StateObservation: returns full state")
-end
 
 @kwdef struct SectionedStateObservation <: AbstractObservationStrategy
     minisections::Int = 32
     target_shock_count::Int = 3
 end
 
-function Base.show(io::IO, obs::SectionedStateObservation)
-    print(io, "SectionedStateObservation(minisections=$(obs.minisections))")
-end
 
-function Base.show(io::IO, ::MIME"text/plain", obs::SectionedStateObservation)
-    println(io, "SectionedStateObservation:")
-    println(io, "  minisections: $(obs.minisections)")
-    println(io, "  target_shock_count: $(obs.target_shock_count)")
-end
 
 struct SampledStateObservation <: AbstractObservationStrategy
     n_samples::Int
 end
 
-function Base.show(io::IO, obs::SampledStateObservation)
-    print(io, "SampledStateObservation(n_samples=$(obs.n_samples))")
-end
-
-function Base.show(io::IO, ::MIME"text/plain", obs::SampledStateObservation)
-    println(io, "SampledStateObservation:")
-    println(io, "  n_samples: $(obs.n_samples)")
-end
 
 
-function compute_observation end
 
-function get_init_observation end
 
 
 #Rewards
@@ -123,16 +73,6 @@ abstract type MultiAgentCachedCompositeReward <: CachedCompositeReward end
     shock_weight::Float32 = 0.8f0
 end
 
-function Base.show(io::IO, rt::ShockSpanReward)
-    print(io, "ShockSpanReward(target_shock_count=$(rt.target_shock_count))")
-end
-
-function Base.show(io::IO, ::MIME"text/plain", rt::ShockSpanReward)
-    println(io, "ShockSpanReward:")
-    println(io, "  target_shock_count: $(rt.target_shock_count)")
-    println(io, "  span_scale: $(rt.span_scale)")
-    println(io, "  shock_weight: $(rt.shock_weight)")
-end
 
 @kwdef mutable struct ShockPreservingReward <: AbstractRDEReward
     target_shock_count::Int = 3
@@ -142,17 +82,7 @@ end
     abscence_start::Union{Float32,Nothing} = nothing
 end
 
-function Base.show(io::IO, rt::ShockPreservingReward)
-    print(io, "ShockPreservingReward(target_shock_count=$(rt.target_shock_count))")
-end
 
-function Base.show(io::IO, ::MIME"text/plain", rt::ShockPreservingReward)
-    println(io, "ShockPreservingReward:")
-    println(io, "  target_shock_count: $(rt.target_shock_count)")
-    println(io, "  span_scale: $(rt.span_scale)")
-    println(io, "  shock_weight: $(rt.shock_weight)")
-    println(io, "  abscence_limit: $(rt.abscence_limit)")
-end
 
 mutable struct ShockPreservingSymmetryReward <: AbstractRDEReward
     target_shock_count::Int
@@ -163,15 +93,6 @@ mutable struct ShockPreservingSymmetryReward <: AbstractRDEReward
     end
 end
 
-function Base.show(io::IO, rt::ShockPreservingSymmetryReward)
-    print(io, "ShockPreservingSymmetryReward(target_shock_count=$(rt.target_shock_count))")
-end
-
-function Base.show(io::IO, ::MIME"text/plain", rt::ShockPreservingSymmetryReward)
-    println(io, "ShockPreservingSymmetryReward:")
-    println(io, "  target_shock_count: $(rt.target_shock_count)")
-    println(io, "  cache size: $(length(rt.cache))")
-end
 
 mutable struct PeriodicityReward <: AbstractRDEReward
     cache::Vector{Float32}
@@ -181,3 +102,57 @@ mutable struct PeriodicityReward <: AbstractRDEReward
 end
 
 function set_reward! end
+
+
+## env
+"""
+    RDEEnvCache{T<:AbstractFloat}
+
+Cache for RDE environment computations and state tracking.
+
+# Fields
+- `circ_u::CircularVector{T}`: Circular buffer for velocity field
+- `circ_λ::CircularVector{T}`: Circular buffer for reaction progress
+- `prev_u::Vector{T}`: Previous velocity field
+- `prev_λ::Vector{T}`: Previous reaction progress
+"""
+mutable struct RDEEnvCache{T<:AbstractFloat}#TODO remove circ
+    circ_u::CircularVector{T, Vector{T}}
+    circ_λ::CircularVector{T, Vector{T}}
+    prev_u::Vector{T}  # Previous step's u values
+    prev_λ::Vector{T}  # Previous step's λ values
+    action::Matrix{T} # column 1 = s action, column 2 = u_p action
+    function RDEEnvCache{T}(N::Int) where {T<:AbstractFloat}
+        # Initialize all arrays with zeros instead of undefined values
+        circ_u = CircularArray(zeros(T, N))
+        circ_λ = CircularArray(zeros(T, N))
+        prev_u = zeros(T, N)
+        prev_λ = zeros(T, N)
+        action = zeros(T, N, 2)    
+        return new{T}(circ_u, circ_λ, prev_u, prev_λ, action)
+    end
+end
+
+mutable struct RDEEnv{T, A, O, R} <: AbstractRDEEnv where {T<:AbstractFloat, A<:AbstractActionType, O<:AbstractObservationStrategy, R<:AbstractRDEReward}
+    prob::RDEProblem                  # RDE problem
+    state::Vector{T}
+    observation::Array{T}
+    dt::T                       # time step
+    t::T                        # Current time
+    done::Bool                        # Termination flag
+    truncated::Bool
+    terminated::Bool
+    reward::Union{T, Vector{T}}
+    smax::T
+    u_pmax::T
+    α::T #action momentum
+    τ_smooth::T #smoothing time constant
+    cache::RDEEnvCache{T}
+    action_type::A
+    observation_strategy::O
+    reward_type::R
+    verbose::Bool               # Control solver output
+    info::Dict{String, Any}
+    steps_taken::Int
+    ode_problem::Union{Nothing, ODEProblem}
+end

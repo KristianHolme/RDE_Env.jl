@@ -1,55 +1,10 @@
 """
-    RDEEnvCache{T<:AbstractFloat}
-
-Cache for RDE environment computations and state tracking.
-
-# Fields
-- `circ_u::CircularVector{T}`: Circular buffer for velocity field
-- `circ_λ::CircularVector{T}`: Circular buffer for reaction progress
-- `prev_u::Vector{T}`: Previous velocity field
-- `prev_λ::Vector{T}`: Previous reaction progress
-"""
-mutable struct RDEEnvCache{T<:AbstractFloat}#TODO remove circ
-    circ_u::CircularVector{T, Vector{T}}
-    circ_λ::CircularVector{T, Vector{T}}
-    prev_u::Vector{T}  # Previous step's u values
-    prev_λ::Vector{T}  # Previous step's λ values
-    action::Matrix{T} # column 1 = s action, column 2 = u_p action
-    function RDEEnvCache{T}(N::Int) where {T<:AbstractFloat}
-        # Initialize all arrays with zeros instead of undefined values
-        circ_u = CircularArray(zeros(T, N))
-        circ_λ = CircularArray(zeros(T, N))
-        prev_u = zeros(T, N)
-        prev_λ = zeros(T, N)
-        action = zeros(T, N, 2)    
-        return new{T}(circ_u, circ_λ, prev_u, prev_λ, action)
-    end
-end
-
-function Base.show(io::IO, cache::RDEEnvCache)
-    if get(io, :compact, false)::Bool
-        print(io, "RDEEnvCache{$(eltype(cache.circ_u))}")
-    else
-        print(io, "RDEEnvCache{$(eltype(cache.circ_u))}(N=$(length(cache.circ_u)))")
-    end
-end
-
-function Base.show(io::IO, ::MIME"text/plain", cache::RDEEnvCache)
-    println(io, "RDEEnvCache{$(eltype(cache.circ_u))} with:")
-    println(io, "  circ_u: $(typeof(cache.circ_u)) of size $(length(cache.circ_u))")
-    println(io, "  circ_λ: $(typeof(cache.circ_λ)) of size $(length(cache.circ_λ))")
-    println(io, "  prev_u: $(typeof(cache.prev_u)) of size $(length(cache.prev_u))")
-    println(io, "  prev_λ: $(typeof(cache.prev_λ)) of size $(length(cache.prev_λ))")
-    println(io, "  action: $(typeof(cache.action)) of size $(size(cache.action))")
-end
-
-"""
     RDEEnv{T<:AbstractFloat} <: AbstractRDEEnv
 
 Reinforcement learning environment for the RDE system.
 
 # Fields
-- `prob::RDEProblem{T}`: Underlying RDE problem
+- `prob::RDEProblem{T, M, R, C}`: Underlying RDE problem
 - `state::Vector{T}`: Current system state
 - `observation::Vector{T}`: Current observation vector
 - `dt::T`: Time step
@@ -89,90 +44,47 @@ RDEEnv{T}(;
 env = RDEEnv(dt=5.0, smax=3.0)
 ```
 """
-mutable struct RDEEnv{T<:AbstractFloat} <: AbstractRDEEnv{T}
-    prob::RDEProblem{T}                  # RDE problem
-    state::Vector{T}
-    observation::AbstractArray{T}
-    dt::T                       # time step
-    t::T                        # Current time
-    done::Bool                        # Termination flag
-    truncated::Bool
-    terminated::Bool
-    reward::Union{T, Vector{T}}
-    smax::T
-    u_pmax::T
-    α::T #action momentum
-    τ_smooth::T #smoothing time constant
-    cache::RDEEnvCache{T}
-    action_type::AbstractActionType
-    observation_strategy::AbstractObservationStrategy
-    reward_type::AbstractRDEReward
-    verbose::Bool               # Control solver output
-    info::Dict{String, Any}
-    steps_taken::Int
-    ode_problem::Union{Nothing, ODEProblem}
-    function RDEEnv{T}(;
-        dt=1.0,
-        smax=4.0,
-        u_pmax=1.2,
-        params::RDEParam{T}=RDEParam{T}(),
-        momentum=0.0,
-        τ_smooth=0.1,
-        observation_strategy::AbstractObservationStrategy=FourierObservation(16),
-        action_type::AbstractActionType=ScalarPressureAction(),
-        reward_type::AbstractRDEReward=ShockSpanReward(target_shock_count=3),
-        verbose::Bool=false,
-        kwargs...) where {T<:AbstractFloat}
 
-        if τ_smooth > dt
-            @warn "τ_smooth > dt, this will cause discontinuities in the control signal"
-            @info "Setting τ_smooth = $(dt/8)"
-            τ_smooth = dt/8
-        end
+function RDEEnv(;
+    dt=1.0f0,
+    smax=4.0f0,
+    u_pmax=1.2f0,
+    params::RDEParam{T}=RDEParam(),
+    momentum=0.0f0,
+    τ_smooth=0.1f0,
+    action_type::A=ScalarPressureAction(),
+    observation_strategy::O=SectionedStateObservation(),
+    reward_type::R=PeriodMinimumReward(),
+    verbose::Bool=false,
+    kwargs...) where {T<:AbstractFloat, A<:AbstractActionType, O<:AbstractObservationStrategy, R<:AbstractRDEReward}
 
-        prob = RDEProblem(params; kwargs...)
-        RDE.reset_state_and_pressure!(prob, prob.reset_strategy)
-        reset_cache!(prob.method.cache, τ_smooth=τ_smooth, params=params)
-
-        # Set N in action_type
-        set_N!(action_type, params.N)
-
-        initial_state = vcat(prob.u0, prob.λ0)
-        init_observation = get_init_observation(observation_strategy, params.N)
-        cache = RDEEnvCache{T}(params.N)
-        ode_problem = ODEProblem{true, SciMLBase.FullSpecialize}(RDE_RHS!, initial_state, (zero(T), dt), prob)
-        return new{T}(prob, initial_state, init_observation,
-                      dt, T(0.0), false, false, false, T(0.0), smax, u_pmax,
-                      momentum, τ_smooth, cache,
-                      action_type, observation_strategy, 
-                      reward_type, verbose, Dict{String, Any}(), 0, ode_problem)
+    if τ_smooth > dt
+        @warn "τ_smooth > dt, this will cause discontinuities in the control signal"
+        @info "Setting τ_smooth = $(dt/8)"
+        τ_smooth = dt/8
     end
+
+    prob = RDEProblem(params; kwargs...)
+    RDE.reset_state_and_pressure!(prob, prob.reset_strategy)
+    reset_cache!(prob.method.cache, τ_smooth=τ_smooth, params=params)
+
+    # Set N in action_type
+    set_N!(action_type, params.N)
+
+    initial_state = vcat(prob.u0, prob.λ0)
+    init_observation = get_init_observation(observation_strategy, params.N)
+    cache = RDEEnvCache{T}(params.N)
+    ode_problem = ODEProblem{true, SciMLBase.FullSpecialize}(RDE_RHS!, initial_state, (zero(T), dt), prob)
+    return RDEEnv{T, A, O, R}(prob, initial_state, init_observation,
+                  dt, T(0.0), false, false, false, T(0.0), smax, u_pmax,
+                  momentum, τ_smooth, cache,
+                  action_type, observation_strategy, 
+                  reward_type, verbose, Dict{String, Any}(), 0, ode_problem)
 end
 
-RDEEnv(; kwargs...) = RDEEnv{Float32}(; kwargs...)
-RDEEnv(params::RDEParam{T}; kwargs...) where {T<:AbstractFloat} = RDEEnv{T}(; params=params, kwargs...)
+RDEEnv(params::RDEParam{T}; kwargs...) where {T<:AbstractFloat} = RDEEnv(; params=params, kwargs...)
 
-_observe(env::RDEEnv) = env.observation
-
-function Base.show(io::IO, env::RDEEnv{T}) where {T<:AbstractFloat}
-    if get(io, :compact, false)::Bool
-        print(io, "RDEEnv{$T}(t=$(env.t), steps=$(env.steps_taken))")
-    else
-        print(io, "RDEEnv{$T}(t=$(env.t), steps=$(env.steps_taken), $(env.action_type))")
-    end
-end
-
-function Base.show(io::IO, ::MIME"text/plain", env::RDEEnv{T}) where {T<:AbstractFloat}
-    println(io, "RDEEnv{$T}:")
-    println(io, "  dt: $(env.dt)")
-    println(io, "  t: $(env.t)")
-    println(io, "  truncated: $(env.truncated)")
-    println(io, "  terminated: $(env.terminated)")
-    println(io, "  action type: $(env.action_type)")
-    println(io, "  observation strategy: $(env.observation_strategy)")
-    println(io, "  reward type: $(env.reward_type)")
-    println(io, "  steps taken: $(env.steps_taken)")
-end
+_observe(env::RDEEnv) = copy(env.observation)
 
 """
     _act!(env::RDEEnv{T}, action; saves_per_action::Int=0) where {T<:AbstractFloat}
@@ -193,6 +105,7 @@ Take an action in the environment.
 - Supports multiple action types
 """
 function _act!(env::RDEEnv{T}, action; saves_per_action::Int=10) where {T<:AbstractFloat}
+    t_start = time()
     # Store current state before taking action
     @logmsg LogLevel(-10000) "Starting act! for environment on thread $(Threads.threadid())"
     N = env.prob.params.N
@@ -245,7 +158,6 @@ function _act!(env::RDEEnv{T}, action; saves_per_action::Int=10) where {T<:Abstr
                                    isoutofdomain=RDE.outofdomain, verbose=env.verbose)
     end
 
-    env.observation .= compute_observation(env, env.observation_strategy)
     #Check termination caused by ODE solver
     if sol.retcode != :Success || any(isnan.(sol.u[end]))
         if any(isnan.(sol.u[end]))
@@ -263,10 +175,11 @@ function _act!(env::RDEEnv{T}, action; saves_per_action::Int=10) where {T<:Abstr
         env.prob.sol = sol
         env.t = sol.t[end]
         env.state = sol.u[end]
-
+        
         env.steps_taken += 1
-
+        
         set_reward!(env, env.reward_type)
+        env.observation .= compute_observation(env, env.observation_strategy)
         if env.terminated #maybe reward caused termination
             set_termination_reward!(env, -2.0)
             env.done = true;
@@ -287,6 +200,9 @@ function _act!(env::RDEEnv{T}, action; saves_per_action::Int=10) where {T<:Abstr
         @logmsg LogLevel(-500) sol.retcode
     end
     @logmsg LogLevel(-10000) "End of step reward: $(env.reward)"
+    t_end = time()
+    t_elapsed = t_end - t_start
+    @debug "act! took $(round(t_elapsed*1000, digits=3)) ms"
     return env.reward
 end
 
@@ -316,6 +232,7 @@ function _reset!(env::RDEEnv)
     env.terminated = false
     set_reward!(env, env.reward_type)
     env.observation .= compute_observation(env, env.observation_strategy)
+    env.info = Dict{String, Any}()
 
     reset_cache!(env.prob.method.cache, τ_smooth=env.τ_smooth, params=env.prob.params)    
     env.prob.sol = nothing
