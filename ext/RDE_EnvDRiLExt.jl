@@ -153,9 +153,9 @@ struct DRiLAgentPolicy <: AbstractRDEPolicy
     norm_env::Union{NormalizeWrapperEnv,Nothing}
 end
 
-function _predict_action(policy::DRiLAgentPolicy, observation)
+function RDE_Env._predict_action(policy::DRiLAgentPolicy, observation)
     if !isnothing(policy.norm_env)
-        observation = normalize_observation(policy.norm_env, observation)
+        DRiL.normalize_obs!(observation, policy.norm_env)
     end
     return predict_actions(policy.agent, [observation], deterministic=true)[1]
 end

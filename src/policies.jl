@@ -1,7 +1,7 @@
 abstract type AbstractRDEPolicy end
 
 """
-    predict_action(policy::AbstractRDEPolicy, obs)
+    _predict_action(policy::AbstractRDEPolicy, obs)
 """
 function _predict_action end
 

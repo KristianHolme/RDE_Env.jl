@@ -3,18 +3,22 @@ using RDE_Env
 using Zygote
 DRiLRDE = Base.get_extension(RDE_Env, :RDE_EnvDRiLExt)
 ##
-function make_RDE_Env()
-    target_shock_count = 3
-    env = RDEEnv(dt=1f0,
+function make_RDE_Env(tmax::Float32=50f0, target_shock_count::Int=3)
+    params = RDEParam(;tmax=tmax)
+    env = RDEEnv(params;dt=1f0,
         reset_strategy=RandomShock(),
         action_type=ScalarPressureAction(),
         observation_strategy=SectionedStateObservation(target_shock_count=target_shock_count),
-        reward_type=PeriodMinimumReward(target_shock_count=target_shock_count))
+        reward_type=MultiplicativeReward(
+            PeriodMinimumReward(target_shock_count=target_shock_count),
+            TimeDiffNormReward()
+        )
+    )
     _reset!(env)
     return env
 end
 ##
-env = BroadcastedParallelEnv([DRiLRDE.DRiLRDEEnv(make_RDE_Env()) for _ in 1:16])
+env = BroadcastedParallelEnv([DRiLRDE.DRiLRDEEnv(make_RDE_Env(60f0, 3)) for _ in 1:16])
 
 alg = DRiL.PPO()
 env = MonitorWrapperEnv(env)
@@ -27,7 +31,7 @@ learn_stats = learn!(agent, env, alg; max_steps=100_000)
 ## wrap agent in DRiLAgentPolicy
 policy = DRiLRDE.DRiLAgentPolicy(agent, env)
 ## run policy
-single_env = unwrap_all(env).envs[1]
+single_env = make_RDE_Env(200f0)
 data = run_policy(policy, single_env)
 ##
 x = single_env.prob.x
