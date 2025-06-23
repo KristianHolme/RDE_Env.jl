@@ -9,7 +9,8 @@
             τ_smooth=0.001,  # Small smoothing time to avoid discontinuities
             momentum=0.0,    # No momentum for simpler testing
             observation_strategy=FourierObservation(8),
-            action_type=ScalarPressureAction()
+            action_type=ScalarPressureAction(),
+            reward_type = CompositeReward()
         )
         policy = RandomRDEPolicy(env)
 
