@@ -69,7 +69,7 @@ function act_single_env!(env::RDEVecEnv, i::Int, actions::AbstractArray)
     @logmsg LogLevel(-10000) "VecEnv act! done with env $i, starting termination check"
     
     # Check termination
-    if env.envs[i].terminated
+    if env.envs[i].terminated || env.envs[i].truncated
         env.dones[i] = true
         env.infos[i]["terminal_observation"] = _observe(env.envs[i])
         if env.envs[i].truncated 
@@ -127,7 +127,7 @@ end
 
 Set the random seed for the environment.
 """
-function seed!(env::AbstractEnv, seed::Int)
+function seed!(env::AbstractRDEEnv, seed::Int)
     Random.seed!(seed)
 end
 

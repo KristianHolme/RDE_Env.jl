@@ -111,7 +111,7 @@ function act_single_env!(env::MultiAgentRDEVecEnv, i::Int, num_agents::Int, acti
     @logmsg LogLevel(-10000) "VecEnv act! done with env $i, starting termination check"
     
     # Check termination
-    if env.envs[i].terminated
+    if env.envs[i].terminated || env.envs[i].truncated
         env.dones[env_inds] .= true
         for agent_i in 1:num_agents
             env.infos[env_inds[agent_i]]["terminal_observation"] = _observe(env.envs[i])[:, agent_i]
