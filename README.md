@@ -51,6 +51,7 @@ plot_policy_data(env, data)
 - `StateObservation`: Full state observation
 - `FourierObservation`: Fourier modes of the state
 - `SampledStateObservation`: Sampled points from the state
+- `SectionedStateObservation`: State divided into sections, for single-agent environments
 - `MultiSectionObservation`: State divided into sections, for Multi-agent environments
 - `CompositeObservation`: Combination of state, number of shocks, target number of shocks, and span of pressure
 
