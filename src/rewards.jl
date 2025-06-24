@@ -482,17 +482,16 @@ function compute_reward(env::RDEEnv{T,A,O,R}, rt::TimeDiffNormReward) where {T,A
 end
 
 struct PeriodMinimumReward <: CachedCompositeReward
-    aggregation::TimeAggregation
     target_shock_count::Int
     cache::Vector{Float32}
     lowest_action_magnitude_reward::Float32 #reward will be \in [lowest_action_magnitude_reward, 1]
     weights::Vector{Float32}
-    function PeriodMinimumReward(; aggregation::TimeAggregation=TimeMin(),
+    function PeriodMinimumReward(;
         target_shock_count::Int=4,
         lowest_action_magnitude_reward::Float32=1f0,
         weights::Vector{Float32}=Float32[1, 1, 5, 1],
         N::Int=512)
-        return new(aggregation,
+        return new(
             target_shock_count,
             zeros(Float32, N),
             lowest_action_magnitude_reward,
