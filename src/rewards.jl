@@ -8,7 +8,7 @@ function set_reward!(env::AbstractRDEEnv, rt::AbstractRDEReward)
     nothing
 end
 
-function compute_reward(env::RDEEnv{T, A, O, R}, rt::ShockSpanReward) where {T, A, O, R}
+function compute_reward(env::RDEEnv{T,A,O,R}, rt::ShockSpanReward) where {T,A,O,R}
     target_shock_count = rt.target_shock_count
     max_span = rt.span_scale
     λ = rt.shock_weight
@@ -35,7 +35,7 @@ end
 Reward for preserving a given number of shocks. terminated/truncated if the number of shocks is not preserved.
     penalize reward if shocks are not evenly spaced, reward for large span.
 """
-function compute_reward(env::RDEEnv{T, A, O, R}, rt::ShockPreservingReward) where {T, A, O, R}
+function compute_reward(env::RDEEnv{T,A,O,R}, rt::ShockPreservingReward) where {T,A,O,R}
     target_shock_count = rt.target_shock_count
     max_span = rt.span_scale
     λ = rt.shock_weight
@@ -65,7 +65,7 @@ function compute_reward(env::RDEEnv{T, A, O, R}, rt::ShockPreservingReward) wher
     return λ * shock_reward + (1 - λ) * span_reward
 end
 
-function compute_reward(env::RDEEnv{T, A, O, R}, rt::ShockPreservingSymmetryReward) where {T, A, O, R}
+function compute_reward(env::RDEEnv{T,A,O,R}, rt::ShockPreservingSymmetryReward) where {T,A,O,R}
     target_shock_count = rt.target_shock_count
     N = env.prob.params.N
     u = env.state[1:N]
@@ -82,7 +82,7 @@ function compute_reward(env::RDEEnv{T, A, O, R}, rt::ShockPreservingSymmetryRewa
     return 1f0 - (maxerr - 0.1f0) / 0.5f0
 end
 
-function compute_reward(env::RDEEnv{T, A, O, R}, rt::PeriodicityReward) where {T, A, O, R}
+function compute_reward(env::RDEEnv{T,A,O,R}, rt::PeriodicityReward) where {T,A,O,R}
     u, = RDE.split_sol_view(env.state)
     N = env.prob.params.N
     dx = env.prob.x[2] - env.prob.x[1]
@@ -152,7 +152,7 @@ function Base.show(io::IO, ::MIME"text/plain", rt::MultiSectionReward)
     println(io, "  cache size: $(length(rt.cache))")
 end
 
-function compute_reward(env::RDEEnv{T, A, O, R}, rt::MultiSectionReward) where {T, A, O, R}
+function compute_reward(env::RDEEnv{T,A,O,R}, rt::MultiSectionReward) where {T,A,O,R}
     common_reward = global_reward(env, rt)
     N = env.prob.params.N
     n_sections = rt.n_sections
@@ -244,7 +244,7 @@ function global_reward(u::AbstractVector{T}, L::T, dx::T, rt::CachedCompositeRew
     return global_reward
 end
 
-function global_reward(env::RDEEnv{T, A, O, R}, rt::CachedCompositeReward) where {T, A, O, R}
+function global_reward(env::RDEEnv{T,A,O,R}, rt::CachedCompositeReward) where {T,A,O,R}
     N = env.prob.params.N
     dx = env.prob.x[2] - env.prob.x[1]
     L = env.prob.params.L
@@ -284,7 +284,7 @@ function Base.show(io::IO, ::MIME"text/plain", rt::CompositeReward)
     println(io, "  cache size: $(length(rt.cache))")
 end
 
-function compute_reward(env::RDEEnv{T, A, O, R}, rt::CompositeReward) where {T, A, O, R}
+function compute_reward(env::RDEEnv{T,A,O,R}, rt::CompositeReward) where {T,A,O,R}
     reward = global_reward(env, rt)
     action_magnitude = maximum(abs.(env.cache.action))
     action_magnitude_modifier = action_magnitude_factor(rt.lowest_action_magnitude_reward, action_magnitude)
@@ -357,7 +357,7 @@ function aggregate(rewards::AbstractVector, aggregation::TimeProd)
     return prod(rewards)
 end
 
-function compute_reward(env::RDEEnv{T, A, O, R}, rt::TimeAggCompositeReward) where {T, A, O, R}
+function compute_reward(env::RDEEnv{T,A,O,R}, rt::TimeAggCompositeReward) where {T,A,O,R}
     N = env.prob.params.N
     dx = env.prob.x[2] - env.prob.x[1]
     L = env.prob.params.L
@@ -396,7 +396,7 @@ function Base.show(io::IO, ::MIME"text/plain", rt::ConstantTargetReward)
     println(io, "  target: $(rt.target)")
 end
 
-function compute_reward(env::RDEEnv{T, A, O, R}, rt::ConstantTargetReward) where {T, A, O, R}
+function compute_reward(env::RDEEnv{T,A,O,R}, rt::ConstantTargetReward) where {T,A,O,R}
     return -abs(rt.target - mean(env.prob.method.cache.u_p_current)) + T(1.0)
 end
 
@@ -423,7 +423,7 @@ function Base.show(io::IO, ::MIME"text/plain", rt::TimeAggMultiSectionReward)
     println(io, "  cache size: $(length(rt.cache))")
 end
 
-function compute_reward(env::RDEEnv{T, A, O, R}, rt::TimeAggMultiSectionReward) where {T, A, O, R}
+function compute_reward(env::RDEEnv{T,A,O,R}, rt::TimeAggMultiSectionReward) where {T,A,O,R}
     N = env.prob.params.N
     n_sections = rt.n_sections
     points_per_section = N ÷ n_sections
@@ -457,11 +457,11 @@ function compute_reward(env::RDEEnv{T, A, O, R}, rt::TimeAggMultiSectionReward) 
 end
 
 @kwdef struct TimeDiffNormReward <: AbstractRDEReward
-    threshold::Float32 = 10f0
-    threshold_reward::Float32 = 0.1f0
+    threshold::Float32 = 1.1f0
+    threshold_reward::Float32 = 0.3f0
 end
 
-function compute_reward(env::RDEEnv{T, A, O, R}, rt::TimeDiffNormReward) where {T, A, O, R}
+function compute_reward(env::RDEEnv{T,A,O,R}, rt::TimeDiffNormReward) where {T,A,O,R}
     if isnothing(env.prob.sol)
         return zero(T)
     end
@@ -500,30 +500,30 @@ struct PeriodMinimumReward <: CachedCompositeReward
     end
 end
 
-function time_minimum_global_reward(env::RDEEnv{T, A, O, R}, rt::CachedCompositeReward) where {T<:AbstractFloat, A, O, R}
+function time_minimum_global_reward(env::RDEEnv{T,A,O,R}, rt::CachedCompositeReward) where {T<:AbstractFloat,A,O,R}
     N = env.prob.params.N
     if isnothing(env.prob.sol)
         return zero(T)
     end
-    
+
     # Pre-compute constants to avoid type instability in loop
     L = env.prob.params.L::T
     dx = (env.prob.x[2] - env.prob.x[1])::T
     weight_sum = sum(rt.weights)::T
-    
+
     # Initialize with large values to find minimum
     min_rewards = fill(T(10000), 5)
-    
+
     # Type-stable iteration - convert to Vector{Vector{T}} if needed
     sol_states = env.prob.sol.u
-    
+
     @inbounds for state::Vector{T} in sol_states
         # Use view to avoid allocation, with fallback type assertion
         u = @view state[1:N]
-        
-        span_rew, periodicity_rew, shock_rew, shock_spacing_rew, low_span_punishment = 
+
+        span_rew, periodicity_rew, shock_rew, shock_spacing_rew, low_span_punishment =
             global_rewards(u, L, dx, rt)
-            
+
         # Update minimums efficiently
         min_rewards[1] = min(min_rewards[1], span_rew)
         min_rewards[2] = min(min_rewards[2], periodicity_rew)
@@ -531,17 +531,17 @@ function time_minimum_global_reward(env::RDEEnv{T, A, O, R}, rt::CachedComposite
         min_rewards[4] = min(min_rewards[4], shock_spacing_rew)
         min_rewards[5] = min(min_rewards[5], low_span_punishment)
     end
-    
-         # Efficient weighted sum without temporary arrays - manually unrolled
-     weighted_rewards = (min_rewards[1] * rt.weights[1] + 
-                        min_rewards[2] * rt.weights[2] + 
-                        min_rewards[3] * rt.weights[3] + 
+
+    # Efficient weighted sum without temporary arrays - manually unrolled
+    weighted_rewards = (min_rewards[1] * rt.weights[1] +
+                        min_rewards[2] * rt.weights[2] +
+                        min_rewards[3] * rt.weights[3] +
                         min_rewards[4] * rt.weights[4]) / weight_sum
-    
+
     return min_rewards[5] * weighted_rewards  # low_span_punishment * weighted_sum
 end
 
-function compute_reward(env::RDEEnv{T, A, O, R}, rt::PeriodMinimumReward) where {T, A, O, R}
+function compute_reward(env::RDEEnv{T,A,O,R}, rt::PeriodMinimumReward) where {T,A,O,R}
     global_reward = time_minimum_global_reward(env, rt)
     action_magnitude = maximum(abs.(env.cache.action))
     action_magnitude_modifier = action_magnitude_factor(rt.lowest_action_magnitude_reward, action_magnitude)
@@ -584,7 +584,7 @@ function Base.show(io::IO, ::MIME"text/plain", rt::MultiplicativeReward)
     end
 end
 
-function compute_reward(env::RDEEnv{T, A, O, R}, rt::MultiplicativeReward) where {T, A, O, R}
+function compute_reward(env::RDEEnv{T,A,O,R}, rt::MultiplicativeReward) where {T,A,O,R}
     # Simply compute all rewards and use prod to multiply them
     # Julia's prod will handle broadcasting automatically when mixing scalar and vector rewards
     reward = compute_reward(env, rt.rewards[1])
