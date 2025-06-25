@@ -879,11 +879,6 @@ function Base.show(io::IO, ::MIME"text/plain", rt::TransitionBasedReward)
 end
 
 function compute_reward(env::RDEEnv{T,A,O,R}, rt::TransitionBasedReward) where {T,A,O,R}
-    # If transition already found, just return (environment should be terminated)
-    if rt.transition_found
-        return T(-1.0)  # This shouldn't be reached if env properly terminates
-    end
-
     # Compute the wrapped reward
     wrapped_reward_value = compute_reward(env, rt.wrapped_reward)
 
