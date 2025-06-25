@@ -1,3 +1,8 @@
+# Default reset interface for rewards - does nothing by default
+function reset_reward!(rt::AbstractRDEReward)
+    nothing
+end
+
 function compute_reward(env::AbstractRDEEnv, rt::AbstractRDEReward)
     @error "No reward computation implemented for type $(typeof(rt))"
     return zero(T)
@@ -547,6 +552,121 @@ function compute_reward(env::RDEEnv{T,A,O,R}, rt::PeriodMinimumReward) where {T,
     return global_reward * action_magnitude_modifier
 end
 
+struct PeriodMinimumVariationReward <: CachedCompositeReward
+    target_shock_count::Int
+    cache::Vector{Float32}
+    lowest_action_magnitude_reward::Float32 #reward will be \in [lowest_action_magnitude_reward, 1]
+    weights::Vector{Float32}
+    variation_penalties::Vector{Float32}  # α values for each component [span, periodicity, shock, shock_spacing]
+end
+function PeriodMinimumVariationReward(;
+    target_shock_count::Int=4,
+    lowest_action_magnitude_reward::Float32=1f0,
+    weights::Vector{Float32}=Float32[1, 1, 5, 1],
+    variation_penalties::Vector{Float32}=Float32[2.0, 2.0, 2.0, 2.0],
+    N::Int=512)
+    return PeriodMinimumVariationReward(
+        target_shock_count,
+        zeros(Float32, N),
+        lowest_action_magnitude_reward,
+        weights,
+        variation_penalties)
+end
+
+function Base.show(io::IO, rt::PeriodMinimumVariationReward)
+    print(io, "PeriodMinimumVariationReward(target_shock_count=$(rt.target_shock_count))")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", rt::PeriodMinimumVariationReward)
+    println(io, "PeriodMinimumVariationReward:")
+    println(io, "  target_shock_count: $(rt.target_shock_count)")
+    println(io, "  lowest_action_magnitude_reward: $(rt.lowest_action_magnitude_reward)")
+    println(io, "  weights: $(rt.weights)")
+    println(io, "  variation_penalties: $(rt.variation_penalties)")
+    println(io, "  cache size: $(length(rt.cache))")
+end
+
+function calculate_variation_punishment(values::Vector{T}, α::T) where T<:AbstractFloat
+    if length(values) <= 1
+        return one(T)  # No variation with single value
+    end
+
+    mean_abs_value = mean(abs.(values))
+    if mean_abs_value < T(1e-6)
+        return one(T)  # Avoid division by zero
+    end
+
+    coefficient_of_variation = std(values) / mean_abs_value
+    return exp(-α * coefficient_of_variation)
+end
+
+function time_minimum_global_reward_with_variation(env::RDEEnv{T,A,O,R}, rt::PeriodMinimumVariationReward) where {T<:AbstractFloat,A,O,R}
+    N = env.prob.params.N
+    if isnothing(env.prob.sol)
+        return zero(T)
+    end
+
+    # Pre-compute constants to avoid type instability in loop
+    L = env.prob.params.L::T
+    dx = (env.prob.x[2] - env.prob.x[1])::T
+    weight_sum = sum(rt.weights)::T
+
+    # Type-stable iteration
+    sol_states = env.prob.sol.u
+    n_states = length(sol_states)
+
+    # Pre-allocate reward vectors with correct size
+    all_span_rewards = Vector{T}(undef, n_states)
+    all_periodicity_rewards = Vector{T}(undef, n_states)
+    all_shock_rewards = Vector{T}(undef, n_states)
+    all_shock_spacing_rewards = Vector{T}(undef, n_states)
+    all_low_span_punishments = Vector{T}(undef, n_states)
+
+    @inbounds for (i, state) in enumerate(sol_states)
+        # Use view to avoid allocation
+        u = @view state[1:N]
+
+        span_rew, periodicity_rew, shock_rew, shock_spacing_rew, low_span_punishment =
+            global_rewards(u, L, dx, rt)
+
+        all_span_rewards[i] = span_rew
+        all_periodicity_rewards[i] = periodicity_rew
+        all_shock_rewards[i] = shock_rew
+        all_shock_spacing_rewards[i] = shock_spacing_rew
+        all_low_span_punishments[i] = low_span_punishment
+    end
+
+    # Calculate variation punishment for each component
+    span_var_punishment = calculate_variation_punishment(all_span_rewards, T(rt.variation_penalties[1]))
+    periodicity_var_punishment = calculate_variation_punishment(all_periodicity_rewards, T(rt.variation_penalties[2]))
+    shock_var_punishment = calculate_variation_punishment(all_shock_rewards, T(rt.variation_penalties[3]))
+    shock_spacing_var_punishment = calculate_variation_punishment(all_shock_spacing_rewards, T(rt.variation_penalties[4]))
+
+    # Apply variation punishment to each component before taking minimum
+    punished_span = minimum(all_span_rewards) * span_var_punishment
+    punished_periodicity = minimum(all_periodicity_rewards) * periodicity_var_punishment
+    punished_shock = minimum(all_shock_rewards) * shock_var_punishment
+    punished_shock_spacing = minimum(all_shock_spacing_rewards) * shock_spacing_var_punishment
+
+    # Low span punishment: only minimum, no variation punishment
+    min_low_span_punishment = minimum(all_low_span_punishments)
+
+    # Efficient weighted sum
+    weighted_rewards = (punished_span * rt.weights[1] +
+                        punished_periodicity * rt.weights[2] +
+                        punished_shock * rt.weights[3] +
+                        punished_shock_spacing * rt.weights[4]) / weight_sum
+
+    return min_low_span_punishment * weighted_rewards
+end
+
+function compute_reward(env::RDEEnv{T,A,O,R}, rt::PeriodMinimumVariationReward) where {T,A,O,R}
+    global_reward = time_minimum_global_reward_with_variation(env, rt)
+    action_magnitude = maximum(abs.(env.cache.action))
+    action_magnitude_modifier = action_magnitude_factor(rt.lowest_action_magnitude_reward, action_magnitude)
+    return global_reward * action_magnitude_modifier
+end
+
 """
     MultiplicativeReward <: AbstractRDEReward
 
@@ -594,4 +714,71 @@ function compute_reward(env::RDEEnv{T,A,O,R}, rt::MultiplicativeReward) where {T
         reward = next_reward .* reward
     end
     return reward
+end
+
+# Reset method for MultiplicativeReward - pass through to sub-rewards
+function reset_reward!(rt::MultiplicativeReward)
+    for r in rt.rewards
+        reset_reward!(r)
+    end
+    nothing
+end
+
+"""
+    ExponentialAverageReward{T<:AbstractRDEReward} <: AbstractRDEReward
+
+A reward wrapper that applies exponential averaging to smooth reward signals.
+
+The exponential average is computed as:
+`new_avg = α * current_reward + (1-α) * old_avg`
+
+# Fields
+- `wrapped_reward::T`: The underlying reward to wrap
+- `α::Float32`: Averaging parameter (0 < α ≤ 1). Higher values give more weight to recent rewards
+- `average::Union{Nothing, Float32, Vector{Float32}}`: Current exponential average (initialized on first use)
+
+# Notes
+- If wrapped reward returns scalar, this returns scalar exponential average
+- If wrapped reward returns vector, this returns element-wise exponential averages
+- The average is reset to `nothing` on `reset_reward!()` calls
+"""
+mutable struct ExponentialAverageReward{T<:AbstractRDEReward} <: AbstractRDEReward
+    wrapped_reward::T
+    α::Float32  # averaging parameter
+    average::Union{Nothing,Float32,Vector{Float32}}  # current exponential average
+
+    function ExponentialAverageReward(wrapped_reward::T; α::Float32=0.2f0) where T<:AbstractRDEReward
+        return new{T}(wrapped_reward, α, nothing)
+    end
+end
+
+function Base.show(io::IO, rt::ExponentialAverageReward)
+    print(io, "ExponentialAverageReward(α=$(rt.α), wrapped=$(typeof(rt.wrapped_reward)))")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", rt::ExponentialAverageReward)
+    println(io, "ExponentialAverageReward:")
+    println(io, "  α: $(rt.α)")
+    println(io, "  wrapped_reward: $(typeof(rt.wrapped_reward))")
+    println(io, "  current_average: $(rt.average)")
+end
+
+function compute_reward(env::RDEEnv{T,A,O,R}, rt::ExponentialAverageReward) where {T,A,O,R}
+    current_reward = compute_reward(env, rt.wrapped_reward)
+
+    if isnothing(rt.average)
+        # Initialize average with first reward
+        rt.average = current_reward
+        return current_reward
+    else
+        # Apply exponential averaging: new_avg = α * current + (1-α) * old_avg
+        rt.average = rt.α .* current_reward .+ (1 - rt.α) .* rt.average
+        return rt.average
+    end
+end
+
+function reset_reward!(rt::ExponentialAverageReward)
+    rt.average = nothing
+    reset_reward!(rt.wrapped_reward)  # Reset the wrapped reward too
+    nothing
 end

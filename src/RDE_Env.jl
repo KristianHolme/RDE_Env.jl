@@ -18,7 +18,7 @@ using ProgressMeter
 
 include("types.jl")
 export AbstractRDEEnv, AbstractActionType, AbstractObservationStrategy, AbstractMultiAgentObservationStrategy,
- AbstractRDEReward
+    AbstractRDEReward
 export action_dim, get_standard_normalized_actions, set_N!
 export compute_observation, get_init_observation
 export set_reward!
@@ -43,7 +43,7 @@ include("rewards.jl")
 export ShockSpanReward, ShockPreservingReward, ShockPreservingSymmetryReward
 export CompositeReward, ConstantTargetReward, MultiSectionReward, PeriodicityReward
 export TimeAggCompositeReward, TimeMin, TimeAvg, TimeMax, TimeSum, TimeProd, TimeAggMultiSectionReward
-export TimeDiffNormReward, MultiplicativeReward, PeriodMinimumReward
+export TimeDiffNormReward, MultiplicativeReward, PeriodMinimumReward, PeriodMinimumVariationReward
 export set_reward!, set_termination_reward!, compute_reward
 
 # Environment

@@ -56,12 +56,12 @@ function RDEEnv(;
     observation_strategy::O=SectionedStateObservation(),
     reward_type::R=PeriodMinimumReward(),
     verbose::Bool=false,
-    kwargs...) where {T<:AbstractFloat, A<:AbstractActionType, O<:AbstractObservationStrategy, R<:AbstractRDEReward}
+    kwargs...) where {T<:AbstractFloat,A<:AbstractActionType,O<:AbstractObservationStrategy,R<:AbstractRDEReward}
 
     if τ_smooth > dt
         @warn "τ_smooth > dt, this will cause discontinuities in the control signal"
         @info "Setting τ_smooth = $(dt/8)"
-        τ_smooth = dt/8
+        τ_smooth = dt / 8
     end
 
     prob = RDEProblem(params; kwargs...)
@@ -74,12 +74,12 @@ function RDEEnv(;
     initial_state = vcat(prob.u0, prob.λ0)
     init_observation = get_init_observation(observation_strategy, params.N)
     cache = RDEEnvCache{T}(params.N)
-    ode_problem = ODEProblem{true, SciMLBase.FullSpecialize}(RDE_RHS!, initial_state, (zero(T), dt), prob)
-    return RDEEnv{T, A, O, R}(prob, initial_state, init_observation,
-                  dt, T(0.0), false, false, false, T(0.0), smax, u_pmax,
-                  momentum, τ_smooth, cache,
-                  action_type, observation_strategy, 
-                  reward_type, verbose, Dict{String, Any}(), 0, ode_problem)
+    ode_problem = ODEProblem{true,SciMLBase.FullSpecialize}(RDE_RHS!, initial_state, (zero(T), dt), prob)
+    return RDEEnv{T,A,O,R}(prob, initial_state, init_observation,
+        dt, T(0.0), false, false, false, T(0.0), smax, u_pmax,
+        momentum, τ_smooth, cache,
+        action_type, observation_strategy,
+        reward_type, verbose, Dict{String,Any}(), 0, ode_problem)
 end
 
 RDEEnv(params::RDEParam{T}; kwargs...) where {T<:AbstractFloat} = RDEEnv(; params=params, kwargs...)
@@ -111,23 +111,23 @@ function _act!(env::RDEEnv{T}, action; saves_per_action::Int=10) where {T<:Abstr
     N = env.prob.params.N
     env.cache.prev_u .= @view env.state[1:N]
     env.cache.prev_λ .= @view env.state[N+1:end]
-    @logmsg LogLevel(-10000) "Stored previous state" prev_u=env.cache.prev_u prev_λ=env.cache.prev_λ
+    @logmsg LogLevel(-10000) "Stored previous state" prev_u = env.cache.prev_u prev_λ = env.cache.prev_λ
 
     t_span = (env.t, env.t + env.dt)
-    @logmsg LogLevel(-10000) "Set time span" t_span=t_span
+    @logmsg LogLevel(-10000) "Set time span" t_span = t_span
     env.prob.method.cache.control_time = env.t
-    @logmsg LogLevel(-10000) "Set control time" control_time=env.prob.method.cache.control_time
+    @logmsg LogLevel(-10000) "Set control time" control_time = env.prob.method.cache.control_time
 
     prev_controls = [env.prob.method.cache.s_current, env.prob.method.cache.u_p_current]
     c = [env.prob.method.cache.s_current, env.prob.method.cache.u_p_current]
     c_max = [env.smax, env.u_pmax]
-    @logmsg LogLevel(-10000) "Initial controls" prev_controls=prev_controls c_max=c_max
+    @logmsg LogLevel(-10000) "Initial controls" prev_controls = prev_controls c_max = c_max
 
     normalized_standard_actions = get_standard_normalized_actions(env.action_type, action)
-    env.cache.action[:,1] = normalized_standard_actions[1]
-    env.cache.action[:,2] = normalized_standard_actions[2]
-    @logmsg LogLevel(-10000) "Normalized actions" actions=normalized_standard_actions
-    
+    env.cache.action[:, 1] = normalized_standard_actions[1]
+    env.cache.action[:, 2] = normalized_standard_actions[2]
+    @logmsg LogLevel(-10000) "Normalized actions" actions = normalized_standard_actions
+
     for i in 1:2
         a = normalized_standard_actions[i]
         if any(abs.(a) .> 1)
@@ -148,14 +148,14 @@ function _act!(env::RDEEnv{T}, action; saves_per_action::Int=10) where {T<:Abstr
     #TODO use remake instead of recreating ??
     # prob_ode = ODEProblem{true, SciMLBase.FullSpecialize}(RDE_RHS!, env.state, t_span, env.prob)
     env.ode_problem = remake(env.ode_problem, u0=env.state, tspan=t_span)
-    
+
     if saves_per_action == 0
-        sol = OrdinaryDiffEq.solve(env.ode_problem, Tsit5(), save_on=false, 
-                                   isoutofdomain=RDE.outofdomain, verbose=env.verbose)
+        sol = OrdinaryDiffEq.solve(env.ode_problem, Tsit5(), save_on=false,
+            isoutofdomain=RDE.outofdomain, verbose=env.verbose)
     else
         saveat = env.dt / saves_per_action
-        sol = OrdinaryDiffEq.solve(env.ode_problem, Tsit5(), saveat=saveat, 
-                                   isoutofdomain=RDE.outofdomain, verbose=env.verbose)
+        sol = OrdinaryDiffEq.solve(env.ode_problem, Tsit5(), saveat=saveat,
+            isoutofdomain=RDE.outofdomain, verbose=env.verbose)
     end
 
     #Check termination caused by ODE solver
@@ -175,20 +175,20 @@ function _act!(env::RDEEnv{T}, action; saves_per_action::Int=10) where {T<:Abstr
         env.prob.sol = sol
         env.t = sol.t[end]
         env.state = sol.u[end]
-        
+
         env.steps_taken += 1
-        
+
         set_reward!(env, env.reward_type)
         env.observation .= compute_observation(env, env.observation_strategy)
         if env.terminated #maybe reward caused termination
             set_termination_reward!(env, -2.0)
-            env.done = true;
+            env.done = true
             @logmsg LogLevel(-10000) "termination caused by reward"
             @logmsg LogLevel(-500) "terminated, t=$(env.t), from reward?"
         end
         if env.t ≥ env.prob.params.tmax
             env.done = true
-            env.truncated = true 
+            env.truncated = true
             @logmsg LogLevel(-10000) "tmax reached, t=$(env.t)"
             env.info["Truncation.Reason"] = "tmax reached"
         end
@@ -230,17 +230,18 @@ function _reset!(env::RDEEnv)
     env.done = false
     env.truncated = false
     env.terminated = false
+    reset_reward!(env.reward_type)  # Reset reward state (e.g., exponential averages)
     set_reward!(env, env.reward_type)
     env.observation .= compute_observation(env, env.observation_strategy)
-    env.info = Dict{String, Any}()
+    env.info = Dict{String,Any}()
 
-    reset_cache!(env.prob.method.cache, τ_smooth=env.τ_smooth, params=env.prob.params)    
+    reset_cache!(env.prob.method.cache, τ_smooth=env.τ_smooth, params=env.prob.params)
     env.prob.sol = nothing
     # Initialize previous state
     N = env.prob.params.N
     env.cache.prev_u .= @view env.state[1:N]
     env.cache.prev_λ .= @view env.state[N+1:end]
-    
+
     nothing
 end
 
