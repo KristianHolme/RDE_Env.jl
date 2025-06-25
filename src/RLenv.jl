@@ -181,7 +181,7 @@ function _act!(env::RDEEnv{T}, action; saves_per_action::Int=10) where {T<:Abstr
         set_reward!(env, env.reward_type)
         env.observation .= compute_observation(env, env.observation_strategy)
         if env.terminated #maybe reward caused termination
-            set_termination_reward!(env, -2.0)
+            # set_termination_reward!(env, -2.0)
             env.done = true
             @logmsg LogLevel(-10000) "termination caused by reward"
             @logmsg LogLevel(-500) "terminated, t=$(env.t), from reward?"

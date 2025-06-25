@@ -667,6 +667,46 @@ function compute_reward(env::RDEEnv{T,A,O,R}, rt::PeriodMinimumVariationReward) 
     return global_reward * action_magnitude_modifier
 end
 
+@kwdef mutable struct MultiSectionPeriodMinimumReward <: MultiAgentCachedCompositeReward
+    n_sections::Int = 4
+    target_shock_count::Int = 3
+    cache::Vector{Float32} = zeros(Float32, 512)
+    lowest_action_magnitude_reward::Float32 = 0.0f0 #reward will be \in [lowest_action_magnitude_reward, 1]
+    weights::Vector{Float32} = [1f0, 1f0, 5f0, 1f0]
+end
+
+function Base.show(io::IO, rt::MultiSectionPeriodMinimumReward)
+    print(io, "MultiSectionPeriodMinimumReward(n_sections=$(rt.n_sections))")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", rt::MultiSectionPeriodMinimumReward)
+    println(io, "MultiSectionPeriodMinimumReward:")
+    println(io, "  n_sections: $(rt.n_sections)")
+    println(io, "  target_shock_count: $(rt.target_shock_count)")
+    println(io, "  lowest_action_magnitude_reward: $(rt.lowest_action_magnitude_reward)")
+    println(io, "  weights: $(rt.weights)")
+    println(io, "  cache size: $(length(rt.cache))")
+end
+
+function compute_reward(env::RDEEnv{T,A,O,R}, rt::MultiSectionPeriodMinimumReward) where {T,A,O,R}
+    # Compute the time minimum global reward (same as PeriodMinimumReward)
+    common_reward = time_minimum_global_reward(env, rt)
+
+    # Multi-section action magnitude punishment (same as MultiSectionReward)
+    N = env.prob.params.N
+    n_sections = rt.n_sections
+    points_per_section = N ÷ n_sections
+    first_element_in_sections = collect(1:points_per_section:N)
+
+    α = rt.lowest_action_magnitude_reward
+    full_engine_pressure_action = env.cache.action[:, 2]
+    section_actions = full_engine_pressure_action[first_element_in_sections]
+    action_magnitudes = abs.(section_actions)
+    individual_modifiers = action_magnitude_factor(α, action_magnitudes)
+
+    return common_reward .* individual_modifiers
+end
+
 """
     MultiplicativeReward <: AbstractRDEReward
 
@@ -779,6 +819,127 @@ end
 
 function reset_reward!(rt::ExponentialAverageReward)
     rt.average = nothing
+    reset_reward!(rt.wrapped_reward)  # Reset the wrapped reward too
+    nothing
+end
+
+"""
+    TransitionBasedReward{T<:AbstractRDEReward} <: AbstractRDEReward
+
+A reward wrapper that gives -1 reward until a successful transition is detected,
+then terminates the environment. Uses transition detection logic similar to detect_transition.
+
+# Fields
+- `wrapped_reward::T`: The underlying reward to wrap and monitor
+- `target_shocks::Int`: Target number of shocks for transition
+- `reward_stability_length::Float32`: Time duration (in env time units) to maintain stable rewards
+- `reward_threshold::Float32`: Minimum reward threshold for stability check
+- `past_rewards::Vector{Float32}`: History of wrapped reward values
+- `past_shock_counts::Vector{Int}`: History of shock counts
+- `past_times::Vector{Float32}`: History of time stamps
+- `transition_found::Bool`: Whether transition has been detected
+
+# Notes
+- Returns -1.0 until transition is found
+- When transition is detected, sets env.terminated = true
+- Transition occurs when: shock count reaches target AND rewards stay above threshold for stability_length time
+"""
+mutable struct TransitionBasedReward{T<:AbstractRDEReward} <: AbstractRDEReward
+    wrapped_reward::T
+    target_shocks::Int
+    reward_stability_length::Float32  # in time units
+    reward_threshold::Float32
+
+    # Internal state tracking
+    past_rewards::Vector{Float32}
+    past_shock_counts::Vector{Int}
+    transition_found::Bool
+
+    function TransitionBasedReward(wrapped_reward::T;
+        target_shocks::Int=3,
+        reward_stability_length::Float32=20.0f0,
+        reward_threshold::Float32=0.99f0) where T<:AbstractRDEReward
+        return new{T}(wrapped_reward, target_shocks, reward_stability_length, reward_threshold,
+            Float32[], Int[], false)
+    end
+end
+
+function Base.show(io::IO, rt::TransitionBasedReward)
+    print(io, "TransitionBasedReward(target_shocks=$(rt.target_shocks), wrapped=$(typeof(rt.wrapped_reward)))")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", rt::TransitionBasedReward)
+    println(io, "TransitionBasedReward:")
+    println(io, "  target_shocks: $(rt.target_shocks)")
+    println(io, "  reward_stability_length: $(rt.reward_stability_length)")
+    println(io, "  reward_threshold: $(rt.reward_threshold)")
+    println(io, "  wrapped_reward: $(typeof(rt.wrapped_reward))")
+    println(io, "  transition_found: $(rt.transition_found)")
+    println(io, "  history_length: $(length(rt.past_rewards))")
+end
+
+function compute_reward(env::RDEEnv{T,A,O,R}, rt::TransitionBasedReward) where {T,A,O,R}
+    # If transition already found, just return (environment should be terminated)
+    if rt.transition_found
+        return T(-1.0)  # This shouldn't be reached if env properly terminates
+    end
+
+    # Compute the wrapped reward
+    wrapped_reward_value = compute_reward(env, rt.wrapped_reward)
+
+    # Handle vector rewards by taking minimum (similar to detect_transition)
+    reward_scalar = if wrapped_reward_value isa AbstractVector
+        minimum(wrapped_reward_value)
+    else
+        wrapped_reward_value
+    end
+
+    # Count current shocks
+    N = env.prob.params.N
+    u = @view env.state[1:N]
+    dx = env.prob.x[2] - env.prob.x[1]
+    current_shock_count = RDE.count_shocks(u, dx)
+
+    # Update history
+    push!(rt.past_rewards, Float32(reward_scalar))
+    push!(rt.past_shock_counts, current_shock_count)
+
+    # Check for transition (only if we have enough history)
+    if length(rt.past_shock_counts) >= 2
+        rt.transition_found = detect_transition_realtime(rt, env.dt)
+
+        if rt.transition_found
+            env.terminated = true
+            @logmsg LogLevel(-500) "Transition detected! Terminating environment at t=$(env.t)"
+            return T(0.0)  # Neutral reward when transition found
+        end
+    end
+
+    # Return -1 until transition
+    return T(-1.0)
+end
+
+function detect_transition_realtime(rt::TransitionBasedReward, dt::Float32)
+    stability_steps = rt.reward_stability_length / dt |> Int
+    if length(rt.past_shock_counts) < stability_steps
+        @debug "Not enough shock counts to detect transition"
+        return false
+    end
+
+
+    # Check if we've had stable rewards for long enough since then
+    stability_rewards = rt.past_rewards[end-stability_steps+1:end]
+    stability_shock_counts = rt.past_shock_counts[end-stability_steps+1:end]
+    if all(stability_shock_counts .== rt.target_shocks) && minimum(stability_rewards) > rt.reward_threshold
+        return true
+    end
+    return false
+end
+
+function reset_reward!(rt::TransitionBasedReward)
+    empty!(rt.past_rewards)
+    empty!(rt.past_shock_counts)
+    rt.transition_found = false
     reset_reward!(rt.wrapped_reward)  # Reset the wrapped reward too
     nothing
 end
