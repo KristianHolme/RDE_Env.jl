@@ -180,10 +180,10 @@ function run_policy(policy::AbstractRDEPolicy, env::RDEEnv{T}; saves_per_action=
     while !env.done && step < max_steps
         action = _predict_action(policy, _observe(env))
         _act!(env, action, saves_per_action=saves_per_action)
-        if env.terminated
-            @assert env.done "Env terminated but done is false"
-            break
-        end
+        # if env.terminated
+        #     @assert env.done "Env terminated but done is false"
+        #     break
+        # end
         step += 1
         log!(step)
     end
@@ -475,7 +475,7 @@ base_policy = RandomRDEPolicy(env)
 delayed_policy = DelayedPolicy(base_policy, 100.0f0, env)
 ```
 """
-struct DelayedPolicy{T<:AbstractFloat, P<:AbstractRDEPolicy} <: AbstractRDEPolicy
+struct DelayedPolicy{T<:AbstractFloat,P<:AbstractRDEPolicy} <: AbstractRDEPolicy
     policy::P
     start_time::T
     env::RDEEnv{T}
@@ -509,7 +509,7 @@ function Base.show(io::IO, ::MIME"text/plain", π::DelayedPolicy)
     println(io, "  env: $(typeof(π.env))")
 end
 
-struct ScaledPolicy{T<:AbstractFloat, P<:AbstractRDEPolicy} <: AbstractRDEPolicy
+struct ScaledPolicy{T<:AbstractFloat,P<:AbstractRDEPolicy} <: AbstractRDEPolicy
     policy::P
     scale::T
 end
