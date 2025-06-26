@@ -117,8 +117,8 @@ Cache for RDE environment computations and state tracking.
 - `prev_λ::Vector{T}`: Previous reaction progress
 """
 mutable struct RDEEnvCache{T<:AbstractFloat}#TODO remove circ
-    circ_u::CircularVector{T, Vector{T}}
-    circ_λ::CircularVector{T, Vector{T}}
+    circ_u::CircularVector{T,Vector{T}}
+    circ_λ::CircularVector{T,Vector{T}}
     prev_u::Vector{T}  # Previous step's u values
     prev_λ::Vector{T}  # Previous step's λ values
     action::Matrix{T} # column 1 = s action, column 2 = u_p action
@@ -128,12 +128,13 @@ mutable struct RDEEnvCache{T<:AbstractFloat}#TODO remove circ
         circ_λ = CircularArray(zeros(T, N))
         prev_u = zeros(T, N)
         prev_λ = zeros(T, N)
-        action = zeros(T, N, 2)    
+        action = zeros(T, N, 2)
         return new{T}(circ_u, circ_λ, prev_u, prev_λ, action)
     end
 end
 
-mutable struct RDEEnv{T, A, O, R} <: AbstractRDEEnv where {T<:AbstractFloat, A<:AbstractActionType, O<:AbstractObservationStrategy, R<:AbstractRDEReward}
+#TODO_is it necessary to parametrize by A, O, R?
+mutable struct RDEEnv{T,A,O,R} <: AbstractRDEEnv where {T<:AbstractFloat,A<:AbstractActionType,O<:AbstractObservationStrategy,R<:AbstractRDEReward}
     prob::RDEProblem                  # RDE problem
     state::Vector{T}
     observation::Array{T}
@@ -142,7 +143,7 @@ mutable struct RDEEnv{T, A, O, R} <: AbstractRDEEnv where {T<:AbstractFloat, A<:
     done::Bool                        # Termination flag
     truncated::Bool
     terminated::Bool
-    reward::Union{T, Vector{T}}
+    reward::Union{T,Vector{T}}
     smax::T
     u_pmax::T
     α::T #action momentum
@@ -152,7 +153,7 @@ mutable struct RDEEnv{T, A, O, R} <: AbstractRDEEnv where {T<:AbstractFloat, A<:
     observation_strategy::O
     reward_type::R
     verbose::Bool               # Control solver output
-    info::Dict{String, Any}
+    info::Dict{String,Any}
     steps_taken::Int
-    ode_problem::Union{Nothing, ODEProblem}
+    ode_problem::Union{Nothing,ODEProblem}
 end

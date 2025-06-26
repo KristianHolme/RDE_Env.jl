@@ -33,7 +33,7 @@ _action_space(::RDEEnv, ::VectorPressureAction) = DRiL.Box([-1f0 for _ in 1:n_se
 function _observation_space(core_env::RDEEnv, strategy::FourierObservation)
     N = core_env.prob.params.N
     n_fft_terms = min(strategy.fft_terms, N ÷ 2 + 1)
-    total_terms = 2*n_fft_terms + 2
+    total_terms = 2 * n_fft_terms + 2
     low = [[-1f0 for _ in 1:2*n_fft_terms]; 0f0; 0f0]
     high = [[1f0 for _ in 1:2*n_fft_terms]; 1f0; 1f0]
     return DRiL.Box(low, high)
@@ -76,7 +76,7 @@ function _observation_space(core_env::RDEEnv, ::MeanInjectionPressureObservation
 end
 
 function _observation_space(::RDEEnv, strategy::MultiCenteredObservation)
-    obs_length = strategy.minisections*2 + 2  # +2 for shocks, target_shock_count
+    obs_length = strategy.minisections * 2 + 2  # +2 for shocks, target_shock_count
     low = [0f0 for _ in 1:obs_length]
     high = [1f0 for _ in 1:obs_length]
     return DRiL.Box(low, high)
@@ -84,7 +84,7 @@ end
 
 function _observation_space(::RDEEnv, strategy::MultiSectionObservation)
     observable_minisections = get_observable_minisections(strategy)
-    obs_length = observable_minisections*2 + 3  # +3 for shocks, target_shock_count, span
+    obs_length = observable_minisections * 2 + 3  # +3 for shocks, target_shock_count, span
     low = [0f0 for _ in 1:obs_length]
     high = [1f0 for _ in 1:obs_length]
     return DRiL.Box(low, high)
@@ -147,6 +147,12 @@ function DRiL.act!(env::DRiLMultiAgentRDEEnv, actions::AbstractVector)
 
     return rewards, terminateds, truncateds, infos
 end
+
+DRiL.observation_space(env::DRiLMultiAgentRDEEnv) = env.observation_space
+DRiL.action_space(env::DRiLMultiAgentRDEEnv) = env.action_space
+DRiL.number_of_envs(env::DRiLMultiAgentRDEEnv) = env.n_envs
+DRiL.terminated(env::DRiLMultiAgentRDEEnv) = fill(env.core_env.terminated, env.n_envs)
+DRiL.truncated(env::DRiLMultiAgentRDEEnv) = fill(env.core_env.truncated, env.n_envs)
 
 struct DRiLAgentPolicy <: AbstractRDEPolicy
     agent::AbstractAgent
