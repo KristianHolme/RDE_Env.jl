@@ -28,7 +28,7 @@ DRiL.get_info(env::DRiLRDEEnv) = env.core_env.info
 
 _action_space(::RDEEnv, ::ScalarPressureAction) = DRiL.Box([-1f0], [1f0])
 _action_space(::RDEEnv, ::ScalarAreaScalarPressureAction) = DRiL.Box([-1f0, -1f0], [1f0, 1f0])
-_action_space(::RDEEnv, ::VectorPressureAction) = DRiL.Box([-1f0 for _ in 1:n_sections], [1f0 for _ in 1:n_sections])
+_action_space(::RDEEnv, action_type::VectorPressureAction) = DRiL.Box([-1f0 for _ in 1:action_type.n_sections], [1f0 for _ in 1:action_type.n_sections])
 
 function _observation_space(core_env::RDEEnv, strategy::FourierObservation)
     N = core_env.prob.params.N
