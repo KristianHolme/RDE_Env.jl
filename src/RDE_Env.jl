@@ -46,6 +46,7 @@ export TimeAggCompositeReward, TimeMin, TimeAvg, TimeMax, TimeSum, TimeProd, Tim
 export TimeDiffNormReward, MultiplicativeReward, PeriodMinimumReward, MultiSectionPeriodMinimumReward,
     PeriodMinimumVariationReward, ExponentialAverageReward, TransitionBasedReward
 export set_reward!, set_termination_reward!, compute_reward
+export ScalarToVectorReward
 
 # Environment
 include("RLenv.jl")

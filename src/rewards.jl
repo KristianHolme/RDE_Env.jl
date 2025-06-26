@@ -938,3 +938,17 @@ function reset_reward!(rt::TransitionBasedReward)
     reset_reward!(rt.wrapped_reward)  # Reset the wrapped reward too
     nothing
 end
+
+struct ScalarToVectorReward{T<:AbstractRDEReward} <: AbstractRDEReward
+    wrapped_reward::T
+    n::Int
+end
+
+function compute_reward(env::RDEEnv{T,A,O,R}, rt::ScalarToVectorReward) where {T,A,O,R}
+    reward = compute_reward(env, rt.wrapped_reward)
+    return fill(reward, rt.n)
+end
+
+function reset_reward!(rt::ScalarToVectorReward)
+    reset_reward!(rt.wrapped_reward)
+end
