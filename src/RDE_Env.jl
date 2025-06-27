@@ -19,7 +19,7 @@ using ProgressMeter
 include("types.jl")
 export AbstractRDEEnv, AbstractActionType, AbstractObservationStrategy, AbstractMultiAgentObservationStrategy,
     AbstractRDEReward
-export action_dim, get_standard_normalized_actions, set_N!
+export action_dim, get_standardized_actions, set_N!
 export compute_observation, get_init_observation
 export set_reward!
 export RDEEnv, RDEEnvCache

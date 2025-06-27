@@ -20,7 +20,7 @@ function set_N!(action_type::AbstractActionType, N::Int)
 end
 
 """
-    get_standard_normalized_actions(action_type::AbstractActionType, action) -> Vector{Vector{T}}
+    get_standardized_actions(action_type::AbstractActionType, action) -> Vector{Vector{T}}
 
 Convert normalized actions to standard form [area_actions pressure_actions].
 
@@ -38,31 +38,30 @@ Convert normalized actions to standard form [area_actions pressure_actions].
 This is a fallback method that issues a warning. Each action type should implement
 its own specific version.
 """
-function get_standard_normalized_actions(action_type::AbstractActionType, action)
+function get_standardized_actions(action_type::AbstractActionType, action)
     @assert action_type.N > 0 "Action type N not set"
-    @warn "get_standard_normalized_actions is not implemented for action_type $action_type"
+    @warn "get_standardized_actions is not implemented for action_type $action_type"
 end
 
 
-function get_standard_normalized_actions(action_type::ScalarAreaScalarPressureAction, action)
+function get_standardized_actions(action_type::ScalarAreaScalarPressureAction, action::Vector)
     @assert action_type.N > 0 "Action type N not set"
     @assert length(action) == 2
     return [fill(action[1], action_type.N), fill(action[2], action_type.N)]
 end
 
 
-function get_standard_normalized_actions(action_type::ScalarPressureAction, action)
+function get_standardized_actions(action_type::ScalarPressureAction, action::AbstractArray)
+    get_standardized_actions(action_type, action[1])
+end
+
+function get_standardized_actions(action_type::ScalarPressureAction, action::Number)
     @assert action_type.N > 0 "Action type N not set"
-    if isa(action, AbstractArray)
-        return [zeros(action_type.N), ones(action_type.N) .* action[1]]
-    else
-        @assert length(action) == 1
-        return [zeros(action_type.N), ones(action_type.N) .* action]
-    end
+    return [zeros(action_type.N), ones(action_type.N) .* action]
 end
 
 
-function get_standard_normalized_actions(action_type::VectorPressureAction, action)
+function get_standardized_actions(action_type::VectorPressureAction, action::Vector)
     @assert action_type.N > 0 "Action type N not set"
     @assert length(action) == action_type.n_sections "Action length ($(length(action))) must match n_sections ($(action_type.n_sections))"
     @assert action_type.N % action_type.n_sections == 0 "N ($N) must be divisible by n_sections ($(action_type.n_sections))"

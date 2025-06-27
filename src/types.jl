@@ -22,7 +22,7 @@ end
 
 
 
-function get_standard_normalized_actions end
+function get_standardized_actions end
 function action_dim end
 
 
@@ -134,16 +134,16 @@ mutable struct RDEEnvCache{T<:AbstractFloat}#TODO remove circ
 end
 
 #TODO_is it necessary to parametrize by A, O, R?
-mutable struct RDEEnv{T,A,O,R} <: AbstractRDEEnv where {T<:AbstractFloat,A<:AbstractActionType,O<:AbstractObservationStrategy,R<:AbstractRDEReward}
+mutable struct RDEEnv{T,A,O,R,V,OBS} <: AbstractRDEEnv where {T<:AbstractFloat,A<:AbstractActionType,O<:AbstractObservationStrategy,R<:AbstractRDEReward,V<:Union{T,Vector{T}},OBS<:AbstractArray{T}}
     prob::RDEProblem                  # RDE problem
     state::Vector{T}
-    observation::Array{T}
+    observation::OBS
     dt::T                       # time step
     t::T                        # Current time
     done::Bool                        # Termination flag
     truncated::Bool
     terminated::Bool
-    reward::Union{T,Vector{T}}
+    reward::V
     smax::T
     u_pmax::T
     α::T #action momentum
@@ -157,3 +157,7 @@ mutable struct RDEEnv{T,A,O,R} <: AbstractRDEEnv where {T<:AbstractFloat,A<:Abst
     steps_taken::Int
     ode_problem::Union{Nothing,ODEProblem}
 end
+
+# Helper functions to determine observation array type
+observation_array_type(::Type{T}, ::AbstractObservationStrategy) where {T} = Vector{T}  # Default: Vector
+observation_array_type(::Type{T}, ::AbstractMultiAgentObservationStrategy) where {T} = Matrix{T}  # Multi-agent: Matrix

@@ -123,7 +123,7 @@ function _act!(env::RDEEnv{T}, action; saves_per_action::Int=10) where {T<:Abstr
     c_max = [env.smax, env.u_pmax]
     @logmsg LogLevel(-10000) "Initial controls" prev_controls = prev_controls c_max = c_max
 
-    normalized_standard_actions = get_standard_normalized_actions(env.action_type, action)
+    normalized_standard_actions = get_standardized_actions(env.action_type, action)
     env.cache.action[:, 1] = normalized_standard_actions[1]
     env.cache.action[:, 2] = normalized_standard_actions[2]
     @logmsg LogLevel(-10000) "Normalized actions" actions = normalized_standard_actions
