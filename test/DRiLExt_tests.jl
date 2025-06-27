@@ -46,8 +46,10 @@ end
 function test_parallel_env_usage(env)
     rand_obs = rand(observation_space(env))
     obs = observe(env)
-    action = rand(action_space(env), number_of_envs(env))
-    reward = act!(env, action)
+    @assert length(obs) == number_of_envs(env)
+    actions = rand(action_space(env), number_of_envs(env))
+    rewards, _, _, _ = act!(env, actions)
+    @assert length(rewards) == number_of_envs(env) "length of rewards: $(length(rewards)) != number of envs: $(number_of_envs(env))"
     random_obs = rand(observation_space(env))
     reset!(env)
     terminated(env)
