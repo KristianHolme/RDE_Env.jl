@@ -141,6 +141,10 @@ function run_policy(policy::AbstractRDEPolicy, env::RDEEnv{T}; saves_per_action=
         observations[ind] = _observe(env)
 
         if step > 0
+            if typeof(env.prob.sol) == Nothing
+                @info "sol is nothing at step $step"
+                @info env.info
+            end
             step_states = env.prob.sol.u[2:end]
             step_ts = env.prob.sol.t[2:end]
             n_states = length(step_states)

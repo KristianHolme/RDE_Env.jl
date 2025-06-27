@@ -21,6 +21,17 @@ function get_multi_agent_env()
     env = DRiLExt.DRiLMultiAgentRDEEnv(env)
     return env
 end
+function get_SAVA_env()
+    env_config = RDEEnvConfig(
+        observation_strategy=SectionedStateObservation(),
+        action_type=VectorPressureAction(n_sections=4),
+        reward_type=PeriodMinimumReward()
+    )
+    env = make_env(env_config)
+    DRiLExt = Base.get_extension(RDE_Env, :RDE_EnvDRiLExt)
+    env = DRiLExt.DRiLRDEEnv(env)
+    return env
+end
 function test_single_env_usage(env)
     rand_obs = rand(observation_space(env))
     obs = observe(env)
@@ -94,6 +105,28 @@ end
 @testset "DRiLExt multi-agent env usage" begin
     envs = [get_multi_agent_env() for _ in 1:4]
     env = MultiAgentParallelEnv(envs)
+    @test test_parallel_env_usage(env)
+    monitored_env = MonitorWrapperEnv(env)
+    @test test_parallel_env_usage(monitored_env)
+    norm_env = NormalizeWrapperEnv(monitored_env)
+    @test test_parallel_env_usage(norm_env)
+end
+
+@testset "DRiLExt SAVA env" begin
+    env = get_SAVA_env()
+    @test hasmethod(DRiL.observation_space, (typeof(env),))
+    @test hasmethod(DRiL.action_space, (typeof(env),))
+    @test hasmethod(DRiL.number_of_envs, (typeof(env),))
+    @test hasmethod(DRiL.reset!, (typeof(env),))
+    @test hasmethod(DRiL.act!, (typeof(env), Any))
+    @test hasmethod(DRiL.observe, (typeof(env),))
+end
+
+@testset "DRiLExt SAVA env usage" begin
+    env = get_SAVA_env()
+    @test test_single_env_usage(env)
+    envs = [get_SAVA_env() for _ in 1:4]
+    env = BroadcastedParallelEnv(envs)
     @test test_parallel_env_usage(env)
     monitored_env = MonitorWrapperEnv(env)
     @test test_parallel_env_usage(monitored_env)
