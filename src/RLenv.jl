@@ -166,7 +166,7 @@ function _act!(env::RDEEnv{T}, action; saves_per_action::Int=10) where {T<:Abstr
         @logmsg LogLevel(-10000) "ODE solver failed, controls: $(mean(prev_controls)) to $(mean(c))"
         env.terminated = true
         env.done = true
-        set_termination_reward!(env, -2.0)
+        set_termination_reward!(env, -100.0)
         env.info["Termination.Reason"] = "ODE solver failed"
         env.info["Termination.ReturnCode"] = sol.retcode
         env.info["Termination.env_t"] = env.t

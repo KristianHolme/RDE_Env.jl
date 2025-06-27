@@ -906,7 +906,7 @@ function compute_reward(env::RDEEnv{T,A,O,R}, rt::TransitionBasedReward) where {
         if rt.transition_found
             env.terminated = true
             @logmsg LogLevel(-500) "Transition detected! Terminating environment at t=$(env.t)"
-            return T(0.0)  # Neutral reward when transition found
+            return T(100.0)  # Positive reward when transition found
         end
     end
 
