@@ -14,7 +14,7 @@ function compute_observation(env::AbstractRDEEnv, strategy::AbstractObservationS
     @error "compute_observation not implemented for strategy $(typeof(strategy))"
 end
 
-function compute_observation(env::RDEEnv{T}, strategy::FourierObservation) where T<:AbstractFloat
+function compute_observation(env::RDEEnv{T,A,O,R,V,OBS}, strategy::FourierObservation) where {T,A,O,R,V,OBS}
     N = env.prob.params.N
     
     current_u = @view env.state[1:N]
@@ -44,11 +44,11 @@ function compute_observation(env::RDEEnv{T}, strategy::FourierObservation) where
     s_scaled = mean(env.prob.method.cache.s_current) / env.smax
     u_p_scaled = mean(env.prob.method.cache.u_p_current) / env.u_pmax
     
-    return vcat(u_obs, λ_obs, s_scaled, u_p_scaled)
+    return vcat(u_obs, λ_obs, s_scaled, u_p_scaled)::OBS
 end
 
 
-function compute_observation(env::AbstractRDEEnv, rt::StateObservation)
+function compute_observation(env::RDEEnv{T,A,O,R,V,OBS}, rt::StateObservation) where {T,A,O,R,V,OBS}
     N = length(env.state) ÷ 2
     u = @view env.state[1:N]
     λ = @view env.state[N+1:end]
@@ -62,7 +62,7 @@ function compute_observation(env::AbstractRDEEnv, rt::StateObservation)
     normalized_state[N+1:end] = λ ./ λ_max
     s_scaled = mean(env.prob.method.cache.s_current) / env.smax
     u_p_scaled = mean(env.prob.method.cache.u_p_current) / env.u_pmax
-    return vcat(normalized_state, s_scaled, u_p_scaled)
+    return vcat(normalized_state, s_scaled, u_p_scaled)::OBS
 end
 
 function compute_sectioned_observation(env::AbstractRDEEnv, obs_strategy::AbstractObservationStrategy)
@@ -89,7 +89,7 @@ function compute_sectioned_observation(env::AbstractRDEEnv, obs_strategy::Abstra
 
     return minisection_observations_u, minisection_observations_λ, shocks, target_shock_count
 end
-function compute_observation(env::AbstractRDEEnv, strategy::SectionedStateObservation)
+function compute_observation(env::RDEEnv{T,A,O,R,V,OBS}, strategy::SectionedStateObservation) where {T,A,O,R,V,OBS}
     (minisection_observations_u,
     minisection_observations_λ,
     shocks,
@@ -97,7 +97,7 @@ function compute_observation(env::AbstractRDEEnv, strategy::SectionedStateObserv
     return vcat(minisection_observations_u, minisection_observations_λ, shocks, target_shock_count)
 end
 
-function compute_observation(env::AbstractRDEEnv, strategy::SampledStateObservation)
+function compute_observation(env::RDEEnv{T,A,O,R,V,OBS}, strategy::SampledStateObservation) where {T,A,O,R,V,OBS}
     N = env.prob.params.N
     n = strategy.n_samples
     
@@ -115,7 +115,7 @@ function compute_observation(env::AbstractRDEEnv, strategy::SampledStateObservat
     
     sampled_u ./= u_max
     sampled_λ ./= λ_max
-    return vcat(sampled_u, sampled_λ, normalized_time)
+    return vcat(sampled_u, sampled_λ, normalized_time)::OBS
 end
 
 """
@@ -174,7 +174,7 @@ function Base.show(io::IO, ::MIME"text/plain", obs_strategy::MultiSectionObserva
     println(io, "  L: $(obs_strategy.L)")
 end
 
-function compute_observation(env::AbstractRDEEnv, obs_strategy::MultiSectionObservation)
+function compute_observation(env::RDEEnv{T,A,O,R,V,OBS}, obs_strategy::MultiSectionObservation) where {T,A,O,R,V,OBS}
     N = env.prob.params.N
     current_u = @view env.state[1:N]
     current_λ = @view env.state[N+1:end]
@@ -223,7 +223,7 @@ function compute_observation(env::AbstractRDEEnv, obs_strategy::MultiSectionObse
         result[end, i] = span / max_pressure
     end
     
-    return result
+    return result::OBS
 end
 
 function get_observable_minisections(obs_strategy::MultiSectionObservation)
@@ -264,7 +264,7 @@ function Base.show(io::IO, ::MIME"text/plain", obs::CompositeObservation)
     println(io, "  target_shock_count: $(obs.target_shock_count)")
 end
 
-function compute_observation(env::AbstractRDEEnv, strategy::CompositeObservation)
+function compute_observation(env::RDEEnv{T,A,O,R,V,OBS}, strategy::CompositeObservation) where {T,A,O,R,V,OBS}
     N = env.prob.params.N
     
     current_u = @view env.state[1:N]
@@ -290,7 +290,7 @@ function compute_observation(env::AbstractRDEEnv, strategy::CompositeObservation
                 u_p_scaled,
                 normalized_shocks,
                 normalized_target_shock_count,
-                normalized_span)
+                normalized_span)::OBS
 
 end
 
@@ -321,7 +321,7 @@ function Base.show(io::IO, ::MIME"text/plain", obs_strategy::MultiCenteredObserv
     println(io, "  minisections: $(obs_strategy.minisections)")
 end
 
-function compute_observation(env::AbstractRDEEnv, obs_strategy::MultiCenteredObservation)
+function compute_observation(env::RDEEnv{T,A,O,R,V,OBS}, obs_strategy::MultiCenteredObservation) where {T,A,O,R,V,OBS}
     (minisection_observations_u,
     minisection_observations_λ,
     shocks,
@@ -344,7 +344,7 @@ function compute_observation(env::AbstractRDEEnv, obs_strategy::MultiCenteredObs
         result[end, i] = target_shock_count
     end
     
-    return result
+    return result::OBS
 end
 
 function get_init_observation(obs_strategy::MultiCenteredObservation, N::Int)
@@ -354,8 +354,8 @@ end
 
 struct MeanInjectionPressureObservation <: AbstractObservationStrategy end
 
-function compute_observation(env::AbstractRDEEnv, strategy::MeanInjectionPressureObservation)
-    return [mean(env.prob.method.cache.u_p_current)]
+function compute_observation(env::RDEEnv{T,A,O,R,V,OBS}, strategy::MeanInjectionPressureObservation) where {T,A,O,R,V,OBS}
+    return [mean(env.prob.method.cache.u_p_current)]::OBS
 end
 
 function get_init_observation(strategy::MeanInjectionPressureObservation, N::Int)

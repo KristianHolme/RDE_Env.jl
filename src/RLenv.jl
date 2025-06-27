@@ -75,8 +75,26 @@ function RDEEnv(;
     init_observation = get_init_observation(observation_strategy, params.N)
     cache = RDEEnvCache{T}(params.N)
     ode_problem = ODEProblem{true,SciMLBase.FullSpecialize}(RDE_RHS!, initial_state, (zero(T), dt), prob)
-    return RDEEnv{T,A,O,R}(prob, initial_state, init_observation,
-        dt, T(0.0), false, false, false, T(0.0), smax, u_pmax,
+    
+    # Use helper functions to determine type parameters
+    V = reward_value_type(T, reward_type)
+    OBS = observation_array_type(T, observation_strategy)
+    
+    # Initialize reward with correct type
+    initial_reward = if V <: Vector
+        # For multi-section rewards, determine the number of sections
+        n_sections = if hasfield(typeof(reward_type), :n_sections)
+            reward_type.n_sections
+        else
+            1  # fallback
+        end
+        zeros(T, n_sections)
+    else
+        zero(T)
+    end
+    
+    return RDEEnv{T,A,O,R,V,OBS}(prob, initial_state, init_observation,
+        dt, T(0.0), false, false, false, initial_reward, smax, u_pmax,
         momentum, τ_smooth, cache,
         action_type, observation_strategy,
         reward_type, verbose, Dict{String,Any}(), 0, ode_problem)
@@ -104,7 +122,7 @@ Take an action in the environment.
 - Handles smooth control transitions
 - Supports multiple action types
 """
-function _act!(env::RDEEnv{T}, action; saves_per_action::Int=10) where {T<:AbstractFloat}
+function _act!(env::RDEEnv{T,A,O,R,V,OBS}, action; saves_per_action::Int=10) where {T,A,O,R,V,OBS}
     t_start = time()
     # Store current state before taking action
     @logmsg LogLevel(-10000) "Starting act! for environment on thread $(Threads.threadid())"
@@ -179,7 +197,7 @@ function _act!(env::RDEEnv{T}, action; saves_per_action::Int=10) where {T<:Abstr
         env.steps_taken += 1
 
         set_reward!(env, env.reward_type)
-        env.observation .= compute_observation(env, env.observation_strategy)
+        env.observation .= compute_observation(env, env.observation_strategy)::OBS
         if env.terminated #maybe reward caused termination
             # set_termination_reward!(env, -2.0)
             env.done = true
@@ -221,7 +239,7 @@ Reset the environment to its initial state.
 - Resets control parameters to initial values
 - Initializes previous state tracking
 """
-function _reset!(env::RDEEnv)
+function _reset!(env::RDEEnv{T,A,O,R,V,OBS}) where {T,A,O,R,V,OBS}
     env.t = 0
     RDE.reset_state_and_pressure!(env.prob, env.prob.reset_strategy)
     env.state = vcat(env.prob.u0, env.prob.λ0)
@@ -232,7 +250,7 @@ function _reset!(env::RDEEnv)
     env.terminated = false
     reset_reward!(env.reward_type)  # Reset reward state (e.g., exponential averages)
     set_reward!(env, env.reward_type)
-    env.observation .= compute_observation(env, env.observation_strategy)
+    env.observation .= compute_observation(env, env.observation_strategy)::OBS
     env.info = Dict{String,Any}()
 
     reset_cache!(env.prob.method.cache, τ_smooth=env.τ_smooth, params=env.prob.params)
@@ -245,11 +263,9 @@ function _reset!(env::RDEEnv)
     nothing
 end
 
-function set_termination_reward!(env::RDEEnv, value::Number)
-    value = eltype(env.reward)(value)
-    if env.reward isa Number
-        env.reward = value
-    else
-        env.reward .= value
-    end
+function set_termination_reward!(env::RDEEnv{T,A,O,R,V,OBS}, value::Number) where {T,A,O,R,V<:Vector,OBS}
+    fill!(env.reward, T(value))
+end
+function set_termination_reward!(env::RDEEnv{T,A,O,R,V,OBS}, value::Number) where {T,A,O,R,V<:Number,OBS}
+    env.reward = T(value)
 end

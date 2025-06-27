@@ -4,20 +4,20 @@ using RDE_Env
 using DRiL
 export DRiLRDEEnv, DRiLMultiAgentRDEEnv
 
-struct DRiLRDEEnv <: DRiL.AbstractEnv
-    core_env::RDEEnv
+struct DRiLRDEEnv{T,A,O,R,V,OBS} <: DRiL.AbstractEnv
+    core_env::RDEEnv{T,A,O,R,V,OBS}
     observation_space::DRiL.Box
     action_space::DRiL.Box
-    function DRiLRDEEnv(core_env::RDEEnv)
+    function DRiLRDEEnv(core_env::RDEEnv{T,A,O,R,V,OBS}) where {T,A,O,R,V,OBS}
         observation_space = _observation_space(core_env, core_env.observation_strategy)
         action_space = _action_space(core_env, core_env.action_type)
-        new(core_env, observation_space, action_space)
+        new{T,A,O,R,V,OBS}(core_env, observation_space, action_space)
     end
 end
 
 DRiL.reset!(env::DRiLRDEEnv) = _reset!(env.core_env)
-DRiL.act!(env::DRiLRDEEnv, action) = _act!(env.core_env, action)
-DRiL.observe(env::DRiLRDEEnv) = _observe(env.core_env)
+DRiL.act!(env::DRiLRDEEnv{T,A,O,R,V,OBS}, action) where {T,A,O,R,V,OBS} = _act!(env.core_env, action)::V
+DRiL.observe(env::DRiLRDEEnv{T,A,O,R,V,OBS}) where {T,A,O,R,V,OBS} = _observe(env.core_env)::OBS
 DRiL.terminated(env::DRiLRDEEnv) = env.core_env.terminated
 DRiL.truncated(env::DRiLRDEEnv) = env.core_env.truncated
 DRiL.observation_space(env::DRiLRDEEnv) = env.observation_space
@@ -97,12 +97,12 @@ end
 
 
 ## multi-agent parallel env
-struct DRiLMultiAgentRDEEnv <: DRiL.AbstractParallelEnv
-    core_env::RDEEnv
+struct DRiLMultiAgentRDEEnv{T,A,O,R,V,OBS} <: DRiL.AbstractParallelEnv
+    core_env::RDEEnv{T,A,O,R,V,OBS}
     observation_space::DRiL.Box
     action_space::DRiL.Box
     n_envs::Int
-    function DRiLMultiAgentRDEEnv(core_env::RDEEnv)
+    function DRiLMultiAgentRDEEnv(core_env::RDEEnv{T,A,O,R,V,OBS}) where {T,A,O,R,V,OBS}
         obs_strategy = core_env.observation_strategy
         @assert obs_strategy isa AbstractMultiAgentObservationStrategy
         @assert core_env.action_type isa VectorPressureAction
@@ -111,7 +111,7 @@ struct DRiLMultiAgentRDEEnv <: DRiL.AbstractParallelEnv
         action_space = _multi_agent_action_space(core_env, action_type)
         n_envs = obs_strategy.n_sections
         @assert n_envs == action_type.n_sections
-        new(core_env, observation_space, action_space, n_envs)
+        new{T,A,O,R,V,OBS}(core_env, observation_space, action_space, n_envs)
     end
 end
 
@@ -124,9 +124,9 @@ function DRiL.observe(env::DRiLMultiAgentRDEEnv)
     return eachslice(observation_matrix, dims=ndims(observation_matrix))
 end
 
-function DRiL.act!(env::DRiLMultiAgentRDEEnv, actions::AbstractVector)
+function DRiL.act!(env::DRiLMultiAgentRDEEnv{T,A,O,R,V,OBS}, actions::AbstractVector) where {T,A,O,R,V,OBS}
     combined_action = vcat(actions...)
-    rewards = _act!(env.core_env, combined_action)
+    rewards = _act!(env.core_env, combined_action)::V
 
     info = env.core_env.info
 
@@ -159,11 +159,18 @@ struct DRiLAgentPolicy <: AbstractRDEPolicy
     norm_env::Union{NormalizeWrapperEnv,Nothing}
 end
 
-function RDE_Env._predict_action(policy::DRiLAgentPolicy, observation)
+function RDE_Env._predict_action(policy::DRiLAgentPolicy, observation::Vector)
     if !isnothing(policy.norm_env)
         DRiL.normalize_obs!(observation, policy.norm_env)
     end
     return predict_actions(policy.agent, [observation], deterministic=true)[1]
+end
+
+function RDE_Env._predict_action(policy::DRiLAgentPolicy, observation::Matrix)
+    if !isnothing(policy.norm_env)
+        DRiL.normalize_obs!(observation, policy.norm_env)
+    end
+    return predict_actions(policy.agent, eachcol(observation), deterministic=true)
 end
 
 function Base.show(io::IO, π::DRiLAgentPolicy)

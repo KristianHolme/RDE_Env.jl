@@ -20,7 +20,7 @@ The environment supports two threading modes:
 - POLYESTER: Uses Polyester.@batch for parallelization
 """
 mutable struct RDEVecEnv{T<:AbstractFloat} <: AbstractRDEEnv
-    envs::Vector{RDEEnv{T, A, O, R}} where {A<:AbstractActionType, O<:AbstractObservationStrategy, R<:AbstractRDEReward}
+    envs::Vector{RDEEnv{T,A,O,R,V,OBS}} where {A<:AbstractActionType, O<:AbstractObservationStrategy, R<:AbstractRDEReward, V, OBS}
     n_envs::Int64
     observations::Matrix{T}  # Pre-allocated for efficiency
     rewards::Vector{T}
@@ -35,7 +35,7 @@ end
 
 Create a vectorized environment from a vector of environments.
 """
-function RDEVecEnv(envs::Vector{RDEEnv{T, A, O, R}}; threading_mode::ThreadingMode=THREADS) where {T<:AbstractFloat, A<:AbstractActionType, O<:AbstractObservationStrategy, R<:AbstractRDEReward}
+function RDEVecEnv(envs::Vector{RDEEnv{T,A, O, R, V, OBS}}; threading_mode::ThreadingMode=THREADS) where {T<:AbstractFloat, A<:AbstractActionType, O<:AbstractObservationStrategy, R<:AbstractRDEReward, V, OBS}
     n_envs = length(envs)
     obs_dim = length(_observe(envs[1]))
     observations = Matrix{T}(undef, obs_dim, n_envs)
