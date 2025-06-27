@@ -27,9 +27,6 @@ DRiL = "49b37b9d-a8e6-4364-9144-4677bcb8a7f0"
 [extensions]
 RDE_EnvDRiLExt = "DRiL"
 
-[sources]
-RDE = {url="https://github.com/KristianHolme/RDE.jl", rev="main"}
-
 [compat]
 DomainSets = "0"
 Observables = "0"
