@@ -842,7 +842,7 @@ function Base.show(io::IO, ::MIME"text/plain", rt::ExponentialAverageReward)
 end
 
 function reward_value_type(::Type{T}, rt::ExponentialAverageReward) where {T}
-    return reward_value_from_wrapper(T, rt.wrapped_reward)
+    return reward_value_type(T, rt.wrapped_reward)
 end
 function compute_reward(env::RDEEnv{T,A,O,R,V,OBS}, rt::ExponentialAverageReward) where {T,A,O,R,V,OBS}
     current_reward = compute_reward(env, rt.wrapped_reward)
