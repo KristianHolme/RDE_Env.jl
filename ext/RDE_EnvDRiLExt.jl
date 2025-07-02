@@ -124,8 +124,8 @@ function DRiL.observe(env::DRiLMultiAgentRDEEnv)
     return eachslice(observation_matrix, dims=ndims(observation_matrix))
 end
 
-function DRiL.act!(env::DRiLMultiAgentRDEEnv{T,A,O,R,V,OBS}, actions::AbstractVector) where {T,A,O,R,V,OBS}
-    combined_action = vcat(actions...)
+function DRiL.act!(env::DRiLMultiAgentRDEEnv{T,A,O,R,V,OBS}, actions::Vector{Vector{T}}) where {T,A,O,R,V,OBS}
+    combined_action = vcat(actions...)::Vector{T}
     rewards = _act!(env.core_env, combined_action)::V
 
     info = env.core_env.info
