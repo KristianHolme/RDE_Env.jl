@@ -183,13 +183,14 @@ function compute_reward(env::RDEEnv{T,A,O,R,V,OBS}, rt::MultiSectionReward) wher
 end
 
 function calculate_periodicity_reward(u::AbstractVector{T}, N::Int, target_shock_count::Int, cache::AbstractVector{T}) where T
+    inv_sqrt_N = 1 / sqrt(N)
     if target_shock_count > 1
         errs = zeros(T, target_shock_count - 1)
         shift_steps = N ÷ target_shock_count
         for i in 1:(target_shock_count-1)
             cache .= u
             circshift!(cache, u, -shift_steps * i)
-            errs[i] = norm(u - cache) / sqrt(N)
+            errs[i] = norm(u - cache) * inv_sqrt_N
         end
         maxerr = maximum(errs)
         periodicity_reward = 1f0 - (max(maxerr - 0.08f0, 0f0) / sqrt(3f0))
@@ -205,7 +206,9 @@ function calculate_shock_reward(shocks::T, target_shock_count::Int, max_shocks::
     return sigmoid_to_linear(shock_reward)
 end
 
+#TODO: dont use shock_indices(performance), use shock_locations instead
 function calculate_shock_rewards(u::AbstractVector{T}, dx::T, L::T, N::Int, target_shock_count::Int) where T<:AbstractFloat
+
     shock_inds = RDE.shock_indices(u, dx)
     shocks = T(length(shock_inds))
     @logmsg LogLevel(-10000) "shocks: $shocks"
@@ -824,7 +827,7 @@ mutable struct ExponentialAverageReward{T<:AbstractRDEReward} <: AbstractRDERewa
     wrapped_reward::T
     α::Float32  # averaging parameter
     average::Union{Nothing,Float32,Vector{Float32}}  # current exponential average
-    
+
     function ExponentialAverageReward(wrapped_reward::T; α::Float32=0.2f0) where T<:AbstractRDEReward
         return new{T}(wrapped_reward, α, nothing)
     end

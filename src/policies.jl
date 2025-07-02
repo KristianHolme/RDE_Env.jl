@@ -243,7 +243,6 @@ function section_reduction(v::Vector{T}, sections::Int) where {T}
     return vec(mean(m, dims=1))
 end
 
-
 function get_env(π::AbstractRDEPolicy)
     if hasfield(typeof(π), :env)
         return getfield(π, :env)

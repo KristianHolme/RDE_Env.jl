@@ -75,11 +75,11 @@ function RDEEnv(;
     init_observation = get_init_observation(observation_strategy, params.N)
     cache = RDEEnvCache{T}(params.N)
     ode_problem = ODEProblem{true,SciMLBase.FullSpecialize}(RDE_RHS!, initial_state, (zero(T), dt), prob)
-    
+
     # Use helper functions to determine type parameters
     V = reward_value_type(T, reward_type)
     OBS = observation_array_type(T, observation_strategy)
-    
+
     # Initialize reward with correct type
     initial_reward = if V <: Vector
         # For multi-section rewards, determine the number of sections
@@ -92,7 +92,7 @@ function RDEEnv(;
     else
         zero(T)
     end
-    
+
     return RDEEnv{T,A,O,R,V,OBS}(prob, initial_state, init_observation,
         dt, T(0.0), false, false, false, initial_reward, smax, u_pmax,
         momentum, τ_smooth, cache,
@@ -124,6 +124,10 @@ Take an action in the environment.
 """
 function _act!(env::RDEEnv{T,A,O,R,V,OBS}, action; saves_per_action::Int=10) where {T,A,O,R,V,OBS}
     t_start = time()
+
+    if env.t > env.prob.params.tmax
+        @warn "t > tmax! ($(env.t) > $(env.prob.params.tmax))"
+    end
     # Store current state before taking action
     @logmsg LogLevel(-10000) "Starting act! for environment on thread $(Threads.threadid())"
     N = env.prob.params.N
