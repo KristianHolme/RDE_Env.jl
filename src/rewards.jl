@@ -955,8 +955,8 @@ function compute_reward(env::RDEEnv{T,A,O,R,V,OBS}, rt::TransitionBasedReward) w
         end
     end
 
-    # Return -1 until transition
-    return T(-1.0)
+    # Return -1*dt until transition
+    return T(-env.dt)
 end
 
 function detect_transition_realtime(rt::TransitionBasedReward, dt::Float32)
