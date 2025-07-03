@@ -4,8 +4,8 @@ using Zygote
 DRiLRDE = Base.get_extension(RDE_Env, :RDE_EnvDRiLExt)
 ##
 function make_RDE_Env(tmax::Float32=50f0, target_shock_count::Int=3)
-    params = RDEParam(;tmax=tmax)
-    env = RDEEnv(params;dt=1f0,
+    params = RDEParam(; tmax=tmax)
+    env = RDEEnv(params; dt=1f0,
         reset_strategy=RandomShock(),
         action_type=ScalarPressureAction(),
         observation_strategy=SectionedStateObservation(target_shock_count=target_shock_count),
@@ -27,7 +27,7 @@ env = MonitorWrapperEnv(env)
 policy = ActorCriticPolicy(observation_space(env), action_space(env))
 agent = ActorCriticAgent(policy; verbose=2, n_steps=4, batch_size=32, learning_rate=3f-4, epochs=10)
 ## train agent
-learn_stats = learn!(agent, env, alg; max_steps=100_000)
+learn_stats = learn!(agent, env, alg, 100_000)
 ## wrap agent in DRiLAgentPolicy
 policy = DRiLRDE.DRiLAgentPolicy(agent, env isa NormalizeWrapperEnv ? env : nothing)
 ## run policy
