@@ -525,6 +525,18 @@ struct PeriodMinimumReward <: CachedCompositeReward
     end
 end
 
+function Base.show(io::IO, rt::PeriodMinimumReward)
+    print(io, "PeriodMinimumReward(target_shock_count=$(rt.target_shock_count))")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", rt::PeriodMinimumReward)
+    println(io, "PeriodMinimumReward:")
+    println(io, "  target_shock_count: $(rt.target_shock_count)")
+    println(io, "  lowest_action_magnitude_reward: $(rt.lowest_action_magnitude_reward)")
+    println(io, "  weights: $(rt.weights)")
+    println(io, "  cache size: $(length(rt.cache))")
+end
+
 function time_minimum_global_reward(env::RDEEnv{T,A,O,R,V,OBS}, rt::CachedCompositeReward) where {T<:AbstractFloat,A,O,R,V,OBS}
     N = env.prob.params.N
     if isnothing(env.prob.sol)
