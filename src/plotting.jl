@@ -320,6 +320,7 @@ function plot_shifted_history(data::PolicyRunData, x::AbstractArray, c=:auto; us
         if saves_per_action > 1
             u_ps = [u_ps[1]; repeat(u_ps[2:end], inner=saves_per_action)]
         end
+        @assert length(u_ps) == length(counts) "length(u_ps) ($(length(u_ps))) != length(counts) ($(length(counts))), saves_per_action: $saves_per_action"
         speeds = RDE.predict_speed.(u_ps, counts)
         c = speeds[1:end-1]
     end
