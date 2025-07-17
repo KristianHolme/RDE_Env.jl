@@ -178,6 +178,9 @@ function _act!(env::RDEEnv{T,A,O,R,V,OBS}, action; saves_per_action::Int=10) whe
         saveat = env.dt / saves_per_action
         sol = OrdinaryDiffEq.solve(env.ode_problem, Tsit5(), saveat=saveat,
             isoutofdomain=RDE.outofdomain, verbose=env.verbose)
+        if length(sol.t) != saves_per_action + 1
+            @debug "length(sol.t) ($(length(sol.t))) != saves_per_action + 1 ($(saves_per_action + 1)), at tspan=$(t_span)"
+        end
     end
 
     #Check termination caused by ODE solver

@@ -145,8 +145,23 @@ function run_policy(policy::AbstractRDEPolicy, env::RDEEnv{T}; saves_per_action=
                 @info "sol is nothing at step $step"
                 @info env.info
             end
-            step_states = env.prob.sol.u[2:end]
-            step_ts = env.prob.sol.t[2:end]
+            if length(env.prob.sol.t) != saves_per_action + 1
+                @debug "length(env.prob.sol.t) ($(length(env.prob.sol.t))) != saves_per_action + 1 ($(saves_per_action + 1))"
+                if env.prob.sol.t[end] - env.prob.sol.t[end-1] < env.dt/10
+                    step_states = env.prob.sol.u[2:end-1]
+                    step_ts = env.prob.sol.t[2:end-1]
+                else
+                    @warn "Too many states, but last two indices are not similar, using all states"
+                    step_states = env.prob.sol.u[2:end]
+                    step_ts = env.prob.sol.t[2:end]
+                end
+            else
+                step_states = env.prob.sol.u[2:end]
+                step_ts = env.prob.sol.t[2:end]
+            end
+            if length(step_states) != saves_per_action
+                @warn "length(step_states) ($(length(step_states))) != saves_per_action ($(saves_per_action))"
+            end
             n_states = length(step_states)
         else
             step_states = [env.state]
@@ -183,11 +198,20 @@ function run_policy(policy::AbstractRDEPolicy, env::RDEEnv{T}; saves_per_action=
     log!(step)
     while !env.done && step < max_steps
         action = _predict_action(policy, _observe(env))
-        _act!(env, action, saves_per_action=saves_per_action)
-        # if env.terminated
-        #     @assert env.done "Env terminated but done is false"
+        _act!(env, action; saves_per_action)
+        if env.terminated
+            @info "Env terminated at step $step"
+            @info env.info
+            if env.done
+                @info "Env done at step $step"
+            end
+            # @assert env.done "Env terminated but done is false"
         #     break
-        # end
+        end
+        if env.truncated
+            @info "Env truncated at step $step"
+            @info env.info
+        end
         step += 1
         log!(step)
     end
