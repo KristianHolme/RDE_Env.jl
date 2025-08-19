@@ -19,7 +19,7 @@ using ProgressMeter
 include("types.jl")
 export AbstractRDEEnv, AbstractActionType, AbstractObservationStrategy, AbstractMultiAgentObservationStrategy,
     AbstractRDEReward
-export action_dim, get_standardized_actions, set_N!
+export action_dim, get_standardized_actions, compute_standard_actions, _reset_action!, set_N!
 export compute_observation, get_init_observation
 export set_reward!
 export RDEEnv, RDEEnvCache
@@ -28,7 +28,7 @@ export sigmoid_to_linear, reward_sigmoid, sigmoid, linear_to_sigmoid
 
 # Actions
 include("actions.jl")
-export ScalarPressureAction, ScalarAreaScalarPressureAction, VectorPressureAction
+export ScalarPressureAction, ScalarAreaScalarPressureAction, VectorPressureAction, PIDAction
 
 # Observation strategies
 include("observations.jl")

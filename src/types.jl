@@ -20,10 +20,29 @@ end
     N::Int = 512 #number of grid points
 end
 
+"""
+    PIDAction <: AbstractActionType
+
+Action type where the agent supplies PID gains `[Kp, Ki, Kd]` and the
+environment produces a scalar pressure action in `[-1, 1]` using a
+built-in PID computation against a target value for the injection pressure.
+
+State for the PID accumulators is stored on the action type and is reset
+on environment reset via `_reset_action!`.
+"""
+@kwdef mutable struct PIDAction <: AbstractActionType
+    N::Int = 512
+    target::Float32 = 0.0f0
+    integral::Float32 = 0.0f0
+    previous_error::Float32 = 0.0f0
+end
+
 
 
 function get_standardized_actions end
 function action_dim end
+function compute_standard_actions end
+function _reset_action! end
 
 
 #Observations

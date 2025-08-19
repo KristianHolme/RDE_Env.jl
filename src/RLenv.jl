@@ -145,7 +145,7 @@ function _act!(env::RDEEnv{T,A,O,R,V,OBS}, action; saves_per_action::Int=10) whe
     c_max = [env.smax, env.u_pmax]
     @logmsg LogLevel(-10000) "Initial controls" prev_controls = prev_controls c_max = c_max
 
-    normalized_standard_actions = get_standardized_actions(env.action_type, action)
+    normalized_standard_actions = compute_standard_actions(env.action_type, action, env)
     env.cache.action[:, 1] = normalized_standard_actions[1]
     env.cache.action[:, 2] = normalized_standard_actions[2]
     @logmsg LogLevel(-10000) "Normalized actions" actions = normalized_standard_actions
@@ -261,6 +261,7 @@ function _reset!(env::RDEEnv{T,A,O,R,V,OBS}) where {T,A,O,R,V,OBS}
     env.info = Dict{String,Any}()
 
     reset_cache!(env.prob.method.cache, τ_smooth=env.τ_smooth, params=env.prob.params)
+    _reset_action!(env.action_type, env)
     env.prob.sol = nothing
     # Initialize previous state
     N = env.prob.params.N
