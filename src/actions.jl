@@ -94,8 +94,8 @@ function compute_standard_actions(action_type::PIDAction, gains::AbstractVector,
     Kp, Ki, Kd = gains
     # Use current observation for u_p feedback; assume first element encodes normalized mean injection pressure in [0, 1]
     # If observation strategy differs, users should adapt this mapping.
-    obs = env.observation
-    u_p = obs[1]
+    # obs = env.observation
+    u_p = mean(env.prob.method.cache.u_p_current)
     error = action_type.target - u_p
     action_type.integral += error * env.dt
     derivative = (error - action_type.previous_error) / env.dt
