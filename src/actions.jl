@@ -1,4 +1,4 @@
-function action_dim(at::ScalarPressureAction) 
+function action_dim(at::ScalarPressureAction)
     return 1
 end
 
@@ -68,16 +68,16 @@ function get_standardized_actions(action_type::VectorPressureAction, action::Vec
     @assert action_type.N > 0 "Action type N not set"
     @assert length(action) == action_type.n_sections "Action length ($(length(action))) must match n_sections ($(action_type.n_sections))"
     @assert action_type.N % action_type.n_sections == 0 "N ($N) must be divisible by n_sections ($(action_type.n_sections))"
-    
+
     # Calculate how many points per section
     points_per_section = action_type.N ÷ action_type.n_sections
-    
+
     # Initialize pressure actions array
     pressure_actions = zeros(action_type.N)
-    
+
     # Fill each section with its corresponding action value
     for i in 1:action_type.n_sections
-        start_idx = (i-1) * points_per_section + 1
+        start_idx = (i - 1) * points_per_section + 1
         end_idx = i * points_per_section
         pressure_actions[start_idx:end_idx] .= action[i]
     end
