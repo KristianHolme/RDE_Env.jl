@@ -882,7 +882,7 @@ end
 """
     TransitionBasedReward{T<:AbstractRDEReward} <: AbstractRDEReward
 
-A reward wrapper that gives -1 reward until a successful transition is detected,
+A reward wrapper that gives -1*dt reward until a successful transition is detected,
 then terminates the environment. Uses transition detection logic similar to detect_transition.
 
 # Fields
@@ -896,7 +896,7 @@ then terminates the environment. Uses transition detection logic similar to dete
 - `transition_found::Bool`: Whether transition has been detected
 
 # Notes
-- Returns -1.0 until transition is found
+- Returns -1.0*dt until transition is found
 - When transition is detected, sets env.terminated = true
 - Transition occurs when: shock count reaches target AND rewards stay above threshold for stability_length time
 """
