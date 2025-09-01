@@ -157,6 +157,7 @@ function _act!(env::RDEEnv{T,A,O,R,V,OBS}, action; saves_per_action::Int=10) whe
         end
         c_prev = c[i]
         c_hat = @. ifelse(a < 0, c_prev .* (a .+ 1), c_prev .+ (c_max[i] .- c_prev) .* a)
+        #FIXME: runtime dispatch below
         c[i] = env.α .* c_prev .+ (1 - env.α) .* c_hat
     end
 
