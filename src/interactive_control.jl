@@ -78,7 +78,7 @@ env, fig = interactive_control(env, show_observations=true)
 - Automatically adapts interface based on the environment's action type
 """
 
-function interactive_control(env::RDEEnv; callback=nothing, show_observations=false)
+function interactive_control(env::RDEEnv; callback=nothing, show_observations=false, dtmax=1.0, kwargs...)
     params = env.prob.params
     N = params.N
     fig = Figure(size=(1200, show_observations ? 900 : 700))
@@ -126,7 +126,7 @@ function interactive_control(env::RDEEnv; callback=nothing, show_observations=fa
         slider_grid = SliderGrid(control_area[1, 1],
             (label="s", range=0:0.001:env.smax, startvalue=control_s[]),
             (label="u_p", range=0:0.001:env.u_pmax, startvalue=control_u_p[]),
-            (label="Δt", range=0:0.001:1, startvalue=time_step[])
+            (label="Δt", range=0:0.001:dtmax, startvalue=time_step[])
         )
 
         sliders = slider_grid.sliders
@@ -160,7 +160,7 @@ function interactive_control(env::RDEEnv; callback=nothing, show_observations=fa
         # Create sliders using SliderGrid
         slider_grid = SliderGrid(control_area[1, 1],
             (label="u_p", range=0:0.001:env.u_pmax, startvalue=control_u_p[]),
-            (label="Δt", range=0:0.001:1, startvalue=time_step[])
+            (label="Δt", range=0:0.001:dtmax, startvalue=time_step[])
         )
 
         sliders = slider_grid.sliders
@@ -204,7 +204,7 @@ function interactive_control(env::RDEEnv; callback=nothing, show_observations=fa
 
         # Create slider configurations
         slider_configs = [(label="u_p_$i", range=0:0.001:env.u_pmax, startvalue=control_u_p_sections[i][]) for i in 1:n_sections]
-        push!(slider_configs, (label="Δt", range=0:0.001:1, startvalue=time_step[]))
+        push!(slider_configs, (label="Δt", range=0:0.001:dtmax, startvalue=time_step[]))
 
         # Create SliderGrid with all section controls plus timestep
         slider_grid = SliderGrid(control_area[1, 1], slider_configs...)
@@ -305,7 +305,8 @@ function interactive_control(env::RDEEnv; callback=nothing, show_observations=fa
         s=action_type isa ScalarAreaScalarPressureAction ? control_s : Observable(params.s),
         u_p=action_type isa ScalarPressureAction ? control_u_p :
             action_type isa ScalarAreaScalarPressureAction ? control_u_p :
-            Observable(params.u_p))
+            Observable(params.u_p),
+        kwargs...)
 
     # Create observation plot if requested
     if show_observations
@@ -379,10 +380,12 @@ function interactive_control(env::RDEEnv; callback=nothing, show_observations=fa
                     if key == Keyboard.up
                         # Increase time step on arrow up
                         time_step[] += get_timestep_scale(time_step.val)
+                        time_step[] = min(time_step[], dtmax)
                         set_close_to!(slider_dt, time_step[])
                     elseif key == Keyboard.down
                         # Decrease time step on arrow down
                         time_step[] -= get_timestep_scale(time_step.val)
+                        time_step[] = max(time_step[], 0.001)
                         set_close_to!(slider_dt, time_step[])
                     elseif key == Keyboard.right
                         try
