@@ -4,10 +4,12 @@ using Observables
 
 
 # Run a stepwise policy that creates different modes with varying shock numbers
-env = RDEEnv(dt=0.2f0);
-π = StepwiseRDEPolicy(env, [20.0f0, 100.0f0, 200.0f0, 350.0f0], 
-[[3.5f0, 0.64f0], [3.5f0, 0.86f0], [3.5f0, 0.64f0], [3.5f0, 0.94f0]]);
-data = run_policy(π, env; tmax=500.0);
+env = RDEEnv(dt = 0.2f0);
+π = StepwiseRDEPolicy(
+    env, [20.0f0, 100.0f0, 200.0f0, 350.0f0],
+    [[3.5f0, 0.64f0], [3.5f0, 0.86f0], [3.5f0, 0.64f0], [3.5f0, 0.94f0]]
+);
+data = run_policy(π, env; tmax = 500.0);
 
 x = env.prob.x
 dx = x[2] - x[1]
@@ -29,17 +31,15 @@ on(shock_ends) do ends
 end
 begin
     fig = Figure()
-    ax = Axis(fig[1, 1], limits=(nothing, (0.0, 3.0)))
-    lines!(ax, x, u, label="u")
-    vlines!(ax, shock_locs, color=:red, label="Shocks", alpha=shocks_alpha, linestyle=:dash)
+    ax = Axis(fig[1, 1], limits = (nothing, (0.0, 3.0)))
+    lines!(ax, x, u, label = "u")
+    vlines!(ax, shock_locs, color = :red, label = "Shocks", alpha = shocks_alpha, linestyle = :dash)
     fig
 end
-
 
 
 # Run through the timeseries
 for i in eachindex(ts)
     time_idx[] = i
-    sleep(1/25)
+    sleep(1 / 25)
 end
-

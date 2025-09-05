@@ -9,15 +9,15 @@ The environment supports two threading modes:
 - THREADS: Uses Base.Threads.@threads for parallelization
 - POLYESTER: Uses Polyester.@batch for parallelization
 """
-mutable struct MultiAgentRDEVecEnv{T<:AbstractFloat} <: AbstractRDEEnv
-    envs::Vector{RDEEnv{T,A,O,R,V,OBS}} where {A<:AbstractActionType,O<:AbstractObservationStrategy, R<:AbstractRDEReward, V, OBS}
+mutable struct MultiAgentRDEVecEnv{T <: AbstractFloat} <: AbstractRDEEnv
+    envs::Vector{RDEEnv{T, A, O, R, V, OBS}} where {A <: AbstractActionType, O <: AbstractObservationStrategy, R <: AbstractRDEReward, V, OBS}
     n_envs::Int
     n_agents_per_env::Int
     observations::Matrix{T}
     rewards::Vector{T}
     dones::Vector{Bool}
-    infos::Vector{Dict{String,Any}}
-    reset_infos::Vector{Dict{String,Any}}
+    infos::Vector{Dict{String, Any}}
+    reset_infos::Vector{Dict{String, Any}}
     threading_mode::ThreadingMode
 end
 
@@ -26,18 +26,18 @@ end
 
 Create a vectorized environment from a vector of environments.
 """
-function MultiAgentRDEVecEnv(envs::Vector{RDEEnv{T}}; threading_mode::ThreadingMode=THREADS) where {T<:AbstractFloat}
+function MultiAgentRDEVecEnv(envs::Vector{RDEEnv{T}}; threading_mode::ThreadingMode = THREADS) where {T <: AbstractFloat}
     n_envs = length(envs)
     obs = _observe(envs[1])
     obs_dim = size(obs, 1)
     n_agents_per_env = size(obs, 2)
-    observations = Matrix{T}(undef, obs_dim, n_envs*n_agents_per_env)
-    rewards = zeros(T, n_envs*n_agents_per_env)
-    dones = fill(false, n_envs*n_agents_per_env)
-    infos = [Dict{String,Any}() for _ in 1:n_envs*n_agents_per_env]
-    reset_infos = [Dict{String,Any}() for _ in 1:n_envs*n_agents_per_env]
-    
-    MultiAgentRDEVecEnv{T}(envs, n_envs, n_agents_per_env, observations, rewards, dones, infos, reset_infos, threading_mode)
+    observations = Matrix{T}(undef, obs_dim, n_envs * n_agents_per_env)
+    rewards = zeros(T, n_envs * n_agents_per_env)
+    dones = fill(false, n_envs * n_agents_per_env)
+    infos = [Dict{String, Any}() for _ in 1:(n_envs * n_agents_per_env)]
+    reset_infos = [Dict{String, Any}() for _ in 1:(n_envs * n_agents_per_env)]
+
+    return MultiAgentRDEVecEnv{T}(envs, n_envs, n_agents_per_env, observations, rewards, dones, infos, reset_infos, threading_mode)
 end
 
 function Base.show(io::IO, env::MultiAgentRDEVecEnv)
@@ -46,16 +46,17 @@ function Base.show(io::IO, env::MultiAgentRDEVecEnv)
         println(io, "  Environment $i:")
         show(io, env.envs[i])
     end
+    return
 end
 
 function env_indices(i::Int, n_agents_per_env::Int)
-    return (1+(i-1)*n_agents_per_env):(i*n_agents_per_env)
+    return (1 + (i - 1) * n_agents_per_env):(i * n_agents_per_env)
 end
 
 function _reset!(env::MultiAgentRDEVecEnv)
     num_agents = env.n_agents_per_env
     num_envs = env.n_envs
-    
+
     # Choose threading macro based on mode
     if env.threading_mode == THREADS
         Threads.@threads for i in 1:num_envs
@@ -66,27 +67,27 @@ function _reset!(env::MultiAgentRDEVecEnv)
             reset_single_env!(env, i, num_agents)
         end
     end
-    nothing
+    return nothing
 end
 
 # Helper function to reset a single environment
 function reset_single_env!(env::MultiAgentRDEVecEnv, i::Int, num_agents::Int)
     _reset!(env.envs[i])
     env.observations[:, env_indices(i, num_agents)] .= _observe(env.envs[i])
-    env.reset_infos[i] = Dict{String,Any}()
+    return env.reset_infos[i] = Dict{String, Any}()
 end
 
 function _observe(env::MultiAgentRDEVecEnv)
-    copy(env.observations)
+    return copy(env.observations)
 end
 
 function _act!(env::MultiAgentRDEVecEnv, actions::AbstractArray)
     num_agents = env.n_agents_per_env
     num_envs = env.n_envs
-    @assert length(actions) == num_envs*num_agents
+    @assert length(actions) == num_envs * num_agents
     actions = reshape(actions, num_agents, num_envs)
     @logmsg LogLevel(-10000) "VecEnv act! starting threaded loop, actions size: $(size(actions))"
-    
+
     # Choose threading macro based on mode
     if env.threading_mode == THREADS
         Threads.@threads for i in 1:num_envs
@@ -97,8 +98,8 @@ function _act!(env::MultiAgentRDEVecEnv, actions::AbstractArray)
             act_single_env!(env, i, num_agents, actions)
         end
     end
-    
-    copy(env.rewards)
+
+    return copy(env.rewards)
 end
 
 # Helper function to act on a single environment
@@ -108,7 +109,7 @@ function act_single_env!(env::MultiAgentRDEVecEnv, i::Int, num_agents::Int, acti
     @logmsg LogLevel(-10000) "action size: $(size(actions))"
     env.rewards[env_inds] = _act!(env.envs[i], @view actions[:, i])
     @logmsg LogLevel(-10000) "VecEnv act! done with env $i, starting termination check"
-    
+
     # Check termination
     if env.envs[i].terminated || env.envs[i].truncated
         env.dones[env_inds] .= true
@@ -123,11 +124,11 @@ function act_single_env!(env::MultiAgentRDEVecEnv, i::Int, num_agents::Int, acti
         env.dones[env_inds] .= false
         empty!.(env.infos[env_inds])
     end
-    
+
     # Update observation
     @logmsg LogLevel(-10000) "VecEnv act! done with env $i, starting observation update"
     env.observations[:, env_indices(i, num_agents)] .= _observe(env.envs[i])
-    @logmsg LogLevel(-10000) "VecEnv act! done with env $i, observation update done"
+    return @logmsg LogLevel(-10000) "VecEnv act! done with env $i, observation update done"
 end
 
 """
@@ -144,6 +145,6 @@ function step!(env::MultiAgentRDEVecEnv, actions::AbstractArray)
         _observe(env),
         copy(env.rewards),
         copy(env.dones),
-        copy(env.infos)
+        copy(env.infos),
     )
 end 

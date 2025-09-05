@@ -46,27 +46,28 @@ env = RDEEnv(dt=5.0, smax=3.0)
 """
 
 function RDEEnv(;
-    dt=1.0f0,
-    smax=4.0f0,
-    u_pmax=1.2f0,
-    params::RDEParam{T}=RDEParam(),
-    momentum=0.0f0,
-    τ_smooth=0.1f0,
-    action_type::A=ScalarPressureAction(),
-    observation_strategy::O=SectionedStateObservation(),
-    reward_type::R=PeriodMinimumReward(),
-    verbose::Bool=false,
-    kwargs...) where {T<:AbstractFloat,A<:AbstractActionType,O<:AbstractObservationStrategy,R<:AbstractRDEReward}
+        dt = 1.0f0,
+        smax = 4.0f0,
+        u_pmax = 1.2f0,
+        params::RDEParam{T} = RDEParam(),
+        momentum = 0.0f0,
+        τ_smooth = 0.1f0,
+        action_type::A = ScalarPressureAction(),
+        observation_strategy::O = SectionedStateObservation(),
+        reward_type::R = PeriodMinimumReward(),
+        verbose::Bool = false,
+        kwargs...
+    ) where {T <: AbstractFloat, A <: AbstractActionType, O <: AbstractObservationStrategy, R <: AbstractRDEReward}
 
     if τ_smooth > dt
         @warn "τ_smooth > dt, this will cause discontinuities in the control signal"
-        @info "Setting τ_smooth = $(dt/8)"
+        @info "Setting τ_smooth = $(dt / 8)"
         τ_smooth = dt / 8
     end
 
     prob = RDEProblem(params; kwargs...)
     RDE.reset_state_and_pressure!(prob, prob.reset_strategy)
-    reset_cache!(prob.method.cache, τ_smooth=τ_smooth, params=params)
+    reset_cache!(prob.method.cache, τ_smooth = τ_smooth, params = params)
 
     # Set N in action_type
     set_N!(action_type, params.N)
@@ -74,7 +75,7 @@ function RDEEnv(;
     initial_state = vcat(prob.u0, prob.λ0)
     init_observation = get_init_observation(observation_strategy, params.N)
     cache = RDEEnvCache{T}(params.N)
-    ode_problem = ODEProblem{true,SciMLBase.FullSpecialize}(RDE_RHS!, initial_state, (zero(T), dt), prob)
+    ode_problem = ODEProblem{true, SciMLBase.FullSpecialize}(RDE_RHS!, initial_state, (zero(T), dt), prob)
 
     # Use helper functions to determine type parameters
     V = reward_value_type(T, reward_type)
@@ -93,14 +94,16 @@ function RDEEnv(;
         zero(T)
     end
 
-    return RDEEnv{T,A,O,R,V,OBS}(prob, initial_state, init_observation,
+    return RDEEnv{T, A, O, R, V, OBS}(
+        prob, initial_state, init_observation,
         dt, T(0.0), false, false, false, initial_reward, smax, u_pmax,
         momentum, τ_smooth, cache,
         action_type, observation_strategy,
-        reward_type, verbose, Dict{String,Any}(), 0, ode_problem)
+        reward_type, verbose, Dict{String, Any}(), 0, ode_problem
+    )
 end
 
-RDEEnv(params::RDEParam{T}; kwargs...) where {T<:AbstractFloat} = RDEEnv(; params=params, kwargs...)
+RDEEnv(params::RDEParam{T}; kwargs...) where {T <: AbstractFloat} = RDEEnv(; params = params, kwargs...)
 
 _observe(env::RDEEnv) = copy(env.observation)
 
@@ -122,7 +125,7 @@ Take an action in the environment.
 - Handles smooth control transitions
 - Supports multiple action types
 """
-function _act!(env::RDEEnv{T,A,O,R,V,OBS}, action; saves_per_action::Int=10) where {T,A,O,R,V,OBS}
+function _act!(env::RDEEnv{T, A, O, R, V, OBS}, action; saves_per_action::Int = 10) where {T, A, O, R, V, OBS}
     t_start = time()
 
     if env.t > env.prob.params.tmax
@@ -132,7 +135,7 @@ function _act!(env::RDEEnv{T,A,O,R,V,OBS}, action; saves_per_action::Int=10) whe
     @logmsg LogLevel(-10000) "Starting act! for environment on thread $(Threads.threadid())"
     N = env.prob.params.N
     env.cache.prev_u .= @view env.state[1:N]
-    env.cache.prev_λ .= @view env.state[N+1:end]
+    env.cache.prev_λ .= @view env.state[(N + 1):end]
     @logmsg LogLevel(-10000) "Stored previous state" prev_u = env.cache.prev_u prev_λ = env.cache.prev_λ
 
     t_span = (env.t, env.t + env.dt)
@@ -170,15 +173,19 @@ function _act!(env::RDEEnv{T,A,O,R,V,OBS}, action; saves_per_action::Int=10) whe
 
     #TODO use remake instead of recreating ??
     # prob_ode = ODEProblem{true, SciMLBase.FullSpecialize}(RDE_RHS!, env.state, t_span, env.prob)
-    env.ode_problem = remake(env.ode_problem, u0=env.state, tspan=t_span)
+    env.ode_problem = remake(env.ode_problem, u0 = env.state, tspan = t_span)
 
     if saves_per_action == 0
-        sol = OrdinaryDiffEq.solve(env.ode_problem, Tsit5(), save_on=false,
-            isoutofdomain=RDE.outofdomain, verbose=env.verbose)
+        sol = OrdinaryDiffEq.solve(
+            env.ode_problem, Tsit5(), save_on = false,
+            isoutofdomain = RDE.outofdomain, verbose = env.verbose
+        )
     else
         saveat = env.dt / saves_per_action
-        sol = OrdinaryDiffEq.solve(env.ode_problem, Tsit5(), saveat=saveat,
-            isoutofdomain=RDE.outofdomain, verbose=env.verbose)
+        sol = OrdinaryDiffEq.solve(
+            env.ode_problem, Tsit5(), saveat = saveat,
+            isoutofdomain = RDE.outofdomain, verbose = env.verbose
+        )
         if length(sol.t) != saves_per_action + 1
             @debug "length(sol.t) ($(length(sol.t))) != saves_per_action + 1 ($(saves_per_action + 1)), at tspan=$(t_span)"
         end
@@ -228,7 +235,7 @@ function _act!(env::RDEEnv{T,A,O,R,V,OBS}, action; saves_per_action::Int=10) whe
     @logmsg LogLevel(-10000) "End of step reward: $(env.reward)"
     t_end = time()
     t_elapsed = t_end - t_start
-    @debug "act! took $(round(t_elapsed*1000, digits=3)) ms"
+    @debug "act! took $(round(t_elapsed * 1000, digits = 3)) ms"
     return env.reward
 end
 
@@ -247,7 +254,7 @@ Reset the environment to its initial state.
 - Resets control parameters to initial values
 - Initializes previous state tracking
 """
-function _reset!(env::RDEEnv{T,A,O,R,V,OBS}) where {T,A,O,R,V,OBS}
+function _reset!(env::RDEEnv{T, A, O, R, V, OBS}) where {T, A, O, R, V, OBS}
     env.t = 0
     RDE.reset_state_and_pressure!(env.prob, env.prob.reset_strategy)
     env.state = vcat(env.prob.u0, env.prob.λ0)
@@ -259,22 +266,22 @@ function _reset!(env::RDEEnv{T,A,O,R,V,OBS}) where {T,A,O,R,V,OBS}
     reset_reward!(env.reward_type)  # Reset reward state (e.g., exponential averages)
     set_reward!(env, env.reward_type)
     env.observation .= compute_observation(env, env.observation_strategy)::OBS
-    env.info = Dict{String,Any}()
+    env.info = Dict{String, Any}()
 
-    reset_cache!(env.prob.method.cache, τ_smooth=env.τ_smooth, params=env.prob.params)
+    reset_cache!(env.prob.method.cache, τ_smooth = env.τ_smooth, params = env.prob.params)
     _reset_action!(env.action_type, env)
     env.prob.sol = nothing
     # Initialize previous state
     N = env.prob.params.N
     env.cache.prev_u .= @view env.state[1:N]
-    env.cache.prev_λ .= @view env.state[N+1:end]
+    env.cache.prev_λ .= @view env.state[(N + 1):end]
 
-    nothing
+    return nothing
 end
 
-function set_termination_reward!(env::RDEEnv{T,A,O,R,V,OBS}, value::Number) where {T,A,O,R,V<:Vector,OBS}
-    fill!(env.reward, T(value))
+function set_termination_reward!(env::RDEEnv{T, A, O, R, V, OBS}, value::Number) where {T, A, O, R, V <: Vector, OBS}
+    return fill!(env.reward, T(value))
 end
-function set_termination_reward!(env::RDEEnv{T,A,O,R,V,OBS}, value::Number) where {T,A,O,R,V<:Number,OBS}
-    env.reward = T(value)
+function set_termination_reward!(env::RDEEnv{T, A, O, R, V, OBS}, value::Number) where {T, A, O, R, V <: Number, OBS}
+    return env.reward = T(value)
 end

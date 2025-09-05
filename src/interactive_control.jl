@@ -78,10 +78,10 @@ env, fig = interactive_control(env, show_observations=true)
 - Automatically adapts interface based on the environment's action type
 """
 
-function interactive_control(env::RDEEnv; callback=nothing, show_observations=false, dtmax=1.0, kwargs...)
+function interactive_control(env::RDEEnv; callback = nothing, show_observations = false, dtmax = 1.0, kwargs...)
     params = env.prob.params
     N = params.N
-    fig = Figure(size=(1200, show_observations ? 900 : 700))
+    fig = Figure(size = (1200, show_observations ? 900 : 700))
     upper_area = fig[1, 1] = GridLayout()
     plotting_area = fig[2, 1] = GridLayout()
     energy_area = fig[3, 1][1, 1] = GridLayout()
@@ -89,7 +89,7 @@ function interactive_control(env::RDEEnv; callback=nothing, show_observations=fa
 
     # Observables for real-time plotting
     u_data = Observable(env.state[1:N])
-    λ_data = Observable(env.state[N+1:end])
+    λ_data = Observable(env.state[(N + 1):end])
     u_max = @lift(maximum($u_data))
     obs_data = show_observations ? Observable(_observe(env)) : nothing
 
@@ -123,10 +123,11 @@ function interactive_control(env::RDEEnv; callback=nothing, show_observations=fa
         end
 
         # Create sliders using SliderGrid
-        slider_grid = SliderGrid(control_area[1, 1],
-            (label="s", range=0:0.001:env.smax, startvalue=control_s[]),
-            (label="u_p", range=0:0.001:env.u_pmax, startvalue=control_u_p[]),
-            (label="Δt", range=0:0.001:dtmax, startvalue=time_step[])
+        slider_grid = SliderGrid(
+            control_area[1, 1],
+            (label = "s", range = 0:0.001:env.smax, startvalue = control_s[]),
+            (label = "u_p", range = 0:0.001:env.u_pmax, startvalue = control_u_p[]),
+            (label = "Δt", range = 0:0.001:dtmax, startvalue = time_step[])
         )
 
         sliders = slider_grid.sliders
@@ -158,9 +159,10 @@ function interactive_control(env::RDEEnv; callback=nothing, show_observations=fa
         end
 
         # Create sliders using SliderGrid
-        slider_grid = SliderGrid(control_area[1, 1],
-            (label="u_p", range=0:0.001:env.u_pmax, startvalue=control_u_p[]),
-            (label="Δt", range=0:0.001:dtmax, startvalue=time_step[])
+        slider_grid = SliderGrid(
+            control_area[1, 1],
+            (label = "u_p", range = 0:0.001:env.u_pmax, startvalue = control_u_p[]),
+            (label = "Δt", range = 0:0.001:dtmax, startvalue = time_step[])
         )
 
         sliders = slider_grid.sliders
@@ -194,6 +196,7 @@ function interactive_control(env::RDEEnv; callback=nothing, show_observations=fa
                 end_idx = i * points_per_section
                 env.prob.method.cache.u_p_current[start_idx:end_idx] .= control_u_p_sections[i][]
             end
+            return
         end
 
         for i in 1:n_sections
@@ -203,8 +206,8 @@ function interactive_control(env::RDEEnv; callback=nothing, show_observations=fa
         end
 
         # Create slider configurations
-        slider_configs = [(label="u_p_$i", range=0:0.001:env.u_pmax, startvalue=control_u_p_sections[i][]) for i in 1:n_sections]
-        push!(slider_configs, (label="Δt", range=0:0.001:dtmax, startvalue=time_step[]))
+        slider_configs = [(label = "u_p_$i", range = 0:0.001:env.u_pmax, startvalue = control_u_p_sections[i][]) for i in 1:n_sections]
+        push!(slider_configs, (label = "Δt", range = 0:0.001:dtmax, startvalue = time_step[]))
 
         # Create SliderGrid with all section controls plus timestep
         slider_grid = SliderGrid(control_area[1, 1], slider_configs...)
@@ -233,8 +236,8 @@ function interactive_control(env::RDEEnv; callback=nothing, show_observations=fa
 
     # Add control buttons
     button_area = control_area[2, 1] = GridLayout()
-    step_button = Button(button_area[1, 1], label="Step", tellwidth=false)
-    reset_button = Button(button_area[1, 2], label="Reset", tellwidth=false)
+    step_button = Button(button_area[1, 1], label = "Step", tellwidth = false)
+    reset_button = Button(button_area[1, 2], label = "Reset", tellwidth = false)
 
     time = Observable(env.t)
 
@@ -243,9 +246,9 @@ function interactive_control(env::RDEEnv; callback=nothing, show_observations=fa
     """
     function update_observables!()
         u_data[] = env.state[1:N]
-        λ_data[] = env.state[N+1:end]
+        λ_data[] = env.state[(N + 1):end]
         time[] = env.t
-        if show_observations
+        return if show_observations
             obs_data[] = _observe(env)
         end
     end
@@ -300,13 +303,15 @@ function interactive_control(env::RDEEnv; callback=nothing, show_observations=fa
     end
 
     # Create main visualization
-    RDE.main_plotting(plotting_area, env.prob.x, u_data, λ_data, env.prob.params;
-        u_max=u_max,
-        s=action_type isa ScalarAreaScalarPressureAction ? control_s : Observable(params.s),
-        u_p=action_type isa ScalarPressureAction ? control_u_p :
+    RDE.main_plotting(
+        plotting_area, env.prob.x, u_data, λ_data, env.prob.params;
+        u_max = u_max,
+        s = action_type isa ScalarAreaScalarPressureAction ? control_s : Observable(params.s),
+        u_p = action_type isa ScalarPressureAction ? control_u_p :
             action_type isa ScalarAreaScalarPressureAction ? control_u_p :
             Observable(params.u_p),
-        kwargs...)
+        kwargs...
+    )
 
     # Create observation plot if requested
     if show_observations
@@ -315,14 +320,14 @@ function interactive_control(env::RDEEnv; callback=nothing, show_observations=fa
         # Check if observations are vectors or matrices (consistent with plot_policy_data)
         if typeof(_observe(env)) <: AbstractVector
             # Vector observations: use barplot
-            ax_obs = Axis(obs_area[1, 1], title="Observations")
+            ax_obs = Axis(obs_area[1, 1], title = "Observations")
             barplot!(ax_obs, obs_data)
             on(obs_data) do obs
                 ylims!(ax_obs, (min(-1.0, minimum(obs)), max(1.0, maximum(obs))))
             end
         else
-            # Matrix observations: use heatmap  
-            ax_obs = Axis(obs_area[1, 1], title="Observations", xlabel="index", ylabel="Agent")
+            # Matrix observations: use heatmap
+            ax_obs = Axis(obs_area[1, 1], title = "Observations", xlabel = "index", ylabel = "Agent")
             heatmap!(ax_obs, 1:size(_observe(env), 1), 1:size(_observe(env), 2), obs_data)
         end
         colsize!(obs_area, 1, Auto(0.3))
@@ -350,7 +355,7 @@ function interactive_control(env::RDEEnv; callback=nothing, show_observations=fa
 
     # Reward plot with auto-scaling
     reward_start_xmax = 0.5
-    ax_reward = Axis(energy_area[1, 1], title="Reward", xlabel="t", ylabel="r", limits=(0, reward_start_xmax, nothing, nothing))
+    ax_reward = Axis(energy_area[1, 1], title = "Reward", xlabel = "t", ylabel = "r", limits = (0, reward_start_xmax, nothing, nothing))
     lines!(ax_reward, reward_pts)
     on(reward_pts) do _
         y_vals = getindex.(reward_pts[], 2)
@@ -478,10 +483,11 @@ function interactive_control(env::RDEEnv; callback=nothing, show_observations=fa
             end
             sleep(0.1)  # Control loop rate
         end
+        return
     end
 
     # Time label
-    label = Label(upper_area[1, 1], text=@lift("Time: $(round($time, digits=2))"), tellwidth=false)
+    label = Label(upper_area[1, 1], text = @lift("Time: $(round($time, digits = 2))"), tellwidth = false)
 
     display(fig)
     @async key_action_loop()

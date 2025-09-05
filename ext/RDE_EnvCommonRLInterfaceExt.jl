@@ -29,7 +29,7 @@ function CommonRLInterface.clone(env::CommonRDEEnv)
 end
 
 function CommonRLInterface.setstate!(env::CommonRDEEnv, s)
-    env.core_env.state = s[1:end-1]
-    env.core_env.t = s[end]
+    env.core_env.state = s[1:(end - 1)]
+    return env.core_env.t = s[end]
 end
 end

@@ -43,7 +43,7 @@ its own specific version.
 """
 function get_standardized_actions(action_type::AbstractActionType, action)
     @assert action_type.N > 0 "Action type N not set"
-    @warn "get_standardized_actions is not implemented for action_type $action_type"
+    return @warn "get_standardized_actions is not implemented for action_type $action_type"
 end
 
 
@@ -55,7 +55,7 @@ end
 
 
 function get_standardized_actions(action_type::ScalarPressureAction, action::AbstractArray)
-    get_standardized_actions(action_type, action[1])
+    return get_standardized_actions(action_type, action[1])
 end
 
 function get_standardized_actions(action_type::ScalarPressureAction, action::Number)
@@ -102,7 +102,7 @@ function compute_standard_actions(action_type::PIDAction, gains::AbstractVector,
     u_p_action = Kp * error + Ki * action_type.integral + Kd * derivative
     action_type.previous_error = error
     # Clamp to normalized action range
-    u_p_action = clamp(u_p_action, -1f0, 1f0)
+    u_p_action = clamp(u_p_action, -1.0f0, 1.0f0)
     return [zeros(action_type.N), fill(u_p_action, action_type.N)]
 end
 
@@ -116,5 +116,5 @@ _reset_action!(::AbstractActionType, ::RDEEnv) = nothing
 function _reset_action!(action_type::PIDAction, ::RDEEnv)
     action_type.integral = 0.0f0
     action_type.previous_error = 0.0f0
-    nothing
+    return nothing
 end

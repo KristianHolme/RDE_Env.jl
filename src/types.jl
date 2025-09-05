@@ -8,15 +8,13 @@ abstract type AbstractActionType end
 end
 
 
-
 @kwdef mutable struct ScalarAreaScalarPressureAction <: AbstractActionType
     N::Int = 512 #number of grid points
 end
 
 
-
 @kwdef mutable struct VectorPressureAction <: AbstractActionType
-    n_sections::Int = 1 #number of sections 
+    n_sections::Int = 1 #number of sections
     N::Int = 512 #number of grid points
 end
 
@@ -38,7 +36,6 @@ on environment reset via `_reset_action!`.
 end
 
 
-
 function get_standardized_actions end
 function action_dim end
 function compute_standard_actions end
@@ -57,9 +54,7 @@ struct FourierObservation <: AbstractObservationStrategy
 end
 
 
-
 struct StateObservation <: AbstractObservationStrategy end
-
 
 
 @kwdef struct SectionedStateObservation <: AbstractObservationStrategy
@@ -68,14 +63,9 @@ struct StateObservation <: AbstractObservationStrategy end
 end
 
 
-
 struct SampledStateObservation <: AbstractObservationStrategy
     n_samples::Int
 end
-
-
-
-
 
 
 #Rewards
@@ -98,16 +88,17 @@ end
     span_scale::Float32 = 4.0f0
     shock_weight::Float32 = 0.8f0
     abscence_limit::Float32 = 5.0f0
-    abscence_start::Union{Float32,Nothing} = nothing
+    abscence_start::Union{Float32, Nothing} = nothing
 end
-
 
 
 mutable struct ShockPreservingSymmetryReward <: AbstractRDEReward
     target_shock_count::Int
     cache::Vector{Float32}
-    function ShockPreservingSymmetryReward(; target_shock_count::Int=4,
-        N::Int=512)
+    function ShockPreservingSymmetryReward(;
+            target_shock_count::Int = 4,
+            N::Int = 512
+        )
         return new(target_shock_count, zeros(Float32, N))
     end
 end
@@ -115,7 +106,7 @@ end
 
 mutable struct PeriodicityReward <: AbstractRDEReward
     cache::Vector{Float32}
-    function PeriodicityReward(; N::Int=512)
+    function PeriodicityReward(; N::Int = 512)
         return new(zeros(Float32, N))
     end
 end
@@ -135,13 +126,13 @@ Cache for RDE environment computations and state tracking.
 - `prev_u::Vector{T}`: Previous velocity field
 - `prev_λ::Vector{T}`: Previous reaction progress
 """
-mutable struct RDEEnvCache{T<:AbstractFloat}#TODO remove circ
-    circ_u::CircularVector{T,Vector{T}}
-    circ_λ::CircularVector{T,Vector{T}}
+mutable struct RDEEnvCache{T <: AbstractFloat} #TODO remove circ
+    circ_u::CircularVector{T, Vector{T}}
+    circ_λ::CircularVector{T, Vector{T}}
     prev_u::Vector{T}  # Previous step's u values
     prev_λ::Vector{T}  # Previous step's λ values
     action::Matrix{T} # column 1 = s action, column 2 = u_p action
-    function RDEEnvCache{T}(N::Int) where {T<:AbstractFloat}
+    function RDEEnvCache{T}(N::Int) where {T <: AbstractFloat}
         # Initialize all arrays with zeros instead of undefined values
         circ_u = CircularArray(zeros(T, N))
         circ_λ = CircularArray(zeros(T, N))
@@ -153,7 +144,7 @@ mutable struct RDEEnvCache{T<:AbstractFloat}#TODO remove circ
 end
 
 #TODO_is it necessary to parametrize by A, O, R?
-mutable struct RDEEnv{T,A,O,R,V,OBS} <: AbstractRDEEnv where {T<:AbstractFloat,A<:AbstractActionType,O<:AbstractObservationStrategy,R<:AbstractRDEReward,V<:Union{T,Vector{T}},OBS<:AbstractArray{T}}
+mutable struct RDEEnv{T, A, O, R, V, OBS} <: AbstractRDEEnv where {T <: AbstractFloat, A <: AbstractActionType, O <: AbstractObservationStrategy, R <: AbstractRDEReward, V <: Union{T, Vector{T}}, OBS <: AbstractArray{T}}
     prob::RDEProblem                  # RDE problem
     state::Vector{T}
     observation::OBS
@@ -172,9 +163,9 @@ mutable struct RDEEnv{T,A,O,R,V,OBS} <: AbstractRDEEnv where {T<:AbstractFloat,A
     observation_strategy::O
     reward_type::R
     verbose::Bool               # Control solver output
-    info::Dict{String,Any}
+    info::Dict{String, Any}
     steps_taken::Int
-    ode_problem::Union{Nothing,ODEProblem}
+    ode_problem::Union{Nothing, ODEProblem}
 end
 
 # Helper functions to determine observation array type

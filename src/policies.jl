@@ -20,22 +20,22 @@ Container for data collected during policy execution.
 - `state_ts::Vector{T}`: Time points for states
 - `states::Vector{Vector{T}}`: States at each time point
 """
-struct PolicyRunData{T<:AbstractFloat}
+struct PolicyRunData{T <: AbstractFloat}
     action_ts::Vector{T} #time points for actions
-    ss::Union{Vector{T},Vector{Vector{T}}} #control parameter s at each action
-    u_ps::Union{Vector{T},Vector{Vector{T}}} #control parameter u_p at each action
-    rewards::Union{Vector{T},Vector{Vector{T}}} #rewards at each action
+    ss::Union{Vector{T}, Vector{Vector{T}}} #control parameter s at each action
+    u_ps::Union{Vector{T}, Vector{Vector{T}}} #control parameter u_p at each action
+    rewards::Union{Vector{T}, Vector{Vector{T}}} #rewards at each action
     energy_bal::Vector{T} #energy balance at each state
     chamber_p::Vector{T} #chamber pressure at each state
     state_ts::Vector{T} #time points for states
     states::Vector{Vector{T}} #states at each time point
-    observations::Union{Union{Vector{Vector{T}},Vector{Matrix{T}}},Vector{Union{Vector{T},Matrix{T}}}} #observations at each time point
+    observations::Union{Union{Vector{Vector{T}}, Vector{Matrix{T}}}, Vector{Union{Vector{T}, Matrix{T}}}} #observations at each time point
     # TODO:  change last type to just Union{Union{Vector{Vector{T}}, Vector{Matrix{T}}}??
 end
 
 function Base.show(io::IO, data::PolicyRunData)
     # Compact display
-    if length(data.action_ts) == length(data.state_ts)
+    return if length(data.action_ts) == length(data.state_ts)
         print(io, "PolicyRunData(steps: $(length(data.action_ts)))")
     else
         print(io, "PolicyRunData(steps: $(length(data.action_ts)), states: $(length(data.state_ts)))")
@@ -53,7 +53,7 @@ function Base.show(io::IO, ::MIME"text/plain", data::PolicyRunData)
     println(io, "  chamber_p: $(typeof(data.chamber_p))($(length(data.chamber_p)))")
     println(io, "  state_ts: $(typeof(data.state_ts))($(length(data.state_ts)))")
     println(io, "  states: $(typeof(data.states))($(length(data.states)))")
-    println(io, "  observations: $(typeof(data.observations))($(length(data.observations)))")
+    return println(io, "  observations: $(typeof(data.observations))($(length(data.observations)))")
 end
 
 """
@@ -84,7 +84,7 @@ policy = ConstantRDEPolicy(env)
 data = run_policy(policy, env, saves_per_action=10)
 ```
 """
-function run_policy(policy::AbstractRDEPolicy, env::RDEEnv{T}; saves_per_action=10) where {T}
+function run_policy(policy::AbstractRDEPolicy, env::RDEEnv{T}; saves_per_action = 10) where {T}
     _reset!(env)
     dt = env.dt
     max_steps = ceil(env.prob.params.tmax / dt) + 2 |> Int # +1 for initial state, +1 for overshoot
@@ -147,9 +147,9 @@ function run_policy(policy::AbstractRDEPolicy, env::RDEEnv{T}; saves_per_action=
             end
             if length(env.prob.sol.t) != saves_per_action + 1
                 @debug "length(env.prob.sol.t) ($(length(env.prob.sol.t))) != saves_per_action + 1 ($(saves_per_action + 1))"
-                if env.prob.sol.t[end] - env.prob.sol.t[end-1] < env.dt / 10
-                    step_states = env.prob.sol.u[2:end-1]
-                    step_ts = env.prob.sol.t[2:end-1]
+                if env.prob.sol.t[end] - env.prob.sol.t[end - 1] < env.dt / 10
+                    step_states = env.prob.sol.u[2:(end - 1)]
+                    step_ts = env.prob.sol.t[2:(end - 1)]
                 else
                     @warn "Too many states, but last two indices are not similar, using all states"
                     step_states = env.prob.sol.u[2:end]
@@ -192,7 +192,7 @@ function run_policy(policy::AbstractRDEPolicy, env::RDEEnv{T}; saves_per_action=
         energy_bal[start_idx:end_idx] = energy_balance.(step_states, Ref(env.prob.params))
         chamber_p[start_idx:end_idx] = chamber_pressure.(step_states, Ref(env.prob.params))
 
-        total_state_steps += n_states
+        return total_state_steps += n_states
     end
 
     log!(step)
@@ -217,15 +217,15 @@ function run_policy(policy::AbstractRDEPolicy, env::RDEEnv{T}; saves_per_action=
     end
 
     # Trim arrays to actual size
-    ts = ts[1:step+1]
-    ss = ss[1:step+1]
-    u_ps = u_ps[1:step+1]
-    rewards = rewards[1:step+1]
+    ts = ts[1:(step + 1)]
+    ss = ss[1:(step + 1)]
+    u_ps = u_ps[1:(step + 1)]
+    rewards = rewards[1:(step + 1)]
     energy_bal = energy_bal[1:total_state_steps]
     chamber_p = chamber_p[1:total_state_steps]
     state_ts = state_ts[1:total_state_steps]
     states = states[1:total_state_steps]
-    observations = observations[1:step+1]
+    observations = observations[1:(step + 1)]
 
     return PolicyRunData{T}(ts, ss, u_ps, rewards, energy_bal, chamber_p, state_ts, states, observations)
 end
@@ -264,7 +264,7 @@ function section_reduction(v::Vector{T}, sections::Int) where {T}
     end
     section_length = Int(round(N // sections))
     m = reshape(v, section_length, :)
-    return vec(mean(m, dims=1))
+    return vec(mean(m, dims = 1))
 end
 
 function get_env(π::AbstractRDEPolicy)
@@ -289,7 +289,7 @@ Returns 0.0 for ScalarPressureAction
 """
 struct ConstantRDEPolicy <: AbstractRDEPolicy
     env::RDEEnv
-    ConstantRDEPolicy(env::RDEEnv=RDEEnv()) = new(env)
+    ConstantRDEPolicy(env::RDEEnv = RDEEnv()) = new(env)
 end
 
 function _predict_action(π::ConstantRDEPolicy, s)
@@ -303,12 +303,12 @@ function _predict_action(π::ConstantRDEPolicy, s)
 end
 
 function Base.show(io::IO, π::ConstantRDEPolicy)
-    print(io, "ConstantRDEPolicy()")
+    return print(io, "ConstantRDEPolicy()")
 end
 
 function Base.show(io::IO, ::MIME"text/plain", π::ConstantRDEPolicy)
     println(io, "ConstantRDEPolicy:")
-    println(io, "  env: $(typeof(π.env))")
+    return println(io, "  env: $(typeof(π.env))")
 end
 
 """
@@ -326,13 +326,13 @@ Policy that applies sinusoidal control signals.
 SinusoidalRDEPolicy(env::RDEEnv{T}; w_1::T=1.0, w_2::T=2.0) where {T<:AbstractFloat}
 ```
 """
-struct SinusoidalRDEPolicy{T<:AbstractFloat} <: AbstractRDEPolicy
+struct SinusoidalRDEPolicy{T <: AbstractFloat} <: AbstractRDEPolicy
     env::RDEEnv{T}
     w_1::T
     w_2::T
     scale::T
-    function SinusoidalRDEPolicy(env::RDEEnv{T}; w_1::T=1.0, w_2::T=2.0) where {T<:AbstractFloat}
-        new{T}(env, w_1, w_2)
+    function SinusoidalRDEPolicy(env::RDEEnv{T}; w_1::T = 1.0, w_2::T = 2.0) where {T <: AbstractFloat}
+        return new{T}(env, w_1, w_2)
     end
 end
 
@@ -350,14 +350,14 @@ function _predict_action(π::SinusoidalRDEPolicy, s)
 end
 
 function Base.show(io::IO, π::SinusoidalRDEPolicy)
-    print(io, "SinusoidalRDEPolicy()")
+    return print(io, "SinusoidalRDEPolicy()")
 end
 
 function Base.show(io::IO, ::MIME"text/plain", π::SinusoidalRDEPolicy)
     println(io, "SinusoidalRDEPolicy:")
     println(io, "  w₁: $(π.w_1)")
     println(io, "  w₂: $(π.w_2)")
-    println(io, "  env: $(typeof(π.env))")
+    return println(io, "  env: $(typeof(π.env))")
 end
 
 """
@@ -375,12 +375,12 @@ Policy that applies predefined control values at specified times.
 - Requires sorted time steps
 - Each control action must have 2 elements
 """
-struct StepwiseRDEPolicy{T<:AbstractFloat} <: AbstractRDEPolicy
+struct StepwiseRDEPolicy{T <: AbstractFloat} <: AbstractRDEPolicy
     env::RDEEnv{T}
     ts::Vector{T}  # Vector of time steps
-    c::Union{Vector{Vector{T}},Vector{T}}  # Vector of control actions
+    c::Union{Vector{Vector{T}}, Vector{T}}  # Vector of control actions
 
-    function StepwiseRDEPolicy(env::RDEEnv{T}, ts::Vector{T}, c::Union{Vector{Vector{T}},Vector{T}}) where {T<:AbstractFloat}
+    function StepwiseRDEPolicy(env::RDEEnv{T}, ts::Vector{T}, c::Union{Vector{Vector{T}}, Vector{T}}) where {T <: AbstractFloat}
         @assert length(ts) == length(c) "Length of time steps and control actions must be equal"
         @assert issorted(ts) "Time steps must be in ascending order"
         if env.action_type isa ScalarAreaScalarPressureAction
@@ -390,7 +390,7 @@ struct StepwiseRDEPolicy{T<:AbstractFloat} <: AbstractRDEPolicy
             @assert eltype(c) <: T "Control actions must be a vector of scalars"
         end
         env.α = 0.0 #to assure that get_scaled_control works
-        new{T}(env, ts, c)
+        return new{T}(env, ts, c)
     end
 end
 
@@ -412,14 +412,14 @@ function _predict_action(π::StepwiseRDEPolicy, s)
 end
 
 function Base.show(io::IO, π::StepwiseRDEPolicy)
-    print(io, "StepwiseRDEPolicy($(length(π.ts)) steps)")
+    return print(io, "StepwiseRDEPolicy($(length(π.ts)) steps)")
 end
 
 function Base.show(io::IO, ::MIME"text/plain", π::StepwiseRDEPolicy)
     println(io, "StepwiseRDEPolicy:")
     println(io, "  steps: $(length(π.ts))")
     println(io, "  env: $(typeof(π.env))")
-    println(io, "  time range: [$(minimum(π.ts)), $(maximum(π.ts))]")
+    return println(io, "  time range: [$(minimum(π.ts)), $(maximum(π.ts))]")
 end
 
 """
@@ -457,10 +457,10 @@ Policy that applies random control values.
 # Notes
 Generates random values in [-1, 1] for each control dimension
 """
-struct RandomRDEPolicy{T<:AbstractFloat} <: AbstractRDEPolicy
+struct RandomRDEPolicy{T <: AbstractFloat} <: AbstractRDEPolicy
     env::RDEEnv{T}
-    function RandomRDEPolicy(env::RDEEnv{T}) where {T<:AbstractFloat}
-        new{T}(env)
+    function RandomRDEPolicy(env::RDEEnv{T}) where {T <: AbstractFloat}
+        return new{T}(env)
     end
 end
 
@@ -477,12 +477,12 @@ function _predict_action(π::RandomRDEPolicy, state)
 end
 
 function Base.show(io::IO, π::RandomRDEPolicy)
-    print(io, "RandomRDEPolicy()")
+    return print(io, "RandomRDEPolicy()")
 end
 
 function Base.show(io::IO, ::MIME"text/plain", π::RandomRDEPolicy)
     println(io, "RandomRDEPolicy:")
-    println(io, "  env: $(typeof(π.env))")
+    return println(io, "  env: $(typeof(π.env))")
 end
 
 """
@@ -502,7 +502,7 @@ base_policy = RandomRDEPolicy(env)
 delayed_policy = DelayedPolicy(base_policy, 100.0f0, env)
 ```
 """
-struct DelayedPolicy{T<:AbstractFloat,P<:AbstractRDEPolicy} <: AbstractRDEPolicy
+struct DelayedPolicy{T <: AbstractFloat, P <: AbstractRDEPolicy} <: AbstractRDEPolicy
     policy::P
     start_time::T
     env::RDEEnv{T}
@@ -526,17 +526,17 @@ function _predict_action(π::DelayedPolicy, s)
 end
 
 function Base.show(io::IO, π::DelayedPolicy)
-    print(io, "DelayedPolicy(t>$(π.start_time))")
+    return print(io, "DelayedPolicy(t>$(π.start_time))")
 end
 
 function Base.show(io::IO, ::MIME"text/plain", π::DelayedPolicy)
     println(io, "DelayedPolicy:")
     println(io, "  start_time: $(π.start_time)")
     println(io, "  policy: $(π.policy)")
-    println(io, "  env: $(typeof(π.env))")
+    return println(io, "  env: $(typeof(π.env))")
 end
 
-struct ScaledPolicy{T<:AbstractFloat,P<:AbstractRDEPolicy} <: AbstractRDEPolicy
+struct ScaledPolicy{T <: AbstractFloat, P <: AbstractRDEPolicy} <: AbstractRDEPolicy
     policy::P
     scale::T
 end
@@ -550,20 +550,20 @@ function _predict_action(π::ScaledPolicy, s)
 end
 
 function Base.show(io::IO, π::ScaledPolicy)
-    print(io, "ScaledPolicy(scale=$(π.scale))")
+    return print(io, "ScaledPolicy(scale=$(π.scale))")
 end
 
 function Base.show(io::IO, ::MIME"text/plain", π::ScaledPolicy)
     println(io, "ScaledPolicy:")
     println(io, "  scale: $(π.scale)")
-    println(io, "  policy: $(π.policy)")
+    return println(io, "  policy: $(π.policy)")
 end
 
-struct LinearPolicy{T<:AbstractFloat} <: AbstractRDEPolicy
+struct LinearPolicy{T <: AbstractFloat} <: AbstractRDEPolicy
     env::RDEEnv{T}
-    start_value::Union{Vector{T},T}
-    end_value::Union{Vector{T},T}
-    function LinearPolicy(env::RDEEnv{T}, start_value::Union{Vector{T},T}, end_value::Union{Vector{T},T}, start_time::T, end_time::T) where {T<:AbstractFloat}
+    start_value::Union{Vector{T}, T}
+    end_value::Union{Vector{T}, T}
+    function LinearPolicy(env::RDEEnv{T}, start_value::Union{Vector{T}, T}, end_value::Union{Vector{T}, T}, start_time::T, end_time::T) where {T <: AbstractFloat}
         if env.action_type isa ScalarAreaScalarPressureAction
             @assert length(start_value) == 2 && length(end_value) == 2 "Start and end values must have 2 elements"
         elseif env.action_type isa ScalarPressureAction
@@ -571,7 +571,7 @@ struct LinearPolicy{T<:AbstractFloat} <: AbstractRDEPolicy
         else
             @error "Unknown action type $(typeof(env.action_type)) for LinearPolicy"
         end
-        new{T}(env, start_value, end_value, start_time, end_time)
+        return new{T}(env, start_value, end_value, start_time, end_time)
     end
 end
 
@@ -590,14 +590,14 @@ function _predict_action(π::LinearPolicy, s)
 end
 
 function Base.show(io::IO, π::LinearPolicy)
-    print(io, "LinearPolicy()")
+    return print(io, "LinearPolicy()")
 end
 
 function Base.show(io::IO, ::MIME"text/plain", π::LinearPolicy)
     println(io, "LinearPolicy:")
     println(io, "  start_value: $(π.start_value)")
     println(io, "  end_value: $(π.end_value)")
-    println(io, "  env: $(typeof(π.env))")
+    return println(io, "  env: $(typeof(π.env))")
 end
 
 """
@@ -616,12 +616,12 @@ Policy that applies linearly interpolated control values between specified check
 - Each control action must have 2 elements for ScalarAreaScalarPressureAction
 - Linear interpolation is performed between checkpoints
 """
-struct LinearCheckpoints{T<:AbstractFloat} <: AbstractRDEPolicy
+struct LinearCheckpoints{T <: AbstractFloat} <: AbstractRDEPolicy
     env::RDEEnv{T}
     ts::Vector{T}  # Vector of time checkpoints
-    c::Union{Vector{Vector{T}},Vector{T}}  # Vector of control actions at checkpoints
+    c::Union{Vector{Vector{T}}, Vector{T}}  # Vector of control actions at checkpoints
 
-    function LinearCheckpoints(env::RDEEnv{T}, ts::Vector{T}, c::Union{Vector{Vector{T}},Vector{T}}) where {T<:AbstractFloat}
+    function LinearCheckpoints(env::RDEEnv{T}, ts::Vector{T}, c::Union{Vector{Vector{T}}, Vector{T}}) where {T <: AbstractFloat}
         @assert length(ts) == length(c) "Length of time checkpoints and control actions must be equal"
         @assert issorted(ts) "Time checkpoints must be in ascending order"
         if env.action_type isa ScalarAreaScalarPressureAction
@@ -631,7 +631,7 @@ struct LinearCheckpoints{T<:AbstractFloat} <: AbstractRDEPolicy
             @assert eltype(c) <: T "Control actions must be a vector of scalars"
         end
         env.α = 0.0 #to assure that get_scaled_control works
-        new{T}(env, ts, c)
+        return new{T}(env, ts, c)
     end
 end
 
@@ -652,8 +652,8 @@ function _predict_action(π::LinearCheckpoints, s)
     end
 
     # Linear interpolation between checkpoints
-    t1, t2 = π.ts[idx], π.ts[idx+1]
-    c1, c2 = π.c[idx], π.c[idx+1]
+    t1, t2 = π.ts[idx], π.ts[idx + 1]
+    c1, c2 = π.c[idx], π.c[idx + 1]
 
     if π.env.action_type isa ScalarAreaScalarPressureAction
         # Interpolate each component separately
@@ -669,14 +669,14 @@ function _predict_action(π::LinearCheckpoints, s)
 end
 
 function Base.show(io::IO, π::LinearCheckpoints)
-    print(io, "LinearCheckpoints($(length(π.ts)) checkpoints)")
+    return print(io, "LinearCheckpoints($(length(π.ts)) checkpoints)")
 end
 
 function Base.show(io::IO, ::MIME"text/plain", π::LinearCheckpoints)
     println(io, "LinearCheckpoints:")
     println(io, "  checkpoints: $(length(π.ts))")
     println(io, "  env: $(typeof(π.env))")
-    println(io, "  time range: [$(minimum(π.ts)), $(maximum(π.ts))]")
+    return println(io, "  time range: [$(minimum(π.ts)), $(maximum(π.ts))]")
 end
 
 """
@@ -694,18 +694,18 @@ Policy that implements a sawtooth control pattern for pressure control, periodic
 - Only compatible with ScalarPressureAction
 - Starts from the current injection pressure and gradually increases
 """
-struct SawtoothPolicy{T<:AbstractFloat} <: AbstractRDEPolicy
+struct SawtoothPolicy{T <: AbstractFloat} <: AbstractRDEPolicy
     env::RDEEnv{T}
     timescale::T
     max_value::T
     min_value::T
 
-    function SawtoothPolicy(env::RDEEnv{T}, timescale::T, max_value::T, min_value::T) where {T<:AbstractFloat}
+    function SawtoothPolicy(env::RDEEnv{T}, timescale::T, max_value::T, min_value::T) where {T <: AbstractFloat}
         @assert env.action_type isa ScalarPressureAction "SawtoothPolicy only supports ScalarPressureAction"
         @assert timescale > 0 "Timescale must be positive"
         @assert max_value > min_value "Max value must be greater than min value"
         env.α = 0.0 #to assure that get_scaled_control works
-        new{T}(env, timescale, max_value, min_value)
+        return new{T}(env, timescale, max_value, min_value)
     end
 end
 
@@ -726,7 +726,7 @@ function _predict_action(π::SawtoothPolicy, s)
 end
 
 function Base.show(io::IO, π::SawtoothPolicy)
-    print(io, "SawtoothPolicy(timescale=$(π.timescale))")
+    return print(io, "SawtoothPolicy(timescale=$(π.timescale))")
 end
 
 function Base.show(io::IO, ::MIME"text/plain", π::SawtoothPolicy)
@@ -734,23 +734,23 @@ function Base.show(io::IO, ::MIME"text/plain", π::SawtoothPolicy)
     println(io, "  timescale: $(π.timescale)")
     println(io, "  max_value: $(π.max_value)")
     println(io, "  min_value: $(π.min_value)")
-    println(io, "  env: $(typeof(π.env))")
+    return println(io, "  env: $(typeof(π.env))")
 end
 
-@kwdef mutable struct PIDCache{T<:AbstractFloat}
+@kwdef mutable struct PIDCache{T <: AbstractFloat}
     integral::T = 0.0f0
     previous_error::T = 0.0f0
 end
 
-struct PIDControllerPolicy{T<:AbstractFloat} <: AbstractRDEPolicy
+struct PIDControllerPolicy{T <: AbstractFloat} <: AbstractRDEPolicy
     dt::T
     target::T
     Kp::T
     Ki::T
     Kd::T
     cache::PIDCache{T}
-    function PIDControllerPolicy(; dt::T, target::T, Kp::T, Ki::T, Kd::T) where {T<:AbstractFloat}
-        new{T}(dt, target, Kp, Ki, Kd, PIDCache{T}())
+    function PIDControllerPolicy(; dt::T, target::T, Kp::T, Ki::T, Kd::T) where {T <: AbstractFloat}
+        return new{T}(dt, target, Kp, Ki, Kd, PIDCache{T}())
     end
 end
 
@@ -763,7 +763,7 @@ function _predict_action(π::PIDControllerPolicy, o)
     action = [π.Kp * error + π.Ki * cache.integral + π.Kd * derivative]
     cache.previous_error = error
 
-    if action[1] > 1f0 || action[1] < -1.0f0
+    if action[1] > 1.0f0 || action[1] < -1.0f0
         @debug "Action out of bounds: $action"
     end
     clamp!(action, -1.0f0, 1.0f0)
@@ -771,7 +771,7 @@ function _predict_action(π::PIDControllerPolicy, o)
 end
 
 function Base.show(io::IO, π::PIDControllerPolicy)
-    print(io, "PIDControllerPolicy(Kp=$(π.Kp), Ki=$(π.Ki), Kd=$(π.Kd), target=$(π.target))")
+    return print(io, "PIDControllerPolicy(Kp=$(π.Kp), Ki=$(π.Ki), Kd=$(π.Kd), target=$(π.target))")
 end
 
 function Base.show(io::IO, ::MIME"text/plain", π::PIDControllerPolicy)
@@ -779,16 +779,14 @@ function Base.show(io::IO, ::MIME"text/plain", π::PIDControllerPolicy)
     println(io, "  Kp: $(π.Kp)")
     println(io, "  Ki: $(π.Ki)")
     println(io, "  Kd: $(π.Kd)")
-    println(io, "  target: $(π.target)")
+    return println(io, "  target: $(π.target)")
 end
 
-function reset_pid_cache!(cache::PIDCache{T}) where {T<:AbstractFloat}
+function reset_pid_cache!(cache::PIDCache{T}) where {T <: AbstractFloat}
     cache.integral = 0.0
-    cache.previous_error = 0.0
+    return cache.previous_error = 0.0
 end
 
 function reset_pid_cache!(pid_controller::PIDControllerPolicy)
-    reset_pid_cache!(pid_controller.cache)
+    return reset_pid_cache!(pid_controller.cache)
 end
-
-

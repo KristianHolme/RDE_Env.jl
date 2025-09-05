@@ -1,8 +1,8 @@
 using DRiL
 function get_env()
     env_config = RDEEnvConfig(
-        observation_strategy=SectionedStateObservation(),
-        action_type=ScalarPressureAction(),
+        observation_strategy = SectionedStateObservation(),
+        action_type = ScalarPressureAction(),
     )
     env = make_env(env_config)
     DRiLExt = Base.get_extension(RDE_Env, :RDE_EnvDRiLExt)
@@ -12,9 +12,9 @@ end
 
 function get_multi_agent_env()
     env_config = RDEEnvConfig(
-        observation_strategy=MultiCenteredObservation(n_sections=4),
-        action_type=VectorPressureAction(n_sections=4),
-        reward_type=MultiSectionPeriodMinimumReward(n_sections=4, target_shock_count=3, lowest_action_magnitude_reward=0.0f0, weights=[1f0, 1f0, 5f0, 1f0]),
+        observation_strategy = MultiCenteredObservation(n_sections = 4),
+        action_type = VectorPressureAction(n_sections = 4),
+        reward_type = MultiSectionPeriodMinimumReward(n_sections = 4, target_shock_count = 3, lowest_action_magnitude_reward = 0.0f0, weights = [1.0f0, 1.0f0, 5.0f0, 1.0f0]),
     )
     env = make_env(env_config)
     DRiLExt = Base.get_extension(RDE_Env, :RDE_EnvDRiLExt)
@@ -23,9 +23,9 @@ function get_multi_agent_env()
 end
 function get_SAVA_env()
     env_config = RDEEnvConfig(
-        observation_strategy=SectionedStateObservation(),
-        action_type=VectorPressureAction(n_sections=4),
-        reward_type=PeriodMinimumReward()
+        observation_strategy = SectionedStateObservation(),
+        action_type = VectorPressureAction(n_sections = 4),
+        reward_type = PeriodMinimumReward()
     )
     env = make_env(env_config)
     DRiLExt = Base.get_extension(RDE_Env, :RDE_EnvDRiLExt)
@@ -41,7 +41,7 @@ function test_single_env_usage(env)
     reset!(env)
     terminated(env)
     truncated(env)
-    true
+    return true
 end
 function test_parallel_env_usage(env)
     rand_obs = rand(observation_space(env))
@@ -54,7 +54,7 @@ function test_parallel_env_usage(env)
     reset!(env)
     terminated(env)
     truncated(env)
-    true
+    return true
 end
 
 @testset "DRiLExt Single env methods" begin

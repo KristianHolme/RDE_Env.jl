@@ -5,11 +5,11 @@ using RDE
     @testset "ShockSpanReward" begin
         # Create environment with ShockSpanReward
         env = RDEEnv(;
-            dt=1.0,
-            reward_type=ShockSpanReward(
-                target_shock_count=3,
-                span_scale=4.0f0,
-                shock_weight=5.0f0
+            dt = 1.0,
+            reward_type = ShockSpanReward(
+                target_shock_count = 3,
+                span_scale = 4.0f0,
+                shock_weight = 5.0f0
             )
         )
 
@@ -28,21 +28,22 @@ using RDE
         # Create a state with 3 shocks
         N = env.prob.params.N
         env.state[1:N] .= 1.0
-        env.state[N÷4] = 2.0  # First shock
-        env.state[N÷2] = 2.0  # Second shock
-        env.state[3N÷4] = 2.0  # Third shock
+        env.state[N ÷ 4] = 2.0  # First shock
+        env.state[N ÷ 2] = 2.0  # Second shock
+        env.state[3N ÷ 4] = 2.0  # Third shock
         set_reward!(env, env.reward_type)
         @test env.reward > 0  # Should be positive with target shocks
     end
 
     @testset "ShockPreservingReward" begin
         # Create environment with ShockPreservingReward
-        params = RDEParam(tmax=1.0)
-        env = RDEEnv(params;
-            dt=0.1,
-            reward_type=ShockPreservingReward(
-                target_shock_count=3,
-                abscence_limit=0.01f0
+        params = RDEParam(tmax = 1.0)
+        env = RDEEnv(
+            params;
+            dt = 0.1,
+            reward_type = ShockPreservingReward(
+                target_shock_count = 3,
+                abscence_limit = 0.01f0
             )
         )
 
@@ -66,8 +67,8 @@ using RDE
         N = env.prob.params.N
         env.state[1:N] .= 1.0
         # Create 3 evenly spaced shocks
-        env.state[N÷3] = 2.0
-        env.state[2N÷3] = 2.0
+        env.state[N ÷ 3] = 2.0
+        env.state[2N ÷ 3] = 2.0
         env.state[N] = 2.0
         set_reward!(env, env.reward_type)
         @test !env.terminated  # Should not be terminated
@@ -83,12 +84,12 @@ using RDE
 
         @testset "Constant Policy with ShockSpanReward" begin
             env = RDEEnv(;
-                dt=dt,
-                params=RDEParam(tmax=tmax),
-                reward_type=ShockSpanReward(
-                    target_shock_count=3,
-                    span_scale=4.0f0,
-                    shock_weight=5.0f0
+                dt = dt,
+                params = RDEParam(tmax = tmax),
+                reward_type = ShockSpanReward(
+                    target_shock_count = 3,
+                    span_scale = 4.0f0,
+                    shock_weight = 5.0f0
                 )
             )
             policy = ConstantRDEPolicy(env)
@@ -109,10 +110,10 @@ using RDE
 
         @testset "Random Policy with ShockPreservingReward" begin
             env = RDEEnv(;
-                dt=dt,
-                params=RDEParam(tmax=tmax),
-                reward_type=ShockPreservingReward(
-                    target_shock_count=2
+                dt = dt,
+                params = RDEParam(tmax = tmax),
+                reward_type = ShockPreservingReward(
+                    target_shock_count = 2
                 )
             )
             policy = RandomRDEPolicy(env)
@@ -147,12 +148,12 @@ using RDE
 
         @testset "Policy Run Data Collection" begin
             env = RDEEnv(;
-                dt=dt,
-                params=RDEParam(tmax=tmax),
-                reward_type=ShockSpanReward(
-                    target_shock_count=3,
-                    span_scale=4.0f0,
-                    shock_weight=5.0f0
+                dt = dt,
+                params = RDEParam(tmax = tmax),
+                reward_type = ShockSpanReward(
+                    target_shock_count = 3,
+                    span_scale = 4.0f0,
+                    shock_weight = 5.0f0
                 )
             )
             policy = ConstantRDEPolicy(env)
@@ -172,12 +173,12 @@ using RDE
     @testset "TimeAggCompositeReward" begin
         # Create environment with TimeAggCompositeReward
         env = RDEEnv(;
-            dt=1.0,
-            reward_type=TimeAggCompositeReward(
-                aggregation=TimeMin(),
-                target_shock_count=3,
-                lowest_action_magnitude_reward=0.5f0,
-                weights=[0.25f0, 0.25f0, 0.25f0, 0.25f0]
+            dt = 1.0,
+            reward_type = TimeAggCompositeReward(
+                aggregation = TimeMin(),
+                target_shock_count = 3,
+                lowest_action_magnitude_reward = 0.5f0,
+                weights = [0.25f0, 0.25f0, 0.25f0, 0.25f0]
             )
         )
 
@@ -195,19 +196,19 @@ using RDE
         # Test reward with target number of shocks
         N = env.prob.params.N
         env.state[1:N] .= 1.0
-        env.state[N÷4] = 2.0  # First shock
-        env.state[N÷2] = 2.0  # Second shock
-        env.state[3N÷4] = 2.0  # Third shock
+        env.state[N ÷ 4] = 2.0  # First shock
+        env.state[N ÷ 2] = 2.0  # Second shock
+        env.state[3N ÷ 4] = 2.0  # Third shock
         set_reward!(env, env.reward_type)
         @test env.reward > 0  # Should be positive with target shocks
 
         # Test different aggregation methods
         for agg in [TimeMin(), TimeMax(), TimeAvg(), TimeSum(), TimeProd()]
             env.reward_type = TimeAggCompositeReward(
-                aggregation=agg,
-                target_shock_count=3,
-                lowest_action_magnitude_reward=0.5f0,
-                weights=[0.25f0, 0.25f0, 0.25f0, 0.25f0]
+                aggregation = agg,
+                target_shock_count = 3,
+                lowest_action_magnitude_reward = 0.5f0,
+                weights = [0.25f0, 0.25f0, 0.25f0, 0.25f0]
             )
             set_reward!(env, env.reward_type)
             @test !isnan(env.reward)
@@ -218,13 +219,13 @@ using RDE
     @testset "TimeAggMultiSectionReward" begin
         # Create environment with TimeAggMultiSectionReward
         env = RDEEnv(;
-            dt=1.0,
-            reward_type=TimeAggMultiSectionReward(
-                aggregation=TimeMin(),
-                n_sections=4,
-                target_shock_count=3,
-                lowest_action_magnitude_reward=0.5f0,
-                weights=[1f0, 1f0, 5f0, 1f0]
+            dt = 1.0,
+            reward_type = TimeAggMultiSectionReward(
+                aggregation = TimeMin(),
+                n_sections = 4,
+                target_shock_count = 3,
+                lowest_action_magnitude_reward = 0.5f0,
+                weights = [1.0f0, 1.0f0, 5.0f0, 1.0f0]
             )
         )
 
@@ -243,20 +244,20 @@ using RDE
         # Test reward with target number of shocks
         N = env.prob.params.N
         env.state[1:N] .= 1.0
-        env.state[N÷4] = 2.0  # First shock
-        env.state[N÷2] = 2.0  # Second shock
-        env.state[3N÷4] = 2.0  # Third shock
+        env.state[N ÷ 4] = 2.0  # First shock
+        env.state[N ÷ 2] = 2.0  # Second shock
+        env.state[3N ÷ 4] = 2.0  # Third shock
         set_reward!(env, env.reward_type)
         @test all(env.reward .≥ 0)  # All sections should have positive reward with target shocks
 
         # Test different aggregation methods
         for agg in [TimeMin(), TimeMax(), TimeAvg(), TimeSum(), TimeProd()]
             env.reward_type = TimeAggMultiSectionReward(
-                aggregation=agg,
-                n_sections=4,
-                target_shock_count=3,
-                lowest_action_magnitude_reward=0.5f0,
-                weights=[1f0, 1f0, 5f0, 1f0]
+                aggregation = agg,
+                n_sections = 4,
+                target_shock_count = 3,
+                lowest_action_magnitude_reward = 0.5f0,
+                weights = [1.0f0, 1.0f0, 5.0f0, 1.0f0]
             )
             set_reward!(env, env.reward_type)
             @test !any(isnan.(env.reward))
@@ -269,20 +270,20 @@ using RDE
         @testset "Scalar rewards multiplication" begin
             # Create two scalar rewards
             reward1 = ShockSpanReward(
-                target_shock_count=3,
-                span_scale=4.0f0,
-                shock_weight=0.5f0
+                target_shock_count = 3,
+                span_scale = 4.0f0,
+                shock_weight = 0.5f0
             )
 
             reward2 = TimeDiffNormReward(
-                threshold=10.0f0,
-                threshold_reward=0.1f0
+                threshold = 10.0f0,
+                threshold_reward = 0.1f0
             )
 
             # Create environment with MultiplicativeReward
             env = RDEEnv(;
-                dt=1.0,
-                reward_type=MultiplicativeReward(reward1, reward2)
+                dt = 1.0,
+                reward_type = MultiplicativeReward(reward1, reward2)
             )
 
             # Test initial reward
@@ -299,9 +300,9 @@ using RDE
             # Test with different state
             N = env.prob.params.N
             env.state[1:N] .= 1.0
-            env.state[N÷4] = 2.0  # First shock
-            env.state[N÷2] = 2.0  # Second shock
-            env.state[3N÷4] = 2.0  # Third shock
+            env.state[N ÷ 4] = 2.0  # First shock
+            env.state[N ÷ 2] = 2.0  # Second shock
+            env.state[3N ÷ 4] = 2.0  # Third shock
 
             set_reward!(env, env.reward_type)
             r1 = compute_reward(env, reward1)
@@ -312,23 +313,23 @@ using RDE
         @testset "Vector rewards multiplication" begin
             # Create two vector rewards
             reward1 = TimeAggMultiSectionReward(
-                aggregation=TimeMin(),
-                n_sections=4,
-                target_shock_count=3,
-                lowest_action_magnitude_reward=0.5f0,
-                weights=[1f0, 1f0, 5f0, 1f0]
+                aggregation = TimeMin(),
+                n_sections = 4,
+                target_shock_count = 3,
+                lowest_action_magnitude_reward = 0.5f0,
+                weights = [1.0f0, 1.0f0, 5.0f0, 1.0f0]
             )
 
             reward2 = MultiSectionReward(
-                n_sections=4,
-                target_shock_count=3,
-                lowest_action_magnitude_reward=0.8f0
+                n_sections = 4,
+                target_shock_count = 3,
+                lowest_action_magnitude_reward = 0.8f0
             )
 
             # Create environment with MultiplicativeReward
             env = RDEEnv(;
-                dt=1.0,
-                reward_type=MultiplicativeReward(reward1, reward2)
+                dt = 1.0,
+                reward_type = MultiplicativeReward(reward1, reward2)
             )
 
             # Test initial reward
@@ -346,9 +347,9 @@ using RDE
             # Test with different state
             N = env.prob.params.N
             env.state[1:N] .= 1.0
-            env.state[N÷4] = 2.0  # First shock
-            env.state[N÷2] = 2.0  # Second shock
-            env.state[3N÷4] = 2.0  # Third shock
+            env.state[N ÷ 4] = 2.0  # First shock
+            env.state[N ÷ 2] = 2.0  # Second shock
+            env.state[3N ÷ 4] = 2.0  # Third shock
 
             set_reward!(env, env.reward_type)
             r1 = compute_reward(env, reward1)
@@ -359,22 +360,22 @@ using RDE
         @testset "Mixed scalar and vector rewards" begin
             # Create a scalar reward
             scalar_reward = ShockSpanReward(
-                target_shock_count=3,
-                span_scale=4.0f0,
-                shock_weight=0.5f0
+                target_shock_count = 3,
+                span_scale = 4.0f0,
+                shock_weight = 0.5f0
             )
 
             # Create a vector reward
             vector_reward = MultiSectionReward(
-                n_sections=4,
-                target_shock_count=3,
-                lowest_action_magnitude_reward=0.8f0
+                n_sections = 4,
+                target_shock_count = 3,
+                lowest_action_magnitude_reward = 0.8f0
             )
 
             # Create environment with MultiplicativeReward
             env = RDEEnv(;
-                dt=1.0,
-                reward_type=MultiplicativeReward(scalar_reward, vector_reward)
+                dt = 1.0,
+                reward_type = MultiplicativeReward(scalar_reward, vector_reward)
             )
 
             # Test initial reward
@@ -391,18 +392,18 @@ using RDE
 
             # Test scalar reward first vs. vector reward first
             env2 = RDEEnv(;
-                dt=1.0,
-                reward_type=MultiplicativeReward(vector_reward, scalar_reward)
+                dt = 1.0,
+                reward_type = MultiplicativeReward(vector_reward, scalar_reward)
             )
             _reset!(env2)
             set_reward!(env2, env2.reward_type)
             @test all(env2.reward .≈ env.reward)  # Order shouldn't matter
 
             # Test with multiple scalar rewards
-            scalar_reward2 = TimeDiffNormReward(threshold=10.0f0)
+            scalar_reward2 = TimeDiffNormReward(threshold = 10.0f0)
             env3 = RDEEnv(;
-                dt=1.0,
-                reward_type=MultiplicativeReward(scalar_reward, vector_reward, scalar_reward2)
+                dt = 1.0,
+                reward_type = MultiplicativeReward(scalar_reward, vector_reward, scalar_reward2)
             )
             _reset!(env3)
             set_reward!(env3, env3.reward_type)
@@ -417,13 +418,13 @@ using RDE
             n_steps = Int(tmax / dt)
 
             # Create a multiplicative reward with mixed types
-            scalar_reward = ShockSpanReward(target_shock_count=3)
-            vector_reward = MultiSectionReward(n_sections=4)
+            scalar_reward = ShockSpanReward(target_shock_count = 3)
+            vector_reward = MultiSectionReward(n_sections = 4)
 
             env = RDEEnv(;
-                dt=dt,
-                params=RDEParam(tmax=tmax),
-                reward_type=MultiplicativeReward(scalar_reward, vector_reward)
+                dt = dt,
+                params = RDEParam(tmax = tmax),
+                reward_type = MultiplicativeReward(scalar_reward, vector_reward)
             )
             policy = ConstantRDEPolicy(env)
 

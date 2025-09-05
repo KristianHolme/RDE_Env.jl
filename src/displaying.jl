@@ -1,80 +1,80 @@
 function Base.show(io::IO, obs::SampledStateObservation)
-    print(io, "SampledStateObservation(n_samples=$(obs.n_samples))")
+    return print(io, "SampledStateObservation(n_samples=$(obs.n_samples))")
 end
 
 function Base.show(io::IO, ::MIME"text/plain", obs::SampledStateObservation)
     println(io, "SampledStateObservation:")
-    println(io, "  n_samples: $(obs.n_samples)")
+    return println(io, "  n_samples: $(obs.n_samples)")
 end
 
 function Base.show(io::IO, obs::SectionedStateObservation)
-    print(io, "SectionedStateObservation(minisections=$(obs.minisections))")
+    return print(io, "SectionedStateObservation(minisections=$(obs.minisections))")
 end
 
 function Base.show(io::IO, ::MIME"text/plain", obs::SectionedStateObservation)
     println(io, "SectionedStateObservation:")
     println(io, "  minisections: $(obs.minisections)")
-    println(io, "  target_shock_count: $(obs.target_shock_count)")
+    return println(io, "  target_shock_count: $(obs.target_shock_count)")
 end
 
 function Base.show(io::IO, ::StateObservation)
-    print(io, "StateObservation()")
+    return print(io, "StateObservation()")
 end
 
 function Base.show(io::IO, ::MIME"text/plain", ::StateObservation)
-    println(io, "StateObservation: returns full state")
+    return println(io, "StateObservation: returns full state")
 end
 
 function Base.show(io::IO, obs::FourierObservation)
-    print(io, "FourierObservation(fft_terms=$(obs.fft_terms))")
+    return print(io, "FourierObservation(fft_terms=$(obs.fft_terms))")
 end
 
 function Base.show(io::IO, ::MIME"text/plain", obs::FourierObservation)
     println(io, "FourierObservation:")
-    println(io, "  fft_terms: $(obs.fft_terms)")
+    return println(io, "  fft_terms: $(obs.fft_terms)")
 end
 
 function Base.show(io::IO, a::ScalarPressureAction)
-    print(io, "ScalarPressureAction()")
+    return print(io, "ScalarPressureAction()")
 end
 
 function Base.show(io::IO, ::MIME"text/plain", a::ScalarPressureAction)
     println(io, "ScalarPressureAction:")
-    println(io, "  N: $(a.N)")
+    return println(io, "  N: $(a.N)")
 end
 
 function Base.show(io::IO, a::ScalarAreaScalarPressureAction)
-    print(io, "ScalarAreaScalarPressureAction()")
+    return print(io, "ScalarAreaScalarPressureAction()")
 end
 
 function Base.show(io::IO, ::MIME"text/plain", a::ScalarAreaScalarPressureAction)
     println(io, "ScalarAreaScalarPressureAction:")
-    println(io, "  N: $(a.N)")
+    return println(io, "  N: $(a.N)")
 end
 
 function Base.show(io::IO, a::VectorPressureAction)
-    print(io, "VectorPressureAction(n_sections=$(a.n_sections))")
+    return print(io, "VectorPressureAction(n_sections=$(a.n_sections))")
 end
 
 function Base.show(io::IO, ::MIME"text/plain", a::VectorPressureAction)
     println(io, "VectorPressureAction:")
     println(io, "  n_sections: $(a.n_sections)")
-    println(io, "  N: $(a.N)")
+    return println(io, "  N: $(a.N)")
 end
 
 function Base.show(io::IO, rt::ShockSpanReward)
-    print(io, "ShockSpanReward(target_shock_count=$(rt.target_shock_count))")
+    return print(io, "ShockSpanReward(target_shock_count=$(rt.target_shock_count))")
 end
 
 function Base.show(io::IO, ::MIME"text/plain", rt::ShockSpanReward)
     println(io, "ShockSpanReward:")
     println(io, "  target_shock_count: $(rt.target_shock_count)")
     println(io, "  span_scale: $(rt.span_scale)")
-    println(io, "  shock_weight: $(rt.shock_weight)")
+    return println(io, "  shock_weight: $(rt.shock_weight)")
 end
 
 function Base.show(io::IO, rt::ShockPreservingReward)
-    print(io, "ShockPreservingReward(target_shock_count=$(rt.target_shock_count))")
+    return print(io, "ShockPreservingReward(target_shock_count=$(rt.target_shock_count))")
 end
 
 function Base.show(io::IO, ::MIME"text/plain", rt::ShockPreservingReward)
@@ -82,21 +82,21 @@ function Base.show(io::IO, ::MIME"text/plain", rt::ShockPreservingReward)
     println(io, "  target_shock_count: $(rt.target_shock_count)")
     println(io, "  span_scale: $(rt.span_scale)")
     println(io, "  shock_weight: $(rt.shock_weight)")
-    println(io, "  abscence_limit: $(rt.abscence_limit)")
+    return println(io, "  abscence_limit: $(rt.abscence_limit)")
 end
 
 function Base.show(io::IO, rt::ShockPreservingSymmetryReward)
-    print(io, "ShockPreservingSymmetryReward(target_shock_count=$(rt.target_shock_count))")
+    return print(io, "ShockPreservingSymmetryReward(target_shock_count=$(rt.target_shock_count))")
 end
 
 function Base.show(io::IO, ::MIME"text/plain", rt::ShockPreservingSymmetryReward)
     println(io, "ShockPreservingSymmetryReward:")
     println(io, "  target_shock_count: $(rt.target_shock_count)")
-    println(io, "  cache size: $(length(rt.cache))")
+    return println(io, "  cache size: $(length(rt.cache))")
 end
 
 function Base.show(io::IO, cache::RDEEnvCache)
-    if get(io, :compact, false)::Bool
+    return if get(io, :compact, false)::Bool
         print(io, "RDEEnvCache{$(eltype(cache.circ_u))}")
     else
         print(io, "RDEEnvCache{$(eltype(cache.circ_u))}(N=$(length(cache.circ_u)))")
@@ -109,18 +109,18 @@ function Base.show(io::IO, ::MIME"text/plain", cache::RDEEnvCache)
     println(io, "  circ_λ: $(typeof(cache.circ_λ)) of size $(length(cache.circ_λ))")
     println(io, "  prev_u: $(typeof(cache.prev_u)) of size $(length(cache.prev_u))")
     println(io, "  prev_λ: $(typeof(cache.prev_λ)) of size $(length(cache.prev_λ))")
-    println(io, "  action: $(typeof(cache.action)) of size $(size(cache.action))")
+    return println(io, "  action: $(typeof(cache.action)) of size $(size(cache.action))")
 end
 
-function Base.show(io::IO, env::RDEEnv{T}) where {T<:AbstractFloat}
-    if get(io, :compact, false)::Bool
+function Base.show(io::IO, env::RDEEnv{T}) where {T <: AbstractFloat}
+    return if get(io, :compact, false)::Bool
         print(io, "RDEEnv{$T}(t=$(env.t), steps=$(env.steps_taken))")
     else
         print(io, "RDEEnv{$T}(t=$(env.t), steps=$(env.steps_taken), $(env.action_type))")
     end
 end
 
-function Base.show(io::IO, ::MIME"text/plain", env::RDEEnv{T}) where {T<:AbstractFloat}
+function Base.show(io::IO, ::MIME"text/plain", env::RDEEnv{T}) where {T <: AbstractFloat}
     println(io, "RDEEnv{$T}:")
     println(io, "  dt: $(env.dt)")
     println(io, "  t: $(env.t)")
@@ -129,5 +129,5 @@ function Base.show(io::IO, ::MIME"text/plain", env::RDEEnv{T}) where {T<:Abstrac
     println(io, "  action type: $(env.action_type)")
     println(io, "  observation strategy: $(env.observation_strategy)")
     println(io, "  reward type: $(env.reward_type)")
-    println(io, "  steps taken: $(env.steps_taken)")
+    return println(io, "  steps taken: $(env.steps_taken)")
 end
