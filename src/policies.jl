@@ -147,7 +147,7 @@ function run_policy(policy::AbstractRDEPolicy, env::RDEEnv{T}; saves_per_action=
             end
             if length(env.prob.sol.t) != saves_per_action + 1
                 @debug "length(env.prob.sol.t) ($(length(env.prob.sol.t))) != saves_per_action + 1 ($(saves_per_action + 1))"
-                if env.prob.sol.t[end] - env.prob.sol.t[end-1] < env.dt/10
+                if env.prob.sol.t[end] - env.prob.sol.t[end-1] < env.dt / 10
                     step_states = env.prob.sol.u[2:end-1]
                     step_ts = env.prob.sol.t[2:end-1]
                 else
@@ -206,7 +206,7 @@ function run_policy(policy::AbstractRDEPolicy, env::RDEEnv{T}; saves_per_action=
                 @info "Env done at step $step"
             end
             # @assert env.done "Env terminated but done is false"
-        #     break
+            #     break
         end
         if env.truncated && env.verbose > 0
             @info "Env truncated at step $step"
