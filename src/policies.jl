@@ -561,13 +561,16 @@ end
 
 struct LinearPolicy{T <: AbstractFloat} <: AbstractRDEPolicy
     env::RDEEnv{T}
-    start_value::Union{Vector{T}, T}
-    end_value::Union{Vector{T}, T}
-    function LinearPolicy(env::RDEEnv{T}, start_value::Union{Vector{T}, T}, end_value::Union{Vector{T}, T}, start_time::T, end_time::T) where {T <: AbstractFloat}
+    start_value::Union{Vector{T},T}
+    end_value::Union{Vector{T},T}
+    duration::T
+    function LinearPolicy(env::RDEEnv{T}, start_value::Union{Vector{T},T}, end_value::Union{Vector{T},T}, duration::T) where {T<:AbstractFloat}
         if env.action_type isa ScalarAreaScalarPressureAction
             @assert length(start_value) == 2 && length(end_value) == 2 "Start and end values must have 2 elements"
+            new{T}(env, start_value, end_value, duration)
         elseif env.action_type isa ScalarPressureAction
             @assert length(start_value) == 1 && length(end_value) == 1 "Start and end values must have 1 element"
+            new{T}(env, start_value, end_value, duration)
         else
             @error "Unknown action type $(typeof(env.action_type)) for LinearPolicy"
         end
@@ -577,13 +580,13 @@ end
 
 function _predict_action(π::LinearPolicy, s)
     t = π.env.t
-    tmax = π.env.prob.params.tmax
     if π.env.action_type isa ScalarAreaScalarPressureAction
-        target_values = π.start_value .+ (π.end_value .- π.start_value) .* t / tmax
+        target_values = π.start_value .+ (π.end_value .- π.start_value) .* min(t, π.duration) / π.duration
         return get_scaled_control.([π.env.prob.method.cache.s_current[1], π.env.prob.method.cache.u_p_current[1]], [π.env.smax, π.env.u_pmax], target_values)
     elseif π.env.action_type isa ScalarPressureAction
-        target_value = π.start_value + (π.end_value - π.start_value) * t / tmax
-        return get_scaled_control(π.env.prob.method.cache.u_p_current[1], π.env.u_pmax, target_value)
+        target_value = π.start_value + (π.end_value - π.start_value) * min(t, π.duration) / π.duration
+        scaled_control = get_scaled_control(π.env.prob.method.cache.u_p_current[1], π.env.u_pmax, target_value)
+        return scaled_control
     else
         @error "Unknown action type $(typeof(π.env.action_type)) for LinearPolicy"
     end
@@ -597,7 +600,7 @@ function Base.show(io::IO, ::MIME"text/plain", π::LinearPolicy)
     println(io, "LinearPolicy:")
     println(io, "  start_value: $(π.start_value)")
     println(io, "  end_value: $(π.end_value)")
-    return println(io, "  env: $(typeof(π.env))")
+    println(io, "  duration: $(π.duration)")
 end
 
 """
