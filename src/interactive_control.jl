@@ -32,19 +32,22 @@ Create an interactive visualization and control interface for an RDE simulation.
 - `↓`: Decrease timestep
 - `w`: Increase s parameter (ScalarAreaScalarPressureAction only)
 - `s`: Decrease s parameter (ScalarAreaScalarPressureAction only)
-- `e`: Increase u_p parameter or first section pressure
-- `d`: Decrease u_p parameter or first section pressure
+- `e`: Increase u_p parameter by 0.01 or first section pressure
+- `d`: Decrease u_p parameter by 0.01 or first section pressure
+- `3`: Fine increase u_p parameter by 0.001
+- `c`: Fine decrease u_p parameter by 0.001
 - `r`: Reset simulation
 
 For VectorPressureAction:
-- `e`/`d`: Modify pressure in all sections simultaneously
+- `e`/`d`: Modify pressure in all sections by 0.01 simultaneously
+- `3`/`c`: Fine control pressure in all sections by 0.001 simultaneously
 - (Individual sections can be controlled via sliders)
 
 ## Interactive Elements
 - Sliders for control parameters based on action type:
-  - ScalarAreaScalarPressureAction: s, u_p, and timestep sliders
-  - ScalarPressureAction: u_p and timestep sliders  
-  - VectorPressureAction: multiple u_p sliders (one per section) and timestep slider
+  - ScalarAreaScalarPressureAction: s (0.001 increments), u_p (0.001 increments), and timestep sliders
+  - ScalarPressureAction: u_p (0.001 increments) and timestep sliders
+  - VectorPressureAction: multiple u_p sliders (0.001 increments, one per section) and timestep slider
 - Control buttons:
   - Step: Advance simulation by one timestep
   - Reset: Reset simulation to initial state
@@ -410,8 +413,8 @@ function interactive_control(env::RDEEnv; callback = nothing, show_observations 
                                 callback(env)
                             end
                         catch e
-                            @error "error taking action e=$e"
-                            rethrow(e)
+                            @error "error taking action" exception = (e, Base.catch_backtrace())
+                            rethrow()  # preserve original backtrace
                         end
                     elseif action_type isa ScalarAreaScalarPressureAction
                         # Both s and u_p controls available
@@ -423,19 +426,41 @@ function interactive_control(env::RDEEnv; callback = nothing, show_observations 
                             control_s[] -= get_timestep_scale(control_s.val)
                             set_close_to!(slider_s, control_s[])
                         elseif key == Keyboard.e
-                            control_u_p[] += get_timestep_scale(control_u_p.val)
+                            control_u_p[] += 0.01
+                            control_u_p[] = clamp(control_u_p[], 0.0, env.u_pmax)
                             set_close_to!(slider_u_p, control_u_p[])
                         elseif key == Keyboard.d
-                            control_u_p[] -= get_timestep_scale(control_u_p.val)
+                            control_u_p[] -= 0.01
+                            control_u_p[] = clamp(control_u_p[], 0.0, env.u_pmax)
+                            set_close_to!(slider_u_p, control_u_p[])
+                        elseif key == Keyboard._3 || key == Keyboard.c
+                            # Fine control: increase/decrease u_p by 0.001
+                            if key == Keyboard._3
+                                control_u_p[] += 0.001
+                            else  # key == Keyboard.c
+                                control_u_p[] -= 0.001
+                            end
+                            control_u_p[] = clamp(control_u_p[], 0.0, env.u_pmax)
                             set_close_to!(slider_u_p, control_u_p[])
                         end
                     elseif action_type isa ScalarPressureAction
                         # Only u_p control available
                         if key == Keyboard.e
-                            control_u_p[] += get_timestep_scale(control_u_p.val)
+                            control_u_p[] += 0.01
+                            control_u_p[] = clamp(control_u_p[], 0.0, env.u_pmax)
                             set_close_to!(slider_u_p, control_u_p[])
                         elseif key == Keyboard.d
-                            control_u_p[] -= get_timestep_scale(control_u_p.val)
+                            control_u_p[] -= 0.01
+                            control_u_p[] = clamp(control_u_p[], 0.0, env.u_pmax)
+                            set_close_to!(slider_u_p, control_u_p[])
+                        elseif key == Keyboard._3 || key == Keyboard.c
+                            # Fine control: increase/decrease u_p by 0.001
+                            if key == Keyboard._3
+                                control_u_p[] += 0.001
+                            else  # key == Keyboard.c
+                                control_u_p[] -= 0.001
+                            end
+                            control_u_p[] = clamp(control_u_p[], 0.0, env.u_pmax)
                             set_close_to!(slider_u_p, control_u_p[])
                         end
                     elseif action_type isa VectorPressureAction
@@ -443,13 +468,26 @@ function interactive_control(env::RDEEnv; callback = nothing, show_observations 
                         if key == Keyboard.e
                             # Increase pressure in all sections
                             for i in 1:action_type.n_sections
-                                control_u_p_sections[i][] += get_timestep_scale(control_u_p_sections[i].val)
+                                control_u_p_sections[i][] += 0.01
+                                control_u_p_sections[i][] = clamp(control_u_p_sections[i][], 0.0, env.u_pmax)
                                 set_close_to!(slider_u_p_sections[i], control_u_p_sections[i][])
                             end
                         elseif key == Keyboard.d
                             # Decrease pressure in all sections
                             for i in 1:action_type.n_sections
-                                control_u_p_sections[i][] -= get_timestep_scale(control_u_p_sections[i].val)
+                                control_u_p_sections[i][] -= 0.01
+                                control_u_p_sections[i][] = clamp(control_u_p_sections[i][], 0.0, env.u_pmax)
+                                set_close_to!(slider_u_p_sections[i], control_u_p_sections[i][])
+                            end
+                        elseif key == Keyboard._3 || key == Keyboard.c
+                            # Fine control: increase/decrease u_p in all sections by 0.001
+                            for i in 1:action_type.n_sections
+                                if key == Keyboard._3
+                                    control_u_p_sections[i][] += 0.001
+                                else  # key == Keyboard.c
+                                    control_u_p_sections[i][] -= 0.001
+                                end
+                                control_u_p_sections[i][] = clamp(control_u_p_sections[i][], 0.0, env.u_pmax)
                                 set_close_to!(slider_u_p_sections[i], control_u_p_sections[i][])
                             end
                         end
