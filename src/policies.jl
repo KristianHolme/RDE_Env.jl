@@ -574,7 +574,7 @@ struct LinearPolicy{T <: AbstractFloat} <: AbstractRDEPolicy
         else
             @error "Unknown action type $(typeof(env.action_type)) for LinearPolicy"
         end
-        return new{T}(env, start_value, end_value, start_time, end_time)
+        return new{T}(env, start_value, end_value, duration)
     end
 end
 
