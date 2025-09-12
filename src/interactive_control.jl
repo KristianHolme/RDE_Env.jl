@@ -1,19 +1,4 @@
 """
-    get_timestep_scale(val)
-
-Calculate an appropriate scale for timestep adjustments based on the current value.
-
-# Arguments
-- `val`: Current value to scale
-
-# Returns
-- Scaled step size (0.01 * val)
-"""
-function get_timestep_scale(val)
-    return 0.01 * val
-end
-
-"""
     interactive_control(env::RDEEnv; callback=nothing, show_observations=false)
 
 Create an interactive visualization and control interface for an RDE simulation.
@@ -387,12 +372,12 @@ function interactive_control(env::RDEEnv; callback = nothing, show_observations 
                 for key in pressed_keys
                     if key == Keyboard.up
                         # Increase time step on arrow up
-                        time_step[] += get_timestep_scale(time_step.val)
+                        time_step[] += 0.01
                         time_step[] = min(time_step[], dtmax)
                         set_close_to!(slider_dt, time_step[])
                     elseif key == Keyboard.down
                         # Decrease time step on arrow down
-                        time_step[] -= get_timestep_scale(time_step.val)
+                        time_step[] -= 0.01
                         time_step[] = max(time_step[], 0.001)
                         set_close_to!(slider_dt, time_step[])
                     elseif key == Keyboard.right
@@ -419,11 +404,11 @@ function interactive_control(env::RDEEnv; callback = nothing, show_observations 
                     elseif action_type isa ScalarAreaScalarPressureAction
                         # Both s and u_p controls available
                         if key == Keyboard.w
-                            change = get_timestep_scale(control_s.val)
+                            change = 0.01
                             control_s[] += change
                             set_close_to!(slider_s, control_s[])
                         elseif key == Keyboard.s
-                            control_s[] -= get_timestep_scale(control_s.val)
+                            control_s[] -= 0.01
                             set_close_to!(slider_s, control_s[])
                         elseif key == Keyboard.e
                             control_u_p[] += 0.01
