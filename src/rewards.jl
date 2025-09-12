@@ -93,38 +93,38 @@ end
 
 reward_value_type(::Type{T}, ::ShockPreservingSymmetryReward) where {T} = T
 
-function compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::PeriodicityReward) where {T, A, O, R, V, OBS}
+function compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::PeriodicityReward) where {T <: AbstractFloat, A, O, R, V, OBS}
     u, = RDE.split_sol_view(env.state)
-    N = env.prob.params.N
-    dx = env.prob.x[2] - env.prob.x[1]
-    L = env.prob.params.L
+    N::Int = env.prob.params.N
+    dx::T = env.prob.x[2] - env.prob.x[1]
+    L::T = env.prob.params.L
     shock_inds = RDE.shock_indices(u, dx)
-    shocks = length(shock_inds)
+    shocks::Int = length(shock_inds)
 
     cache = rt.cache
     if shocks > 1
-        shift_steps = N ÷ shocks
-        errs = zeros(shocks - 1)
+        shift_steps::Int = N ÷ shocks
+        errs::Vector{T} = zeros(T, shocks - 1)
         for i in 1:(shocks - 1)
             cache .= u
             circshift!(cache, u, -shift_steps * i)
-            errs[i] = norm(u - cache) / sqrt(N)
+            errs[i]::T = norm(u - cache) / sqrt(N)
         end
-        maxerr = maximum(errs)
-        periodicity_reward = 1.0f0 - (max(maxerr - 0.08f0, 0.0f0) / sqrt(3.0f0))
+        maxerr::T = maximum(errs)
+        periodicity_reward = T(1) - (max(maxerr - T(0.08), zero(T)) / sqrt(T(3)))
     else
-        periodicity_reward = 1.0f0
+        periodicity_reward = T(1)
     end
 
     if shocks > 1
-        optimal_spacing = L / shocks
-        shock_spacing = mod.(RDE.periodic_diff(shock_inds), N) .* dx
-        shock_spacing_reward = 1.0f0 - maximum(abs.((shock_spacing .- optimal_spacing) ./ optimal_spacing))
+        optimal_spacing::T = L / shocks
+        shock_spacing::Vector{T} = mod.(RDE.periodic_diff(shock_inds), N) .* dx
+        shock_spacing_reward = T(1) - maximum(abs.((shock_spacing .- optimal_spacing) ./ optimal_spacing))
     else
-        shock_spacing_reward = 1.0f0
+        shock_spacing_reward = T(1)
     end
 
-    return (Float32(periodicity_reward + shock_spacing_reward)) / 2.0f0
+    return (periodicity_reward::T + shock_spacing_reward::T) / T(2)
 end
 
 reward_value_type(::Type{T}, ::PeriodicityReward) where {T} = T
@@ -548,18 +548,18 @@ function Base.show(io::IO, ::MIME"text/plain", rt::PeriodMinimumReward)
 end
 
 function time_minimum_global_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::CachedCompositeReward) where {T <: AbstractFloat, A, O, R, V, OBS}
-    N = env.prob.params.N
+    N::Int = env.prob.params.N
     if isnothing(env.prob.sol)
         return zero(T)
     end
 
     # Pre-compute constants to avoid type instability in loop
-    L = env.prob.params.L::T
-    dx = (env.prob.x[2] - env.prob.x[1])::T
-    weight_sum = sum(rt.weights)::T
+    L::T = env.prob.params.L
+    dx::T = RDE.get_dx(env.prob)
+    weight_sum::T = sum(rt.weights)
 
     # Initialize with large values to find minimum
-    min_rewards = fill(T(10000), 5)
+    min_rewards::Vector{T} = fill(T(10000), 5)
 
     # Type-stable iteration - convert to Vector{Vector{T}} if needed
     sol_states = env.prob.sol.u

@@ -125,27 +125,30 @@ Take an action in the environment.
 - Handles smooth control transitions
 - Supports multiple action types
 """
-function _act!(env::RDEEnv{T, A, O, R, V, OBS}, action; saves_per_action::Int = 10) where {T, A, O, R, V, OBS}
+function _act!(env::RDEEnv{T, A, O, R, V, OBS}, action; saves_per_action::Int = 10) where {T <: AbstractFloat, A, O, R, V, OBS}
     t_start = time()
 
-    if env.t > env.prob.params.tmax
-        @warn "t > tmax! ($(env.t) > $(env.prob.params.tmax))"
+    tmax::T = env.prob.params.tmax
+    t::T = env.t
+    dt::T = env.dt
+    if t > tmax
+        @warn "t > tmax! ($(t) > $(tmax))"
     end
     # Store current state before taking action
     @logmsg LogLevel(-10000) "Starting act! for environment on thread $(Threads.threadid())"
-    N = env.prob.params.N
+    N::Int = env.prob.params.N
     env.cache.prev_u .= @view env.state[1:N]
     env.cache.prev_λ .= @view env.state[(N + 1):end]
     @logmsg LogLevel(-10000) "Stored previous state" prev_u = env.cache.prev_u prev_λ = env.cache.prev_λ
 
-    t_span = (env.t, env.t + env.dt)
+    t_span = (t, t + dt)
     @logmsg LogLevel(-10000) "Set time span" t_span = t_span
-    env.prob.method.cache.control_time = env.t
+    env.prob.method.cache.control_time::T = t
     @logmsg LogLevel(-10000) "Set control time" control_time = env.prob.method.cache.control_time
 
-    prev_controls = [env.prob.method.cache.s_current, env.prob.method.cache.u_p_current]
-    c = [env.prob.method.cache.s_current, env.prob.method.cache.u_p_current]
-    c_max = [env.smax, env.u_pmax]
+    prev_controls = [env.prob.method.cache.s_current::Vector{T}, env.prob.method.cache.u_p_current::Vector{T}]
+    c::Vector{Vector{T}} = [env.prob.method.cache.s_current::Vector{T}, env.prob.method.cache.u_p_current::Vector{T}]
+    c_max::Vector{T} = [env.smax::T, env.u_pmax::T]
     @logmsg LogLevel(-10000) "Initial controls" prev_controls = prev_controls c_max = c_max
 
     normalized_standard_actions = compute_standard_actions(env.action_type, action, env)
@@ -158,8 +161,8 @@ function _act!(env::RDEEnv{T, A, O, R, V, OBS}, action; saves_per_action::Int = 
         if any(abs.(a) .> 1)
             @warn "action $a out of bounds [-1,1]"
         end
-        c_prev = c[i]
-        c_hat = @. ifelse(a < 0, c_prev .* (a .+ 1), c_prev .+ (c_max[i] .- c_prev) .* a)
+        c_prev::T = c[i]
+        c_hat::Vector{T} = @. ifelse(a < 0, c_prev .* (a .+ 1), c_prev .+ (c_max[i] .- c_prev) .* a)
         #FIXME: runtime dispatch below
         c[i] = env.α .* c_prev .+ (1 - env.α) .* c_hat
     end
