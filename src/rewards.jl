@@ -85,7 +85,7 @@ function compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::ShockPreservingSymm
     for i in 1:(target_shock_count - 1)
         cache .= u
         circshift!(cache, u, -shift_steps * i)
-        errs[i] = norm(u - cache) / sqrt(T(N))
+        errs[i] = RDE.turbo_diff_norm(u, cache) / sqrt(T(N))
     end
     maxerr = RDE.turbo_maximum(errs)
     return T(1) - (maxerr - T(0.1)) / T(0.5)
@@ -108,7 +108,7 @@ function compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::PeriodicityReward) 
         for i in 1:(shocks - 1)
             cache .= u
             circshift!(cache, u, -shift_steps * i)
-            errs[i]::T = norm(u - cache) / sqrt(N)
+            errs[i]::T = RDE.turbo_diff_norm(u, cache) / sqrt(N)
         end
         maxerr::T = RDE.turbo_maximum(errs)
         periodicity_reward = T(1) - (max(maxerr - T(0.08), zero(T)) / sqrt(T(3)))
@@ -188,9 +188,9 @@ function calculate_periodicity_reward(u::AbstractVector{T}, N::Int, target_shock
         errs = zeros(T, target_shock_count - 1)
         shift_steps = N ÷ target_shock_count
         for i in 1:(target_shock_count - 1)
-            cache .= u
+            # cache .= u #maybe not necessary?
             circshift!(cache, u, -shift_steps * i)
-            errs[i] = norm(u - cache) * inv_sqrt_N
+            errs[i] = RDE.turbo_diff_norm(u, cache) * inv_sqrt_N
         end
         maxerr = RDE.turbo_maximum(errs)
         periodicity_reward = one(T) - (max(maxerr - T(0.08), zero(T)) / sqrt(T(3)))
@@ -547,7 +547,7 @@ function compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::TimeDiffNormReward{
     abs_ft_us = map(v -> abs.(v), ft_us)
     for i in 1:n, j in (i + 1):n
         # L2 distance between magnitude spectra, normalized by sqrt(N)
-        diff_norms[ind] = norm(abs_ft_us[i] .- abs_ft_us[j]) / sqrt(N)
+        diff_norms[ind] = RDE.turbo_diff_norm(abs_ft_us[i], abs_ft_us[j]) / sqrt(N)
         ind += 1
     end
     # Use fast turbo maximum for the worst-case spectral change across time
