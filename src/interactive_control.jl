@@ -66,7 +66,10 @@ env, fig = interactive_control(env, show_observations=true)
 - Automatically adapts interface based on the environment's action type
 """
 
-function interactive_control(env::RDEEnv; callback = nothing, show_observations = false, dtmax = 1.0, kwargs...)
+function interactive_control(
+        env::RDEEnv{T, A, O, R, V, OBS};
+        callback = nothing, show_observations = false, dtmax = 1.0, kwargs...
+    ) where {T <: AbstractFloat, A, O, R, V, OBS}
     params = env.prob.params
     N = params.N
     fig = Figure(size = (1200, show_observations ? 900 : 700))
@@ -248,7 +251,7 @@ function interactive_control(env::RDEEnv; callback = nothing, show_observations 
             dummy_action = if action_type isa VectorPressureAction
                 zeros(action_type.n_sections)  # Vector with correct length
             else
-                [0.0]  # Single value for scalar actions
+                zero(T)  # Single value for scalar actions
             end
             _act!(env, dummy_action) # cached values are already set
             # energy_bal_pts[] = push!(energy_bal_pts[], Point2f(env.t, energy_balance(env.state, params)))
@@ -386,7 +389,7 @@ function interactive_control(env::RDEEnv; callback = nothing, show_observations 
                             dummy_action = if action_type isa VectorPressureAction
                                 zeros(action_type.n_sections)  # Vector with correct length
                             else
-                                [0.0]  # Single value for scalar actions
+                                zero(T)  # Single value for scalar actions
                             end
                             _act!(env, dummy_action) #cached values are already set
                             # energy_bal_pts[] = push!(energy_bal_pts[], Point2f(env.t, energy_balance(env.state, params)))
