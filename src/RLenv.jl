@@ -107,6 +107,248 @@ RDEEnv(params::RDEParam{T}; kwargs...) where {T <: AbstractFloat} = RDEEnv(; par
 
 _observe(env::RDEEnv) = copy(env.observation)
 
+# Scalar-action overloads (avoid building action vectors)
+@inline function control_target(a::T, c_prev::T, c_max::T) where {T <: AbstractFloat}
+    target = ifelse(a < 0, c_prev * (a + one(T)), c_prev + (c_max - c_prev) * a)::T
+    return target
+end
+
+@inline function action_to_control(a::T, c_prev::T, c_max::T, α::T) where {T <: AbstractFloat}
+    target::T = control_target(a, c_prev, c_max)
+    return α * c_prev + (one(T) - α) * target
+end
+
+@inline get_saveat(env::RDEEnv{T}, saves_per_action::Int) where {T <: AbstractFloat} = saves_per_action == 0 ? nothing : (env.dt / saves_per_action)
+
+function step_env!(env::RDEEnv{T, A, O, R, V, OBS}; saves_per_action::Int = 10) where {T <: AbstractFloat, A, O, R, V, OBS}
+    return _step!(env, env.prob.method; saves_per_action = saves_per_action)
+end
+
+function _step!(env::RDEEnv{T, A, O, R, V, OBS}, ::RDE.PseudospectralMethod{T}; saves_per_action::Int = 10) where {T <: AbstractFloat, A, O, R, V, OBS}
+    if saves_per_action == 0
+        return OrdinaryDiffEq.solve(
+            env.ode_problem, OrdinaryDiffEq.Tsit5(); save_on = false,
+            isoutofdomain = RDE.outofdomain, verbose = env.verbose,
+        )
+    else
+        saveat = get_saveat(env, saves_per_action)
+        return OrdinaryDiffEq.solve(
+            env.ode_problem, OrdinaryDiffEq.Tsit5(); saveat = saveat,
+            isoutofdomain = RDE.outofdomain, verbose = env.verbose,
+        )
+    end
+end
+
+function _step!(env::RDEEnv{T, A, O, R, V, OBS}, ::RDE.FiniteVolumeMethod{T}; saves_per_action::Int = 10) where {T <: AbstractFloat, A, O, R, V, OBS}
+    # SSPRK33 (fixed-step, no error adaptivity). Use CFL to set proposed dt and exact saveat spacing.
+    params = env.prob.params
+    u0_view = @view env.ode_problem.u0[1:params.N]
+    dtmax0::T = RDE.cfl_dtmax(params, u0_view)
+
+    function cfl_affect!(integrator)
+        u = @view integrator.u[1:params.N]
+        umax = maximum(abs, u)
+        if !isfinite(umax) || umax <= 0
+            SciMLBase.terminate!(integrator, SciMLBase.ReturnCode.Failure)
+            return
+        end
+        dt_cfl::T = RDE.cfl_dtmax(params, u)
+        if !isfinite(dt_cfl) || dt_cfl <= 0
+            SciMLBase.terminate!(integrator, SciMLBase.ReturnCode.Failure)
+            return
+        end
+        SciMLBase.set_proposed_dt!(integrator, dt_cfl)
+        return SciMLBase.u_modified!(integrator, false)
+    end
+    cfl_condition(u, t, integrator) = true
+    cfl_cb = SciMLBase.DiscreteCallback(cfl_condition, cfl_affect!; save_positions = (false, false))
+
+    if saves_per_action == 0
+        return OrdinaryDiffEq.solve(
+            env.ode_problem, OrdinaryDiffEq.SSPRK33(); adaptive = false, dt = dtmax0,
+            save_on = false, isoutofdomain = RDE.outofdomain, callback = cfl_cb,
+            verbose = env.verbose,
+        )
+    else
+        t0, t1 = env.ode_problem.tspan
+        save_times = collect(range(t0, t1; length = saves_per_action + 1))
+        return OrdinaryDiffEq.solve(
+            env.ode_problem, OrdinaryDiffEq.SSPRK33(); dt = dtmax0,
+            saveat = save_times, isoutofdomain = RDE.outofdomain, callback = cfl_cb,
+            verbose = env.verbose,
+        )
+    end
+end
+
+function _step!(env::RDEEnv{T, A, O, R, V, OBS}, ::RDE.UpwindMethod{T}; saves_per_action::Int = 10) where {T <: AbstractFloat, A, O, R, V, OBS}
+    params = env.prob.params
+    u0_view = @view env.ode_problem.u0[1:params.N]
+    dtmax0::T = RDE.cfl_dtmax(params, u0_view)
+
+    function cfl_affect!(integrator)
+        u = @view integrator.u[1:params.N]
+        umax = maximum(abs, u)
+        if !isfinite(umax) || umax <= 0
+            SciMLBase.terminate!(integrator; retcode = SciMLBase.ReturnCode.Failure)
+            return
+        end
+        dt_cfl::T = RDE.cfl_dtmax(params, u)
+        if !isfinite(dt_cfl) || dt_cfl <= 0
+            SciMLBase.terminate!(integrator; retcode = SciMLBase.ReturnCode.Failure)
+            return
+        end
+        SciMLBase.set_proposed_dt!(integrator, dt_cfl)
+        return SciMLBase.u_modified!(integrator, false)
+    end
+    cfl_condition(u, t, integrator) = true
+    cfl_cb = SciMLBase.DiscreteCallback(cfl_condition, cfl_affect!; save_positions = (false, false))
+
+    if saves_per_action == 0
+        return OrdinaryDiffEq.solve(
+            env.ode_problem, OrdinaryDiffEq.SSPRK33(); adaptive = false, dt = dtmax0,
+            save_on = false, isoutofdomain = RDE.outofdomain, callback = cfl_cb,
+            verbose = env.verbose,
+        )
+    else
+        t0, t1 = env.ode_problem.tspan
+        save_times = collect(range(t0, t1; length = saves_per_action + 1))
+        return OrdinaryDiffEq.solve(
+            env.ode_problem, OrdinaryDiffEq.SSPRK33(); adaptive = false, dt = dtmax0,
+            saveat = save_times, save_on = false, isoutofdomain = RDE.outofdomain, callback = cfl_cb,
+            verbose = env.verbose,
+        )
+    end
+end
+
+function _step!(env::RDEEnv{T, A, O, R, V, OBS}, ::RDE.AbstractMethod; saves_per_action::Int = 10) where {T <: AbstractFloat, A, O, R, V, OBS}
+    # Fallback: Tsit5 with/without saveat
+    if saves_per_action == 0
+        return OrdinaryDiffEq.solve(
+            env.ode_problem, OrdinaryDiffEq.Tsit5(); save_on = false,
+            isoutofdomain = RDE.outofdomain, verbose = env.verbose,
+        )
+    else
+        saveat = get_saveat(env, saves_per_action)
+        return OrdinaryDiffEq.solve(
+            env.ode_problem, OrdinaryDiffEq.Tsit5(); saveat = saveat,
+            isoutofdomain = RDE.outofdomain, verbose = env.verbose,
+        )
+    end
+end
+
+function apply_action!(env::RDEEnv{T, A, O, R, V, OBS}, action::AbstractVector{T}) where {T <: AbstractFloat, A <: VectorPressureAction, O, R, V, OBS}
+    action_type = env.action_type
+    a = compute_standard_actions(action_type, action, env)
+    env.cache.action[:, 1] = a[1]
+    env.cache.action[:, 2] = a[2]
+
+    cache = env.prob.method.cache
+
+    if any(abs.(a[1]) .> one(T)) || any(abs.(a[2]) .> one(T))
+        @warn "action out of bounds [-1,1]"
+    end
+
+    copyto!(cache.u_p_previous, cache.u_p_current)
+
+    @assert action_type.N > 0 "Action type N not set"
+    @assert length(action) == action_type.n_sections "Action length ($(length(action))) must match n_sections ($(action_type.n_sections))"
+    @assert action_type.N % action_type.n_sections == 0 "N ($(action_type.N)) must be divisible by n_sections ($(action_type.n_sections))"
+
+    # Calculate how many points per section
+    points_per_section = action_type.N ÷ action_type.n_sections
+
+    current_section_controls = @view cache.u_p_current[1:points_per_section:end]
+    section_controls = action_to_control.(action, current_section_controls, env.u_pmax, env.α)
+    # Initialize pressure actions array
+    new_pressures = zeros(T, action_type.N)
+
+    # Fill each section with its corresponding action value
+    for i in 1:action_type.n_sections
+        start_idx = (i - 1) * points_per_section + 1
+        end_idx = i * points_per_section
+        new_pressures[start_idx:end_idx] .= section_controls[i]
+        cache.action[start_idx:end_idx, 2] .= action[i]
+    end
+
+    cache.u_p_current .= new_pressures
+    return nothing
+end
+
+# Specialization: ScalarPressureAction — scalar action updates only u_p channel
+function apply_action!(env::RDEEnv{T, A, O, R, V, OBS}, action::T) where {T <: AbstractFloat, A <: ScalarPressureAction, O, R, V, OBS}
+    cache = env.prob.method.cache
+    if abs(action) > one(T)
+        @warn "action (u_p) out of bounds [-1,1]"
+    end
+    # Keep cache.action updated without allocating
+    env.cache.action[:, 1] .= zero(T)
+    env.cache.action[:, 2] .= action
+
+    copyto!(cache.u_p_previous, cache.u_p_current)
+    cache.u_p_current .= action_to_control(action, cache.u_p_current[1], env.u_pmax, env.α)
+
+    copyto!(cache.s_previous, cache.s_current)
+    return nothing
+end
+
+# Convenience: accept array-like scalar for ScalarPressureAction
+function apply_action!(env::RDEEnv{T, A, O, R, V, OBS}, action::AbstractArray{T}) where {T <: AbstractFloat, A <: ScalarPressureAction, O, R, V, OBS}
+    return apply_action!(env, action[1])
+end
+
+# Specialization: ScalarAreaScalarPressureAction — two scalar actions (s, u_p)
+function apply_action!(env::RDEEnv{T, A, O, R, V, OBS}, action::AbstractVector{T}) where {T <: AbstractFloat, A <: ScalarAreaScalarPressureAction, O, R, V, OBS}
+    @assert length(action) == 2
+    a_s, a_up = action[1], action[2]
+    cache = env.prob.method.cache
+
+    if abs(a_s) > one(T) || abs(a_up) > one(T)
+        @warn "action (s/u_p) out of bounds [-1,1]"
+    end
+
+    env.cache.action[:, 1] .= a_s
+    env.cache.action[:, 2] .= a_up
+
+    copyto!(cache.s_previous, cache.s_current)
+    cache.s_current .= action_to_control(a_s, cache.s_current[1], env.smax, env.α)
+
+    copyto!(cache.u_p_previous, cache.u_p_current)
+    cache.u_p_current .= action_to_control(a_up, cache.u_p_current[1], env.u_pmax, env.α)
+    return nothing
+end
+
+# function apply_action!(env::RDEEnv{T, A, O, R, V, OBS}, action::NTuple{2, T}) where {T <: AbstractFloat, A <: ScalarAreaScalarPressureAction, O, R, V, OBS}
+#     return apply_action!(env, collect(action))
+# end
+
+# Specialization: PIDAction — gains => scalar u_p set via PID, s unchanged
+function apply_action!(env::RDEEnv{T, A, O, R, V, OBS}, gains::AbstractVector{T}) where {T <: AbstractFloat, A <: PIDAction, O, R, V, OBS}
+    @assert length(gains) == 3 "PIDAction expects [Kp, Ki, Kd]"
+    Kp, Ki, Kd = gains
+
+    cache = env.prob.method.cache
+    u_p_mean::T = mean(cache.u_p_current)
+
+    # PID terms (keep in T)
+    err::T = env.action_type.target - u_p_mean
+    env.action_type.integral += err * env.dt
+    deriv::T = (err - env.action_type.previous_error) / env.dt
+    u_p_action::T = clamp(Kp * err + Ki * env.action_type.integral + Kd * deriv, -one(T), one(T))
+    env.action_type.previous_error = err
+
+    # Keep cache.action updated (no allocations)
+    env.cache.action[:, 1] .= zero(T)
+    env.cache.action[:, 2] .= u_p_action
+
+    # Apply control (only u_p)
+    copyto!(cache.u_p_previous, cache.u_p_current)
+    cache.u_p_current .= action_to_control(u_p_action, cache.u_p_current[1], env.u_pmax, env.α)
+
+    # s channel unchanged, still keep previous in sync
+    copyto!(cache.s_previous, cache.s_current)
+    return nothing
+end
+
 """
     _act!(env::RDEEnv{T}, action; saves_per_action::Int=0) where {T<:AbstractFloat}
 
@@ -146,60 +388,30 @@ function _act!(env::RDEEnv{T, A, O, R, V, OBS}, action; saves_per_action::Int = 
     env.prob.method.cache.control_time::T = t
     @logmsg LogLevel(-10000) "Set control time" control_time = env.prob.method.cache.control_time
 
-    prev_controls = [env.prob.method.cache.s_current::Vector{T}, env.prob.method.cache.u_p_current::Vector{T}]
-    c::Vector{Vector{T}} = [env.prob.method.cache.s_current::Vector{T}, env.prob.method.cache.u_p_current::Vector{T}]
-    c_max::Vector{T} = [env.smax::T, env.u_pmax::T]
-    @logmsg LogLevel(-10000) "Initial controls" prev_controls = prev_controls c_max = c_max
+    @logmsg LogLevel(-10000) "Initial controls" prev_s = env.prob.method.cache.s_current prev_up = env.prob.method.cache.u_p_current
 
-    normalized_standard_actions = compute_standard_actions(env.action_type, action, env)
-    env.cache.action[:, 1] = normalized_standard_actions[1]
-    env.cache.action[:, 2] = normalized_standard_actions[2]
-    @logmsg LogLevel(-10000) "Normalized actions" actions = normalized_standard_actions
+    prev_means = mean.([env.prob.method.cache.s_current, env.prob.method.cache.u_p_current])
+    apply_action!(env, action)
+    curr_means = mean.([env.prob.method.cache.s_current, env.prob.method.cache.u_p_current])
 
-    for i in 1:2
-        a = normalized_standard_actions[i]
-        if any(abs.(a) .> 1)
-            @warn "action $a out of bounds [-1,1]"
-        end
-        c_prev::T = c[i]
-        c_hat::Vector{T} = @. ifelse(a < 0, c_prev .* (a .+ 1), c_prev .+ (c_max[i] .- c_prev) .* a)
-        #FIXME: runtime dispatch below
-        c[i] = env.α .* c_prev .+ (1 - env.α) .* c_hat
-    end
-
-    env.prob.method.cache.s_previous = env.prob.method.cache.s_current
-    env.prob.method.cache.u_p_previous = env.prob.method.cache.u_p_current
-    env.prob.method.cache.s_current = c[1]
-    env.prob.method.cache.u_p_current = c[2]
-
-    @logmsg LogLevel(-10000) "taking action $action at time $(env.t), controls: $(mean.(prev_controls)) to $(mean.(c))"
+    @logmsg LogLevel(-10000) "taking action $action at time $(env.t), controls: $(prev_means) to $(curr_means)"
 
     #TODO use remake instead of recreating ??
     # prob_ode = ODEProblem{true, SciMLBase.FullSpecialize}(RDE_RHS!, env.state, t_span, env.prob)
-    env.ode_problem = remake(env.ode_problem, u0 = env.state, tspan = t_span)
+    env.ode_problem = remake(env.ode_problem::SciMLBase.ODEProblem, u0 = env.state, tspan = t_span)
 
-    if saves_per_action == 0
-        sol = OrdinaryDiffEq.solve(
-            env.ode_problem, Tsit5(), save_on = false,
-            isoutofdomain = RDE.outofdomain, verbose = env.verbose
-        )
-    else
-        saveat = env.dt / saves_per_action
-        sol = OrdinaryDiffEq.solve(
-            env.ode_problem, Tsit5(), saveat = saveat,
-            isoutofdomain = RDE.outofdomain, verbose = env.verbose
-        )
-        if length(sol.t) != saves_per_action + 1
-            @debug "length(sol.t) ($(length(sol.t))) != saves_per_action + 1 ($(saves_per_action + 1)), at tspan=$(t_span)"
-        end
+    sol = step_env!(env; saves_per_action = saves_per_action)
+    if saves_per_action > 0 && length(sol.t) != saves_per_action + 1
+        @debug "length(sol.t) ($(length(sol.t))) != saves_per_action + 1 ($(saves_per_action + 1)), at tspan=$(t_span)"
     end
 
+    #TODO: factor out this
     #Check termination caused by ODE solver
-    if sol.retcode != :Success || any(isnan.(sol.u[end]))
+    if !SciMLBase.successful_retcode(sol) || any(isnan.(sol.u[end]))
         if any(isnan.(sol.u[end]))
             @warn "NaN state detected"
         end
-        @logmsg LogLevel(-10000) "ODE solver failed, controls: $(mean(prev_controls)) to $(mean(c))"
+        @logmsg LogLevel(-10000) "ODE solver failed, controls: $(prev_means) to $(curr_means)"
         env.terminated = true
         env.done = true
         set_termination_reward!(env, -100.0)
