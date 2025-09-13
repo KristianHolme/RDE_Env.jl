@@ -89,7 +89,7 @@ end
 compute_standard_actions(action_type::AbstractActionType, action, env::RDEEnv) = get_standardized_actions(action_type, action)
 
 # PIDAction: the agent supplies [Kp, Ki, Kd] in [-1, 1]; we compute a scalar pressure action in [-1, 1]
-function compute_standard_actions(action_type::PIDAction, gains::AbstractVector, env::RDEEnv)
+function compute_standard_actions(action_type::PIDAction{T}, gains::AbstractVector, env::RDEEnv{T}) where {T}
     @assert length(gains) == 3 "PIDAction expects 3 coefficients [Kp, Ki, Kd]"
     @assert action_type.N > 0 "Action type N not set"
     Kp, Ki, Kd = gains
@@ -103,8 +103,8 @@ function compute_standard_actions(action_type::PIDAction, gains::AbstractVector,
     u_p_action = Kp * error + Ki * action_type.integral + Kd * derivative
     action_type.previous_error = error
     # Clamp to normalized action range
-    u_p_action = clamp(u_p_action, -1.0f0, 1.0f0)
-    return [zeros(action_type.N), fill(u_p_action, action_type.N)]
+    u_p_action = clamp(u_p_action, T(-1), T(1))
+    return [zeros(T, action_type.N), fill(T(u_p_action), action_type.N)]
 end
 
 # For PIDAction, prevent accidental use of get_standardized_actions without env context
@@ -114,8 +114,8 @@ end
 
 # Reset hook: default no-op and PID-specific state reset
 _reset_action!(::AbstractActionType, ::RDEEnv) = nothing
-function _reset_action!(action_type::PIDAction, ::RDEEnv)
-    action_type.integral = 0.0f0
-    action_type.previous_error = 0.0f0
+function _reset_action!(action_type::PIDAction{T}, ::RDEEnv{T}) where {T}
+    action_type.integral = zero(T)
+    action_type.previous_error = zero(T)
     return nothing
 end

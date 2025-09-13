@@ -20,7 +20,7 @@ The environment supports two threading modes:
 - POLYESTER: Uses Polyester.@batch for parallelization
 """
 mutable struct RDEVecEnv{T <: AbstractFloat} <: AbstractRDEEnv
-    envs::Vector{RDEEnv{T, A, O, R, V, OBS}} where {A <: AbstractActionType, O <: AbstractObservationStrategy, R <: AbstractRDEReward, V, OBS}
+    envs::Vector{RDEEnv{T, A, O, RW, V, OBS, M, RS, C}} where {A <: AbstractActionType, O <: AbstractObservationStrategy, RW <: AbstractRDEReward, V, OBS, M, RS, C}
     n_envs::Int64
     observations::Matrix{T}  # Pre-allocated for efficiency
     rewards::Vector{T}
@@ -35,7 +35,7 @@ end
 
 Create a vectorized environment from a vector of environments.
 """
-function RDEVecEnv(envs::Vector{RDEEnv{T, A, O, R, V, OBS}}; threading_mode::ThreadingMode = THREADS) where {T <: AbstractFloat, A <: AbstractActionType, O <: AbstractObservationStrategy, R <: AbstractRDEReward, V, OBS}
+function RDEVecEnv(envs::Vector{RDEEnv{T, A, O, RW, V, OBS, M, RS, C}}; threading_mode::ThreadingMode = THREADS) where {T <: AbstractFloat, A <: AbstractActionType, O <: AbstractObservationStrategy, RW <: AbstractRDEReward, V, OBS, M, RS, C}
     n_envs = length(envs)
     obs_dim = length(_observe(envs[1]))
     observations = Matrix{T}(undef, obs_dim, n_envs)
@@ -64,9 +64,10 @@ function reset_single_env!(env::RDEVecEnv, i::Int)
 end
 
 # Helper function to act on a single environment
-function act_single_env!(env::RDEVecEnv, i::Int, actions::AbstractArray)
+function act_single_env!(env::RDEVecEnv{T}, i::Int, actions::AbstractArray) where {T}
     # Step environment
-    env.rewards[i] = _act!(env.envs[i], @view actions[:, i])
+    action_view = @view actions[:, i]
+    env.rewards[i] = _act!(env.envs[i], action_view)
     @logmsg LogLevel(-10000) "VecEnv act! done with env $i, starting termination check"
 
     # Check termination
@@ -148,4 +149,4 @@ function step!(env::RDEVecEnv, actions::AbstractArray)
         copy(env.dones),
         copy(env.infos),
     )
-end 
+end

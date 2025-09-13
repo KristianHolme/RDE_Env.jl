@@ -89,7 +89,7 @@ include("displaying.jl")
             action_type = ScalarPressureAction()
         )
         policy = RandomRDEPolicy(env)
-        data = run_policy(policy, env, saves_per_action = 2)
+        data = run_policy(policy, env)
 
         # Test vectorized environment
         envs = [
@@ -97,16 +97,18 @@ include("displaying.jl")
                     dt = 0.01f0,
                     τ_smooth = 0.001f0,
                     params = RDEParam(; N = 512, tmax = 0.05f0),
-                    observation_strategy = FourierObservation(8)
+                    observation_strategy = FourierObservation(8),
+                    action_type = ScalarPressureAction(),
+                    reward_type = PeriodMinimumReward()
                 ) for _ in 1:2
         ]
         vec_env = RDEVecEnv(envs)
         _reset!(vec_env)
-        actions = rand(Float32, 1, 2) .- 0.5
+        actions = Float32.(rand(1, 2) .- 0.5)
         step!(vec_env, actions)
 
     catch e
-        @warn "Precompilation failure: $e"
+        rethrow(e)
     end
 end
 

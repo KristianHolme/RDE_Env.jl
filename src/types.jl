@@ -28,12 +28,15 @@ built-in PID computation against a target value for the injection pressure.
 State for the PID accumulators is stored on the action type and is reset
 on environment reset via `_reset_action!`.
 """
-@kwdef mutable struct PIDAction <: AbstractActionType
+@kwdef mutable struct PIDAction{T <: AbstractFloat} <: AbstractActionType
     N::Int = 512
-    target::Float32 = 0.0f0
-    integral::Float32 = 0.0f0
-    previous_error::Float32 = 0.0f0
+    target::T = zero(T)
+    integral::T = zero(T)
+    previous_error::T = zero(T)
 end
+
+# Constructors
+# PIDAction(; N::Int = 512, target::Float32 = 0.0f0) = PIDAction{Float32}(N = N, target = target)
 
 
 function get_standardized_actions end
@@ -104,12 +107,13 @@ mutable struct ShockPreservingSymmetryReward <: AbstractRDEReward
 end
 
 
-mutable struct PeriodicityReward <: AbstractRDEReward
-    cache::Vector{Float32}
-    function PeriodicityReward(; N::Int = 512)
-        return new(zeros(Float32, N))
-    end
+mutable struct PeriodicityReward{T <: AbstractFloat} <: AbstractRDEReward
+    cache::Vector{T}
 end
+
+# Constructors
+PeriodicityReward{T}(; N::Int = 512) where {T <: AbstractFloat} = PeriodicityReward{T}(zeros(T, N))
+PeriodicityReward(; N::Int = 512) = PeriodicityReward{Float32}(; N = N)
 
 function set_reward! end
 
@@ -144,8 +148,18 @@ mutable struct RDEEnvCache{T <: AbstractFloat} #TODO remove circ
 end
 
 #TODO_is it necessary to parametrize by A, O, R?
-mutable struct RDEEnv{T, A, O, R, V, OBS} <: AbstractRDEEnv where {T <: AbstractFloat, A <: AbstractActionType, O <: AbstractObservationStrategy, R <: AbstractRDEReward, V <: Union{T, Vector{T}}, OBS <: AbstractArray{T}}
-    prob::RDEProblem                  # RDE problem
+mutable struct RDEEnv{T, A, O, RW, V, OBS, M, RS, C} <: AbstractRDEEnv where {
+        T <: AbstractFloat,
+        A <: AbstractActionType,
+        O <: AbstractObservationStrategy,
+        RW <: AbstractRDEReward,
+        V <: Union{T, Vector{T}},
+        OBS <: AbstractArray{T},
+        M <: AbstractMethod,
+        RS <: AbstractReset,
+        C <: AbstractControlShift,
+    }
+    prob::RDEProblem{T, M, RS, C}                  # RDE problem
     state::Vector{T}
     observation::OBS
     dt::T                       # time step
@@ -161,11 +175,11 @@ mutable struct RDEEnv{T, A, O, R, V, OBS} <: AbstractRDEEnv where {T <: Abstract
     cache::RDEEnvCache{T}
     action_type::A
     observation_strategy::O
-    reward_type::R
+    reward_type::RW
     verbose::Bool               # Control solver output
     info::Dict{String, Any}
     steps_taken::Int
-    ode_problem::Union{Nothing, ODEProblem}
+    ode_problem::SciMLBase.ODEProblem
 end
 
 # Helper functions to determine observation array type

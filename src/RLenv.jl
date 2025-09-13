@@ -54,10 +54,10 @@ function RDEEnv(;
         τ_smooth = 0.1f0,
         action_type::A = ScalarPressureAction(),
         observation_strategy::O = SectionedStateObservation(),
-        reward_type::R = PeriodMinimumReward(),
+        reward_type::RW = PeriodMinimumReward(),
         verbose::Bool = false,
         kwargs...
-    ) where {T <: AbstractFloat, A <: AbstractActionType, O <: AbstractObservationStrategy, R <: AbstractRDEReward}
+    ) where {T <: AbstractFloat, A <: AbstractActionType, O <: AbstractObservationStrategy, RW <: AbstractRDEReward}
 
     if τ_smooth > dt
         @warn "τ_smooth > dt, this will cause discontinuities in the control signal"
@@ -73,7 +73,7 @@ function RDEEnv(;
     set_N!(action_type, params.N)
 
     initial_state = vcat(prob.u0, prob.λ0)
-    init_observation = get_init_observation(observation_strategy, params.N)
+    init_observation = get_init_observation(observation_strategy, params.N, T)
     cache = RDEEnvCache{T}(params.N)
     ode_problem = ODEProblem{true, SciMLBase.FullSpecialize}(RDE_RHS!, initial_state, (zero(T), dt), prob)
 
@@ -94,7 +94,12 @@ function RDEEnv(;
         zero(T)
     end
 
-    return RDEEnv{T, A, O, R, V, OBS}(
+
+    M = typeof(prob.method)
+    RS = typeof(prob.reset_strategy)
+    CS = typeof(prob.control_shift_strategy)
+
+    return RDEEnv{T, A, O, RW, V, OBS, M, RS, CS}(
         prob, initial_state, init_observation,
         dt, T(0.0), false, false, false, initial_reward, smax, u_pmax,
         momentum, τ_smooth, cache,
@@ -139,20 +144,24 @@ function _step!(env::RDEEnv{T, A, O, R, V, OBS}, ::RDE.PseudospectralMethod{T}; 
     end
 end
 
-function _step!(env::RDEEnv{T, A, O, R, V, OBS}, ::RDE.FiniteVolumeMethod{T}; saves_per_action::Int = 10) where {T <: AbstractFloat, A, O, R, V, OBS}
+function _step!(env::RDEEnv{T, A, O, R, V, OBS, M, RS, C}, ::RDE.FiniteVolumeMethod{T}; saves_per_action::Int = 10) where {T <: AbstractFloat, A, O, R, V, OBS, M, RS, C}
     # SSPRK33 (fixed-step, no error adaptivity). Use CFL to set proposed dt and exact saveat spacing.
     params = env.prob.params
-    u0_view = @view env.ode_problem.u0[1:params.N]
-    dtmax0::T = RDE.cfl_dtmax(params, u0_view)
+    ode_problem = env.ode_problem
+    prob = env.prob::RDEProblem{T, M, RS, C}
+    cache = prob.method.cache::RDE.FVCache{T}
+    ode_u0 = ode_problem.u0
+    u0_view = @view ode_u0[1:params.N]
+    dtmax0::T = RDE.cfl_dtmax(params, u0_view, cache)
 
     function cfl_affect!(integrator)
         u = @view integrator.u[1:params.N]
-        umax = maximum(abs, u)
+        umax = RDE.turbo_maximum_abs(u)
         if !isfinite(umax) || umax <= 0
             SciMLBase.terminate!(integrator, SciMLBase.ReturnCode.Failure)
             return
         end
-        dt_cfl::T = RDE.cfl_dtmax(params, u)
+        dt_cfl::T = RDE.cfl_dtmax(params, u, cache)
         if !isfinite(dt_cfl) || dt_cfl <= 0
             SciMLBase.terminate!(integrator, SciMLBase.ReturnCode.Failure)
             return
@@ -164,35 +173,39 @@ function _step!(env::RDEEnv{T, A, O, R, V, OBS}, ::RDE.FiniteVolumeMethod{T}; sa
     cfl_cb = SciMLBase.DiscreteCallback(cfl_condition, cfl_affect!; save_positions = (false, false))
 
     if saves_per_action == 0
-        return OrdinaryDiffEq.solve(
-            env.ode_problem, OrdinaryDiffEq.SSPRK33(); adaptive = false, dt = dtmax0,
+        sol = OrdinaryDiffEq.solve(
+            ode_problem, OrdinaryDiffEq.SSPRK33(); adaptive = false, dt = dtmax0,
             save_on = false, isoutofdomain = RDE.outofdomain, callback = cfl_cb,
             verbose = env.verbose,
         )
     else
-        t0, t1 = env.ode_problem.tspan
+        t0, t1 = ode_problem.tspan
         save_times = collect(range(t0, t1; length = saves_per_action + 1))
-        return OrdinaryDiffEq.solve(
-            env.ode_problem, OrdinaryDiffEq.SSPRK33(); dt = dtmax0,
+        sol = OrdinaryDiffEq.solve(
+            ode_problem, OrdinaryDiffEq.SSPRK33(); dt = dtmax0,
             saveat = save_times, isoutofdomain = RDE.outofdomain, callback = cfl_cb,
             verbose = env.verbose,
         )
     end
+    prob.sol = sol
+    return sol
 end
 
 function _step!(env::RDEEnv{T, A, O, R, V, OBS}, ::RDE.UpwindMethod{T}; saves_per_action::Int = 10) where {T <: AbstractFloat, A, O, R, V, OBS}
     params = env.prob.params
-    u0_view = @view env.ode_problem.u0[1:params.N]
-    dtmax0::T = RDE.cfl_dtmax(params, u0_view)
+    ode_problem = env.ode_problem
+    ode_u0 = ode_problem.u0
+    u0_view = @view ode_u0[1:params.N]
+    dtmax0::T = RDE.cfl_dtmax(params, u0_view, env.prob.method.cache)
 
     function cfl_affect!(integrator)
         u = @view integrator.u[1:params.N]
-        umax = maximum(abs, u)
+        umax = RDE.turbo_maximum_abs(u)
         if !isfinite(umax) || umax <= 0
             SciMLBase.terminate!(integrator; retcode = SciMLBase.ReturnCode.Failure)
             return
         end
-        dt_cfl::T = RDE.cfl_dtmax(params, u)
+        dt_cfl::T = RDE.cfl_dtmax(params, u, env.prob.method.cache)
         if !isfinite(dt_cfl) || dt_cfl <= 0
             SciMLBase.terminate!(integrator; retcode = SciMLBase.ReturnCode.Failure)
             return
@@ -205,15 +218,15 @@ function _step!(env::RDEEnv{T, A, O, R, V, OBS}, ::RDE.UpwindMethod{T}; saves_pe
 
     if saves_per_action == 0
         return OrdinaryDiffEq.solve(
-            env.ode_problem, OrdinaryDiffEq.SSPRK33(); adaptive = false, dt = dtmax0,
+            ode_problem, OrdinaryDiffEq.SSPRK33(); adaptive = false, dt = dtmax0,
             save_on = false, isoutofdomain = RDE.outofdomain, callback = cfl_cb,
             verbose = env.verbose,
         )
     else
-        t0, t1 = env.ode_problem.tspan
+        t0, t1 = ode_problem.tspan
         save_times = collect(range(t0, t1; length = saves_per_action + 1))
         return OrdinaryDiffEq.solve(
-            env.ode_problem, OrdinaryDiffEq.SSPRK33(); adaptive = false, dt = dtmax0,
+            ode_problem, OrdinaryDiffEq.SSPRK33(); adaptive = false, dt = dtmax0,
             saveat = save_times, save_on = false, isoutofdomain = RDE.outofdomain, callback = cfl_cb,
             verbose = env.verbose,
         )
@@ -222,21 +235,22 @@ end
 
 function _step!(env::RDEEnv{T, A, O, R, V, OBS}, ::RDE.AbstractMethod; saves_per_action::Int = 10) where {T <: AbstractFloat, A, O, R, V, OBS}
     # Fallback: Tsit5 with/without saveat
+    ode_problem = env.ode_problem
     if saves_per_action == 0
         return OrdinaryDiffEq.solve(
-            env.ode_problem, OrdinaryDiffEq.Tsit5(); save_on = false,
+            ode_problem, OrdinaryDiffEq.Tsit5(); save_on = false,
             isoutofdomain = RDE.outofdomain, verbose = env.verbose,
         )
     else
         saveat = get_saveat(env, saves_per_action)
         return OrdinaryDiffEq.solve(
-            env.ode_problem, OrdinaryDiffEq.Tsit5(); saveat = saveat,
+            ode_problem, OrdinaryDiffEq.Tsit5(); saveat = saveat,
             isoutofdomain = RDE.outofdomain, verbose = env.verbose,
         )
     end
 end
 
-function apply_action!(env::RDEEnv{T, A, O, R, V, OBS}, action::AbstractVector{T}) where {T <: AbstractFloat, A <: VectorPressureAction, O, R, V, OBS}
+function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::AbstractVector{T}) where {T <: AbstractFloat, A <: VectorPressureAction, O, RW, V, OBS, M, RS, C}
     action_type = env.action_type
     a = compute_standard_actions(action_type, action, env)
     env.cache.action[:, 1] = a[1]
@@ -275,7 +289,7 @@ function apply_action!(env::RDEEnv{T, A, O, R, V, OBS}, action::AbstractVector{T
 end
 
 # Specialization: ScalarPressureAction — scalar action updates only u_p channel
-function apply_action!(env::RDEEnv{T, A, O, R, V, OBS}, action::T) where {T <: AbstractFloat, A <: ScalarPressureAction, O, R, V, OBS}
+function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::T) where {T <: AbstractFloat, A <: ScalarPressureAction, O, RW, V, OBS, M, RS, C}
     cache = env.prob.method.cache
     if abs(action) > one(T)
         @warn "action (u_p) out of bounds [-1,1]"
@@ -292,12 +306,12 @@ function apply_action!(env::RDEEnv{T, A, O, R, V, OBS}, action::T) where {T <: A
 end
 
 # Convenience: accept array-like scalar for ScalarPressureAction
-function apply_action!(env::RDEEnv{T, A, O, R, V, OBS}, action::AbstractArray{T}) where {T <: AbstractFloat, A <: ScalarPressureAction, O, R, V, OBS}
+function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::AbstractArray{T}) where {T <: AbstractFloat, A <: ScalarPressureAction, O, RW, V, OBS, M, RS, C}
     return apply_action!(env, action[1])
 end
 
 # Specialization: ScalarAreaScalarPressureAction — two scalar actions (s, u_p)
-function apply_action!(env::RDEEnv{T, A, O, R, V, OBS}, action::AbstractVector{T}) where {T <: AbstractFloat, A <: ScalarAreaScalarPressureAction, O, R, V, OBS}
+function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::AbstractVector{T}) where {T <: AbstractFloat, A <: ScalarAreaScalarPressureAction, O, RW, V, OBS, M, RS, C}
     @assert length(action) == 2
     a_s, a_up = action[1], action[2]
     cache = env.prob.method.cache
@@ -317,12 +331,12 @@ function apply_action!(env::RDEEnv{T, A, O, R, V, OBS}, action::AbstractVector{T
     return nothing
 end
 
-# function apply_action!(env::RDEEnv{T, A, O, R, V, OBS}, action::NTuple{2, T}) where {T <: AbstractFloat, A <: ScalarAreaScalarPressureAction, O, R, V, OBS}
+# function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::NTuple{2, T}) where {T <: AbstractFloat, A <: ScalarAreaScalarPressureAction, O, RW, V, OBS, M, RS, C}
 #     return apply_action!(env, collect(action))
 # end
 
 # Specialization: PIDAction — gains => scalar u_p set via PID, s unchanged
-function apply_action!(env::RDEEnv{T, A, O, R, V, OBS}, gains::AbstractVector{T}) where {T <: AbstractFloat, A <: PIDAction, O, R, V, OBS}
+function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, gains::AbstractVector{T}) where {T <: AbstractFloat, A <: PIDAction, O, RW, V, OBS, M, RS, C}
     @assert length(gains) == 3 "PIDAction expects [Kp, Ki, Kd]"
     Kp, Ki, Kd = gains
 
@@ -367,48 +381,56 @@ Take an action in the environment.
 - Handles smooth control transitions
 - Supports multiple action types
 """
-function _act!(env::RDEEnv{T, A, O, R, V, OBS}, action; saves_per_action::Int = 10) where {T <: AbstractFloat, A, O, R, V, OBS}
+function _act!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action; saves_per_action::Int = 10) where {T <: AbstractFloat, A, O, RW, V, OBS, M, RS, C}
     t_start = time()
+    params = env.prob.params::RDEParam{T}
+    prob = env.prob::RDEProblem{T}
 
-    tmax::T = env.prob.params.tmax
-    t::T = env.t
-    dt::T = env.dt
+    tmax = params.tmax
+    t = env.t
+    dt = env.dt
+    method_cache = prob.method.cache
+    env_cache = env.cache
     if t > tmax
         @warn "t > tmax! ($(t) > $(tmax))"
     end
     # Store current state before taking action
     @logmsg LogLevel(-10000) "Starting act! for environment on thread $(Threads.threadid())"
-    N::Int = env.prob.params.N
-    env.cache.prev_u .= @view env.state[1:N]
-    env.cache.prev_λ .= @view env.state[(N + 1):end]
-    @logmsg LogLevel(-10000) "Stored previous state" prev_u = env.cache.prev_u prev_λ = env.cache.prev_λ
+    N::Int = params.N
+    env_cache.prev_u .= @view env.state[1:N]
+    env_cache.prev_λ .= @view env.state[(N + 1):end]
+    @logmsg LogLevel(-10000) "Stored previous state" prev_u = env_cache.prev_u prev_λ = env_cache.prev_λ
 
-    t_span = (t, t + dt)
+    t_span = (t, t + dt)::Tuple{T, T}
     @logmsg LogLevel(-10000) "Set time span" t_span = t_span
-    env.prob.method.cache.control_time::T = t
-    @logmsg LogLevel(-10000) "Set control time" control_time = env.prob.method.cache.control_time
+    method_cache.control_time::T = t
+    @logmsg LogLevel(-10000) "Set control time" control_time = method_cache.control_time
 
-    @logmsg LogLevel(-10000) "Initial controls" prev_s = env.prob.method.cache.s_current prev_up = env.prob.method.cache.u_p_current
+    @logmsg LogLevel(-10000) "Initial controls" prev_s = method_cache.s_current prev_up = method_cache.u_p_current
 
-    prev_means = mean.([env.prob.method.cache.s_current, env.prob.method.cache.u_p_current])
+    prev_means = mean.([method_cache.s_current, method_cache.u_p_current])
     apply_action!(env, action)
-    curr_means = mean.([env.prob.method.cache.s_current, env.prob.method.cache.u_p_current])
+    curr_means = mean.([method_cache.s_current, method_cache.u_p_current])
 
     @logmsg LogLevel(-10000) "taking action $action at time $(env.t), controls: $(prev_means) to $(curr_means)"
 
-    #TODO use remake instead of recreating ??
-    # prob_ode = ODEProblem{true, SciMLBase.FullSpecialize}(RDE_RHS!, env.state, t_span, env.prob)
-    env.ode_problem = remake(env.ode_problem::SciMLBase.ODEProblem, u0 = env.state, tspan = t_span)
+    # Construct a fully-specialized ODEProblem to keep types concrete
+    env.ode_problem = ODEProblem{true, SciMLBase.FullSpecialize}(RDE_RHS!, env.state, t_span, env.prob)
+    #env.ode_problem = remake(env.ode_problem; u0 = env.state, tspan = t_span)::SciMLBase.ODEProblem
 
-    sol = step_env!(env; saves_per_action = saves_per_action)
-    if saves_per_action > 0 && length(sol.t) != saves_per_action + 1
-        @debug "length(sol.t) ($(length(sol.t))) != saves_per_action + 1 ($(saves_per_action + 1)), at tspan=$(t_span)"
+    sol = step_env!(env; saves_per_action)
+
+    tvec::Vector{T} = sol.t
+    sol_u::Vector{Vector{T}} = sol.u
+    last_u::Vector{T} = sol_u[end]
+    if saves_per_action > 0 && length(tvec) != saves_per_action + 1
+        @debug "length(sol.t) ($(length(tvec))) != saves_per_action + 1 ($(saves_per_action + 1)), at tspan=$(t_span)"
     end
 
     #TODO: factor out this
     #Check termination caused by ODE solver
-    if !SciMLBase.successful_retcode(sol) || any(isnan.(sol.u[end]))
-        if any(isnan.(sol.u[end]))
+    if !SciMLBase.successful_retcode(sol) || any(isnan, last_u)
+        if any(isnan, last_u)
             @warn "NaN state detected"
         end
         @logmsg LogLevel(-10000) "ODE solver failed, controls: $(prev_means) to $(curr_means)"
@@ -420,9 +442,9 @@ function _act!(env::RDEEnv{T, A, O, R, V, OBS}, action; saves_per_action::Int = 
         env.info["Termination.env_t"] = env.t
         @logmsg LogLevel(-500) "ODE solver failed, t=$(env.t), terminating"
     else #advance environment
-        env.prob.sol = sol
-        env.t = sol.t[end]
-        env.state = sol.u[end]
+        prob.sol = sol
+        env.t = tvec[end]::T
+        env.state = last_u
 
         env.steps_taken += 1
 
@@ -469,7 +491,7 @@ Reset the environment to its initial state.
 - Resets control parameters to initial values
 - Initializes previous state tracking
 """
-function _reset!(env::RDEEnv{T, A, O, R, V, OBS}) where {T, A, O, R, V, OBS}
+function _reset!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}) where {T, A, O, RW, V, OBS, M, RS, C}
     env.t = 0
     RDE.reset_state_and_pressure!(env.prob, env.prob.reset_strategy)
     env.state = vcat(env.prob.u0, env.prob.λ0)
@@ -494,9 +516,9 @@ function _reset!(env::RDEEnv{T, A, O, R, V, OBS}) where {T, A, O, R, V, OBS}
     return nothing
 end
 
-function set_termination_reward!(env::RDEEnv{T, A, O, R, V, OBS}, value::Number) where {T, A, O, R, V <: Vector, OBS}
+function set_termination_reward!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, value::Number) where {T, A, O, RW, V <: Vector, OBS, M, RS, C}
     return fill!(env.reward, T(value))
 end
-function set_termination_reward!(env::RDEEnv{T, A, O, R, V, OBS}, value::Number) where {T, A, O, R, V <: Number, OBS}
+function set_termination_reward!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, value::Number) where {T, A, O, RW, V <: Number, OBS, M, RS, C}
     return env.reward = T(value)
 end
