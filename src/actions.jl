@@ -22,6 +22,7 @@ function set_N!(action_type::AbstractActionType, N::Int)
     return action_type
 end
 
+#TODO: can we remove this?
 """
     get_standardized_actions(action_type::AbstractActionType, action) -> Vector{Vector{T}}
 
@@ -47,24 +48,24 @@ function get_standardized_actions(action_type::AbstractActionType, action)
 end
 
 
-function get_standardized_actions(action_type::ScalarAreaScalarPressureAction, action::Vector)
+function get_standardized_actions(action_type::ScalarAreaScalarPressureAction, action::Vector{T})::Vector{Vector{T}} where {T <: AbstractFloat}
     @assert action_type.N > 0 "Action type N not set"
     @assert length(action) == 2
     return [fill(action[1], action_type.N), fill(action[2], action_type.N)]
 end
 
 
-function get_standardized_actions(action_type::ScalarPressureAction, action::AbstractArray)
+function get_standardized_actions(action_type::ScalarPressureAction, action::AbstractArray{T})::Vector{Vector{T}} where {T <: AbstractFloat}
     return get_standardized_actions(action_type, action[1])
 end
 
-function get_standardized_actions(action_type::ScalarPressureAction, action::Number)
+function get_standardized_actions(action_type::ScalarPressureAction, action::T)::Vector{Vector{T}} where {T <: AbstractFloat}
     @assert action_type.N > 0 "Action type N not set"
-    return [zeros(action_type.N), ones(action_type.N) .* action]
+    return [zeros(T, action_type.N), ones(T, action_type.N) .* action]
 end
 
 
-function get_standardized_actions(action_type::VectorPressureAction, action::Vector)
+function get_standardized_actions(action_type::VectorPressureAction, action::Vector{T})::Vector{Vector{T}} where {T <: AbstractFloat}
     @assert action_type.N > 0 "Action type N not set"
     @assert length(action) == action_type.n_sections "Action length ($(length(action))) must match n_sections ($(action_type.n_sections))"
     @assert action_type.N % action_type.n_sections == 0 "N ($N) must be divisible by n_sections ($(action_type.n_sections))"
@@ -73,7 +74,7 @@ function get_standardized_actions(action_type::VectorPressureAction, action::Vec
     points_per_section = action_type.N ÷ action_type.n_sections
 
     # Initialize pressure actions array
-    pressure_actions = zeros(action_type.N)
+    pressure_actions = zeros(T, action_type.N)
 
     # Fill each section with its corresponding action value
     for i in 1:action_type.n_sections
@@ -81,7 +82,7 @@ function get_standardized_actions(action_type::VectorPressureAction, action::Vec
         end_idx = i * points_per_section
         pressure_actions[start_idx:end_idx] .= action[i]
     end
-    return [zeros(action_type.N), pressure_actions]
+    return [zeros(T, action_type.N), pressure_actions]
 end
 
 # Default compute_standard_actions: defer to get_standardized_actions

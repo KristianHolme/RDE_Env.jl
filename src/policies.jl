@@ -293,11 +293,13 @@ struct ConstantRDEPolicy <: AbstractRDEPolicy
     ConstantRDEPolicy(env::RDEEnv = RDEEnv()) = new(env)
 end
 
-function _predict_action(π::ConstantRDEPolicy, s)
+function _predict_action(π::ConstantRDEPolicy, s::AbstractVector{T}) where {T <: AbstractFloat}
     if π.env.action_type isa ScalarAreaScalarPressureAction
-        return [0.0, 0.0]
+        return zeros(T, 2)
     elseif π.env.action_type isa ScalarPressureAction
-        return 0.0
+        return zeros(T, 1)
+    elseif π.env.action_type isa VectorPressureAction
+        return zeros(T, π.env.action_type.n_sections)
     else
         @error "Unknown action type $(typeof(π.env.action_type)) for ConstantRDEPolicy"
     end
@@ -337,10 +339,10 @@ struct SinusoidalRDEPolicy{T <: AbstractFloat} <: AbstractRDEPolicy
     end
 end
 
-function _predict_action(π::SinusoidalRDEPolicy, s)
+function _predict_action(π::SinusoidalRDEPolicy, s::AbstractVector{T}) where {T <: AbstractFloat}
     t = π.env.t
-    action1 = sin(π.w_1 * t)
-    action2 = sin(π.w_2 * t)
+    action1 = T(sin(π.w_1 * t))
+    action2 = T(sin(π.w_2 * t))
     if π.env.action_type isa ScalarAreaScalarPressureAction
         return [action1, action2]
     elseif π.env.action_type isa ScalarPressureAction
@@ -395,13 +397,13 @@ struct StepwiseRDEPolicy{T <: AbstractFloat} <: AbstractRDEPolicy
     end
 end
 
-function _predict_action(π::StepwiseRDEPolicy, s)
+function _predict_action(π::StepwiseRDEPolicy, s::AbstractVector{T}) where {T <: AbstractFloat}
     t = π.env.t
     cache = π.env.prob.method.cache
     past = π.ts .≤ t
     idx = findlast(past)
     if isnothing(idx)
-        return zero(π.c[1])
+        return zeros(T, length(π.c[1]))
     end
     if π.env.action_type isa ScalarAreaScalarPressureAction
         return get_scaled_control.([cache.s_current[1], cache.u_p_current[1]], [π.env.smax, π.env.u_pmax], π.c[idx])
@@ -439,9 +441,9 @@ Scaled control value in [-1, 1]
 # Notes
 Assumes zero momentum (env.α = 0)
 """
-function get_scaled_control(current, max_val, target)
+function get_scaled_control(current::T, max_val::T, target::T) where {T <: AbstractFloat}
     if target < current
-        return target / current - 1.0
+        return target / current - one(T)
     else
         return (target - current) / (max_val - current)
     end
@@ -465,9 +467,9 @@ struct RandomRDEPolicy{T <: AbstractFloat} <: AbstractRDEPolicy
     end
 end
 
-function _predict_action(π::RandomRDEPolicy, state)
-    action1 = 2 * rand() - 1
-    action2 = 2 * rand() - 1
+function _predict_action(π::RandomRDEPolicy, state::AbstractVector{T}) where {T <: AbstractFloat}
+    action1 = 2 * rand(T) - 1
+    action2 = 2 * rand(T) - 1
     if π.env.action_type isa ScalarAreaScalarPressureAction
         return [action1, action2]
     elseif π.env.action_type isa ScalarPressureAction
@@ -509,15 +511,15 @@ struct DelayedPolicy{T <: AbstractFloat, P <: AbstractRDEPolicy} <: AbstractRDEP
     env::RDEEnv{T}
 end
 
-function _predict_action(π::DelayedPolicy, s)
+function _predict_action(π::DelayedPolicy, s::AbstractVector{T}) where {T <: AbstractFloat}
     t = π.env.t
     if t < π.start_time
         if π.env.action_type isa ScalarAreaScalarPressureAction
-            return [0.0f0, 0.0f0]
+            return [zeros(T, 2)]
         elseif π.env.action_type isa ScalarPressureAction
-            return 0.0f0
+            return zero(T)
         elseif π.env.action_type isa VectorPressureAction
-            return zeros(Float32, π.env.action_type.n_sections)
+            return zeros(T, π.env.action_type.n_sections)
         else
             @error "Unknown action type $(typeof(π.env.action_type)) for DelayedPolicy"
         end
@@ -546,8 +548,8 @@ function get_env(π::ScaledPolicy)
     return get_env(π.policy)
 end
 
-function _predict_action(π::ScaledPolicy, s)
-    return π.scale .* _predict_action(π.policy, s)
+function _predict_action(π::ScaledPolicy, s::AbstractVector{T}) where {T <: AbstractFloat}
+    return π.scale::T .* _predict_action(π.policy, s)
 end
 
 function Base.show(io::IO, π::ScaledPolicy)
@@ -562,10 +564,10 @@ end
 
 struct LinearPolicy{T <: AbstractFloat} <: AbstractRDEPolicy
     env::RDEEnv{T}
-    start_value::Union{Vector{T},T}
-    end_value::Union{Vector{T},T}
+    start_value::Union{Vector{T}, T}
+    end_value::Union{Vector{T}, T}
     duration::T
-    function LinearPolicy(env::RDEEnv{T}, start_value::Union{Vector{T},T}, end_value::Union{Vector{T},T}, duration::T) where {T<:AbstractFloat}
+    function LinearPolicy(env::RDEEnv{T}, start_value::Union{Vector{T}, T}, end_value::Union{Vector{T}, T}, duration::T) where {T <: AbstractFloat}
         if env.action_type isa ScalarAreaScalarPressureAction
             @assert length(start_value) == 2 && length(end_value) == 2 "Start and end values must have 2 elements"
             new{T}(env, start_value, end_value, duration)
@@ -601,7 +603,7 @@ function Base.show(io::IO, ::MIME"text/plain", π::LinearPolicy)
     println(io, "LinearPolicy:")
     println(io, "  start_value: $(π.start_value)")
     println(io, "  end_value: $(π.end_value)")
-    println(io, "  duration: $(π.duration)")
+    return println(io, "  duration: $(π.duration)")
 end
 
 """
