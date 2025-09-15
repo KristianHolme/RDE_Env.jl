@@ -245,7 +245,7 @@ end
 
 function get_minisection_observations(data, minisection_size)
     minisection_u = reshape(data, minisection_size, :)
-    minisection_observations = vec(maximum(minisection_u, dims = 1)) #TODO optimise??
+    minisection_observations = RDE.turbo_column_maximum(minisection_u)
     return minisection_observations
 end
 
