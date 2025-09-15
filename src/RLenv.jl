@@ -146,11 +146,11 @@ end
 
 function _step!(env::RDEEnv{T, A, O, R, V, OBS, M, RS, C}, ::RDE.FiniteVolumeMethod{T}; saves_per_action::Int = 10) where {T <: AbstractFloat, A, O, R, V, OBS, M, RS, C}
     # SSPRK33 (fixed-step, no error adaptivity). Use CFL to set proposed dt and exact saveat spacing.
-    params = env.prob.params
-    ode_problem = env.ode_problem
+    params = env.prob.params::RDEParam{T}
+    ode_problem = env.ode_problem::SciMLBase.ODEProblem
     prob = env.prob::RDEProblem{T, M, RS, C}
     cache = prob.method.cache::RDE.FVCache{T}
-    ode_u0 = ode_problem.u0
+    ode_u0::Vector{T} = ode_problem.u0::Vector{T}
     u0_view = @view ode_u0[1:params.N]
     dtmax0::T = RDE.cfl_dtmax(params, u0_view, cache)
 
@@ -177,16 +177,17 @@ function _step!(env::RDEEnv{T, A, O, R, V, OBS, M, RS, C}, ::RDE.FiniteVolumeMet
             ode_problem, OrdinaryDiffEq.SSPRK33(); adaptive = false, dt = dtmax0,
             save_on = false, isoutofdomain = RDE.outofdomain, callback = cfl_cb,
             verbose = env.verbose,
-        )
+        )::SciMLBase.ODESolution
     else
-        t0, t1 = ode_problem.tspan
+        t0, t1 = ode_problem.tspan::Tuple{T, T}
         save_times = collect(range(t0, t1; length = saves_per_action + 1))
         sol = OrdinaryDiffEq.solve(
             ode_problem, OrdinaryDiffEq.SSPRK33(); dt = dtmax0,
             saveat = save_times, isoutofdomain = RDE.outofdomain, callback = cfl_cb,
             verbose = env.verbose,
-        )
+        )::SciMLBase.ODESolution
     end
+    #Maybe not needed since we assign in _act!
     prob.sol = sol
     return sol
 end
@@ -223,7 +224,7 @@ function _step!(env::RDEEnv{T, A, O, R, V, OBS}, ::RDE.UpwindMethod{T}; saves_pe
             verbose = env.verbose,
         )
     else
-        t0, t1 = ode_problem.tspan
+        t0, t1 = ode_problem.tspan::Tuple{T, T}
         save_times = collect(range(t0, t1; length = saves_per_action + 1))
         return OrdinaryDiffEq.solve(
             ode_problem, OrdinaryDiffEq.SSPRK33(); adaptive = false, dt = dtmax0,
@@ -418,11 +419,11 @@ function _act!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action; saves_per_act
     env.ode_problem = ODEProblem{true, SciMLBase.FullSpecialize}(RDE_RHS!, env.state, t_span, env.prob)
     #env.ode_problem = remake(env.ode_problem; u0 = env.state, tspan = t_span)::SciMLBase.ODEProblem
 
-    sol = step_env!(env; saves_per_action)
+    sol = step_env!(env; saves_per_action)::SciMLBase.ODESolution
 
-    tvec::Vector{T} = sol.t
-    sol_u::Vector{Vector{T}} = sol.u
-    last_u::Vector{T} = sol_u[end]
+    tvec = sol.t::Vector{T}
+    sol_u = sol.u::Vector{Vector{T}}
+    last_u = sol_u[end]
     if saves_per_action > 0 && length(tvec) != saves_per_action + 1
         @debug "length(sol.t) ($(length(tvec))) != saves_per_action + 1 ($(saves_per_action + 1)), at tspan=$(t_span)"
     end
@@ -442,7 +443,7 @@ function _act!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action; saves_per_act
         env.info["Termination.env_t"] = env.t
         @logmsg LogLevel(-500) "ODE solver failed, t=$(env.t), terminating"
     else #advance environment
-        prob.sol = sol
+        prob.sol = sol::SciMLBase.ODESolution
         env.t = tvec[end]::T
         env.state = last_u
 
@@ -492,9 +493,11 @@ Reset the environment to its initial state.
 - Initializes previous state tracking
 """
 function _reset!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}) where {T, A, O, RW, V, OBS, M, RS, C}
+    N = env.prob.params.N
     env.t = 0
     RDE.reset_state_and_pressure!(env.prob, env.prob.reset_strategy)
-    env.state = vcat(env.prob.u0, env.prob.λ0)
+    env.state[1:N] = env.prob.u0
+    env.state[N+1:end] = env.prob.λ0
     set_termination_reward!(env, 0.0)
     env.steps_taken = 0
     env.done = false
