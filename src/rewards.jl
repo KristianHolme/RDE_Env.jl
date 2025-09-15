@@ -3,12 +3,9 @@ function reset_reward!(rt::AbstractRDEReward)
     return nothing
 end
 
-function compute_reward(env::AbstractRDEEnv, rt::AbstractRDEReward)
-    @error "No reward computation implemented for type $(typeof(rt))"
-    return zero(T)
-end
-
 function set_reward!(env::AbstractRDEEnv, rt::AbstractRDEReward)
+    #not doing in place because reward can change size
+    #TODO: initialize env.reward to correct size so we can do .= here
     env.reward = compute_reward(env, rt)
     return nothing
 end
@@ -144,12 +141,43 @@ function action_magnitude_factor(lowest_action_magnitude_reward::AbstractFloat, 
     return α .+ (1 - α) .* action_magnitude_inv
 end
 
-@kwdef mutable struct MultiSectionReward{T <: AbstractFloat} <: MultiAgentCachedCompositeReward
-    n_sections::Int = 4
-    target_shock_count::Int = 3
-    cache::Vector{T} = zeros(T, 512)
-    lowest_action_magnitude_reward::T = zero(T) #reward will be \in [lowest_action_magnitude_reward, 1]
-    weights::Vector{T} = [one(T), one(T), T(5), one(T)]
+mutable struct MultiSectionReward{T <: AbstractFloat} <: MultiAgentCachedCompositeReward
+    n_sections::Int
+    target_shock_count::Int
+    cache::Vector{T}
+    lowest_action_magnitude_reward::T #reward will be \in [lowest_action_magnitude_reward, 1]
+    weights::Vector{T}
+end
+
+# Ensure T is known when building defaults
+function MultiSectionReward{T}(; n_sections::Int = 4,
+        target_shock_count::Int = 3,
+        N::Int = 512,
+        lowest_action_magnitude_reward::T = zero(T),
+        weights::Vector{T} = [one(T), one(T), T(5), one(T)]
+    ) where {T <: AbstractFloat}
+    return MultiSectionReward{T}(
+        n_sections,
+        target_shock_count,
+        zeros(T, N),
+        lowest_action_magnitude_reward,
+        weights
+    )
+end
+
+function MultiSectionReward(; n_sections::Int = 4,
+        target_shock_count::Int = 3,
+        N::Int = 512,
+        lowest_action_magnitude_reward::Float32 = 0.0f0,
+        weights::Vector{Float32} = [1.0f0, 1.0f0, 5.0f0, 1.0f0]
+    )
+    return MultiSectionReward{Float32}(
+        n_sections,
+        target_shock_count,
+        zeros(Float32, N),
+        lowest_action_magnitude_reward,
+        weights
+    )
 end
 
 reward_value_type(::Type{T}, ::MultiSectionReward{T}) where {T} = Vector{T}
@@ -372,12 +400,12 @@ struct TimeAggCompositeReward{T <: AbstractFloat} <: CachedCompositeReward
     function TimeAggCompositeReward(;
             aggregation::TimeAggregation = TimeMin(),
             target_shock_count::Int = 4,
-            lowest_action_magnitude_reward::Float32 = 1.0f0,
+            lowest_action_magnitude_reward::T = T(1.0),
             span_reward::Bool = true,
-            weights::Vector{Float32} = [0.25f0, 0.25f0, 0.25f0, 0.25f0],
+            weights::Vector{T} = [T(0.25), T(0.25), T(0.25), T(0.25)],
             N::Int = 512
-        )
-        return TimeAggCompositeReward{Float32}(
+        ) where {T <: AbstractFloat}
+        return TimeAggCompositeReward{T}(
             aggregation = aggregation,
             target_shock_count = target_shock_count,
             lowest_action_magnitude_reward = lowest_action_magnitude_reward,
@@ -449,8 +477,8 @@ struct ConstantTargetReward{T <: AbstractFloat} <: AbstractRDEReward
     function ConstantTargetReward{T}(; target::T = T(0.64)) where {T <: AbstractFloat}
         return new{T}(target)
     end
-    function ConstantTargetReward(; target::Float32 = 0.64f0)
-        return ConstantTargetReward{Float32}(target = target)
+    function ConstantTargetReward(; target::T = 0.64f0) where {T <: AbstractFloat}
+        return ConstantTargetReward{T}(target = target)
     end
 end
 
@@ -467,13 +495,13 @@ function compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::ConstantTargetRewar
     return -abs(rt.target - mean(env.prob.method.cache.u_p_current)) + one(T)
 end
 
-@kwdef mutable struct TimeAggMultiSectionReward{T <: AbstractFloat} <: MultiAgentCachedCompositeReward
-    aggregation::TimeAggregation = TimeMin()
-    n_sections::Int = 4
-    target_shock_count::Int = 3
-    cache::Vector{T} = zeros(T, 512)
-    lowest_action_magnitude_reward::T = zero(T) #reward will be \in [lowest_action_magnitude_reward, 1]
-    weights::Vector{T} = [one(T), one(T), T(5), one(T)]
+mutable struct TimeAggMultiSectionReward{T <: AbstractFloat} <: MultiAgentCachedCompositeReward
+    aggregation::TimeAggregation
+    n_sections::Int
+    target_shock_count::Int
+    cache::Vector{T}
+    lowest_action_magnitude_reward::T #reward will be \in [lowest_action_magnitude_reward, 1]
+    weights::Vector{T}
 end
 reward_value_type(::Type{T}, ::TimeAggMultiSectionReward{T}) where {T} = Vector{T}
 
@@ -524,10 +552,53 @@ function compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::TimeAggMultiSection
     return agg_section_rewards
 end
 
-@kwdef struct TimeDiffNormReward{T <: AbstractFloat} <: AbstractRDEReward
-    threshold::T = T(1.1)
-    threshold_reward::T = T(0.3)
+# Ensure T is known when building defaults
+function TimeAggMultiSectionReward{T}(; aggregation::TimeAggregation = TimeMin(),
+        n_sections::Int = 4,
+        target_shock_count::Int = 3,
+        N::Int = 512,
+        lowest_action_magnitude_reward::T = zero(T),
+        weights::Vector{T} = [one(T), one(T), T(5), one(T)]
+    ) where {T <: AbstractFloat}
+    return TimeAggMultiSectionReward{T}(
+        aggregation,
+        n_sections,
+        target_shock_count,
+        zeros(T, N),
+        lowest_action_magnitude_reward,
+        weights
+    )
 end
+
+function TimeAggMultiSectionReward(; aggregation::TimeAggregation = TimeMin(),
+        n_sections::Int = 4,
+        target_shock_count::Int = 3,
+        N::Int = 512,
+        lowest_action_magnitude_reward::Float32 = 0.0f0,
+        weights::Vector{Float32} = [1.0f0, 1.0f0, 5.0f0, 1.0f0]
+    )
+    return TimeAggMultiSectionReward{Float32}(
+        aggregation,
+        n_sections,
+        target_shock_count,
+        zeros(Float32, N),
+        lowest_action_magnitude_reward,
+        weights
+    )
+end
+
+struct TimeDiffNormReward{T <: AbstractFloat} <: AbstractRDEReward
+    threshold::T
+    threshold_reward::T
+end
+
+function TimeDiffNormReward{T}(; threshold::T = 1.1f0, threshold_reward::T = 0.3f0) where {T <: AbstractFloat}
+    return TimeDiffNormReward{T}(threshold, threshold_reward)
+end
+function TimeDiffNormReward(; threshold::T = 1.1f0, threshold_reward::T = 0.3f0) where {T <: AbstractFloat}
+    return TimeDiffNormReward{T}(threshold, threshold_reward)
+end
+
 
 function compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::TimeDiffNormReward{T}) where {T, A, O, R, V, OBS}
     if isnothing(env.prob.sol)
