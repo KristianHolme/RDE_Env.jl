@@ -257,13 +257,14 @@ function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::Abstr
     env.cache.action[:, 1] = a[1]
     env.cache.action[:, 2] = a[2]
 
-    cache = env.prob.method.cache
+    method_cache = env.prob.method.cache
+    env_cache = env.cache
 
     if any(abs.(a[1]) .> one(T)) || any(abs.(a[2]) .> one(T))
         @warn "action out of bounds [-1,1]"
     end
 
-    copyto!(cache.u_p_previous, cache.u_p_current)
+    copyto!(method_cache.u_p_previous, method_cache.u_p_current)
 
     @assert action_type.N > 0 "Action type N not set"
     @assert length(action) == action_type.n_sections "Action length ($(length(action))) must match n_sections ($(action_type.n_sections))"
@@ -272,7 +273,7 @@ function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::Abstr
     # Calculate how many points per section
     points_per_section = action_type.N ÷ action_type.n_sections
 
-    current_section_controls = @view cache.u_p_current[1:points_per_section:end]
+    current_section_controls = @view method_cache.u_p_current[1:points_per_section:end]
     section_controls = action_to_control.(action, current_section_controls, env.u_pmax, env.α)
     # Initialize pressure actions array
     new_pressures = zeros(T, action_type.N)
@@ -282,27 +283,28 @@ function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::Abstr
         start_idx = (i - 1) * points_per_section + 1
         end_idx = i * points_per_section
         new_pressures[start_idx:end_idx] .= section_controls[i]
-        cache.action[start_idx:end_idx, 2] .= action[i]
+        env_cache.action[start_idx:end_idx, 2] .= action[i]
     end
 
-    cache.u_p_current .= new_pressures
+    method_cache.u_p_current .= new_pressures
     return nothing
 end
 
 # Specialization: ScalarPressureAction — scalar action updates only u_p channel
 function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::T) where {T <: AbstractFloat, A <: ScalarPressureAction, O, RW, V, OBS, M, RS, C}
-    cache = env.prob.method.cache
+    env_cache = env.cache
+    method_cache = env.prob.method.cache
     if abs(action) > one(T)
         @warn "action (u_p) out of bounds [-1,1]"
     end
     # Keep cache.action updated without allocating
-    env.cache.action[:, 1] .= zero(T)
-    env.cache.action[:, 2] .= action
+    env_cache.action[:, 1] .= zero(T)
+    env_cache.action[:, 2] .= action
 
-    copyto!(cache.u_p_previous, cache.u_p_current)
-    cache.u_p_current .= action_to_control(action, cache.u_p_current[1], env.u_pmax, env.α)
+    copyto!(method_cache.u_p_previous, method_cache.u_p_current)
+    method_cache.u_p_current .= action_to_control(action, method_cache.u_p_current[1], env.u_pmax, env.α)
 
-    copyto!(cache.s_previous, cache.s_current)
+    copyto!(method_cache.s_previous, method_cache.s_current)
     return nothing
 end
 
@@ -315,20 +317,21 @@ end
 function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::AbstractVector{T}) where {T <: AbstractFloat, A <: ScalarAreaScalarPressureAction, O, RW, V, OBS, M, RS, C}
     @assert length(action) == 2
     a_s, a_up = action[1], action[2]
-    cache = env.prob.method.cache
+    method_cache = env.prob.method.cache
+    env_cache = env.cache
 
     if abs(a_s) > one(T) || abs(a_up) > one(T)
         @warn "action (s/u_p) out of bounds [-1,1]"
     end
 
-    env.cache.action[:, 1] .= a_s
-    env.cache.action[:, 2] .= a_up
+    env_cache.action[:, 1] .= a_s
+    env_cache.action[:, 2] .= a_up
 
-    copyto!(cache.s_previous, cache.s_current)
-    cache.s_current .= action_to_control(a_s, cache.s_current[1], env.smax, env.α)
+    copyto!(method_cache.s_previous, method_cache.s_current)
+    method_cache.s_current .= action_to_control(a_s, method_cache.s_current[1], env.smax, env.α)
 
-    copyto!(cache.u_p_previous, cache.u_p_current)
-    cache.u_p_current .= action_to_control(a_up, cache.u_p_current[1], env.u_pmax, env.α)
+    copyto!(method_cache.u_p_previous, method_cache.u_p_current)
+    method_cache.u_p_current .= action_to_control(a_up, method_cache.u_p_current[1], env.u_pmax, env.α)
     return nothing
 end
 
@@ -341,7 +344,8 @@ function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, gains::Abstra
     @assert length(gains) == 3 "PIDAction expects [Kp, Ki, Kd]"
     Kp, Ki, Kd = gains
 
-    cache = env.prob.method.cache
+    method_cache = env.prob.method.cache
+    env_cache = env.cache
     u_p_mean::T = mean(cache.u_p_current)
 
     # PID terms (keep in T)
@@ -352,15 +356,15 @@ function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, gains::Abstra
     env.action_type.previous_error = err
 
     # Keep cache.action updated (no allocations)
-    env.cache.action[:, 1] .= zero(T)
-    env.cache.action[:, 2] .= u_p_action
+    env_cache.action[:, 1] .= zero(T)
+    env_cache.action[:, 2] .= u_p_action
 
     # Apply control (only u_p)
-    copyto!(cache.u_p_previous, cache.u_p_current)
-    cache.u_p_current .= action_to_control(u_p_action, cache.u_p_current[1], env.u_pmax, env.α)
+    copyto!(method_cache.u_p_previous, method_cache.u_p_current)
+    method_cache.u_p_current .= action_to_control(u_p_action, method_cache.u_p_current[1], env.u_pmax, env.α)
 
     # s channel unchanged, still keep previous in sync
-    copyto!(cache.s_previous, cache.s_current)
+    copyto!(method_cache.s_previous, method_cache.s_current)
     return nothing
 end
 
