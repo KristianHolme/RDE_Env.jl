@@ -864,12 +864,46 @@ function compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::PeriodMinimumVariat
     return global_reward * action_magnitude_modifier
 end
 
-@kwdef mutable struct MultiSectionPeriodMinimumReward{T <: AbstractFloat} <: MultiAgentCachedCompositeReward
-    n_sections::Int = 4
-    target_shock_count::Int = 3
-    cache::Vector{T} = zeros(T, 512)
-    lowest_action_magnitude_reward::T = zero(T) #reward will be \in [lowest_action_magnitude_reward, 1]
+mutable struct MultiSectionPeriodMinimumReward{T <: AbstractFloat} <: MultiAgentCachedCompositeReward
+    n_sections::Int
+    target_shock_count::Int
+    cache::Vector{T}
+    lowest_action_magnitude_reward::T
+    weights::Vector{T}
+end
+
+# Default constructor with Float32 type
+function MultiSectionPeriodMinimumReward(;
+    weights::Vector{T} = [1.0f0, 1.0f0, 5.0f0, 1.0f0],
+    n_sections::Int = 4,
+    target_shock_count::Int = 3,
+    lowest_action_magnitude_reward::T = zero(T)
+) where {T <: AbstractFloat}
+    cache = zeros(T, 512)
+    return MultiSectionPeriodMinimumReward{T}(
+        n_sections,
+        target_shock_count,
+        cache,
+        lowest_action_magnitude_reward,
+        weights
+    )
+end
+
+# Constructor with explicit type parameter
+function MultiSectionPeriodMinimumReward{T}(
+    n_sections::Int = 4,
+    target_shock_count::Int = 3,
+    lowest_action_magnitude_reward::T = zero(T),
     weights::Vector{T} = [one(T), one(T), T(5), one(T)]
+) where {T <: AbstractFloat}
+    cache = zeros(T, 512)
+    return MultiSectionPeriodMinimumReward{T}(
+        n_sections,
+        target_shock_count,
+        cache,
+        lowest_action_magnitude_reward,
+        weights
+    )
 end
 
 function Base.show(io::IO, rt::MultiSectionPeriodMinimumReward)
