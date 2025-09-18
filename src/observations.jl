@@ -157,7 +157,7 @@ end
     target_shock_count::Int = 3
     look_ahead_speed::Float32 = 1.65f0
     minisections_per_section::Int = 8
-    dt::Float32 = 0.5f0
+    dt::Float32 = 1.0f0
     L::Float32 = 2.0f0 * π
 end
 MultiSectionObservation(n::Int) = MultiSectionObservation(n_sections = n)
