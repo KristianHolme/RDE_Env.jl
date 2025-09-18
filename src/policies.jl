@@ -198,6 +198,10 @@ function run_policy(policy::AbstractRDEPolicy, env::RDEEnv{T}; saves_per_action 
     log!(step)
     while !env.done && step < max_steps
         action = _predict_action(policy, _observe(env))
+        if env.observation_strategy isa AbstractMultiAgentObservationStrategy && action isa Vector{Vector{T}}
+            action = vcat(action...)
+            @assert action isa Vector{T} 
+        end
         @debug "action: $action"
         _act!(env, action; saves_per_action)
         if env.terminated && env.verbose > 0
