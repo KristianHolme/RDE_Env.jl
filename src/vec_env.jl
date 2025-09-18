@@ -129,7 +129,7 @@ end
 
 Set the random seed for the environment.
 """
-function seed!(env::AbstractRDEEnv, seed::Int)
+function Random.seed!(env::AbstractRDEEnv, seed::Int)
     return Random.seed!(seed)
 end
 
