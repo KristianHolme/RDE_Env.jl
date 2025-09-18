@@ -150,7 +150,8 @@ mutable struct MultiSectionReward{T <: AbstractFloat} <: MultiAgentCachedComposi
 end
 
 # Ensure T is known when building defaults
-function MultiSectionReward{T}(; n_sections::Int = 4,
+function MultiSectionReward{T}(;
+        n_sections::Int = 4,
         target_shock_count::Int = 3,
         N::Int = 512,
         lowest_action_magnitude_reward::T = zero(T),
@@ -165,7 +166,8 @@ function MultiSectionReward{T}(; n_sections::Int = 4,
     )
 end
 
-function MultiSectionReward(; n_sections::Int = 4,
+function MultiSectionReward(;
+        n_sections::Int = 4,
         target_shock_count::Int = 3,
         N::Int = 512,
         lowest_action_magnitude_reward::Float32 = 0.0f0,
@@ -553,7 +555,8 @@ function compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::TimeAggMultiSection
 end
 
 # Ensure T is known when building defaults
-function TimeAggMultiSectionReward{T}(; aggregation::TimeAggregation = TimeMin(),
+function TimeAggMultiSectionReward{T}(;
+        aggregation::TimeAggregation = TimeMin(),
         n_sections::Int = 4,
         target_shock_count::Int = 3,
         N::Int = 512,
@@ -570,7 +573,8 @@ function TimeAggMultiSectionReward{T}(; aggregation::TimeAggregation = TimeMin()
     )
 end
 
-function TimeAggMultiSectionReward(; aggregation::TimeAggregation = TimeMin(),
+function TimeAggMultiSectionReward(;
+        aggregation::TimeAggregation = TimeMin(),
         n_sections::Int = 4,
         target_shock_count::Int = 3,
         N::Int = 512,
@@ -874,11 +878,11 @@ end
 
 # Default constructor with Float32 type
 function MultiSectionPeriodMinimumReward(;
-    weights::Vector{T} = [1.0f0, 1.0f0, 5.0f0, 1.0f0],
-    n_sections::Int = 4,
-    target_shock_count::Int = 3,
-    lowest_action_magnitude_reward::T = zero(T)
-) where {T <: AbstractFloat}
+        weights::Vector{T} = [1.0f0, 1.0f0, 5.0f0, 1.0f0],
+        n_sections::Int = 4,
+        target_shock_count::Int = 3,
+        lowest_action_magnitude_reward::T = zero(T)
+    ) where {T <: AbstractFloat}
     cache = zeros(T, 512)
     return MultiSectionPeriodMinimumReward{T}(
         n_sections,
@@ -891,11 +895,11 @@ end
 
 # Constructor with explicit type parameter
 function MultiSectionPeriodMinimumReward{T}(
-    n_sections::Int = 4,
-    target_shock_count::Int = 3,
-    lowest_action_magnitude_reward::T = zero(T),
-    weights::Vector{T} = [one(T), one(T), T(5), one(T)]
-) where {T <: AbstractFloat}
+        n_sections::Int = 4,
+        target_shock_count::Int = 3,
+        lowest_action_magnitude_reward::T = zero(T),
+        weights::Vector{T} = [one(T), one(T), T(5), one(T)]
+    ) where {T <: AbstractFloat}
     cache = zeros(T, 512)
     return MultiSectionPeriodMinimumReward{T}(
         n_sections,
