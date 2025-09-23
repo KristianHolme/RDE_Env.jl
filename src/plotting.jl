@@ -201,7 +201,7 @@ function plot_policy_data(
 
     if live_control && eltype(u_ps) <: AbstractVector
         u_p_t = @lift(u_ps[$sparse_time_idx])
-        max_u_p = RDE.turbo_maximum(RDE.turbo_maximum.(u_ps))
+        max_u_p = maximum(maximum.(u_ps))
         ax_live_u_p = Axis(
             main_layout[1, 1][3, 1], ylabel = "uₚ", yaxisposition = :left,
             limits = ((nothing, (-0.1, max(max_u_p * 1.1, 1.0e-3))))
@@ -274,7 +274,7 @@ function plot_shifted_history(
         counts = RDE.count_shocks.(us, x[2] - x[1])
         ax2 = Axis(
             fig[end + 1, 1], xlabel = "t", ylabel = "Number of shocks",
-            limits = (nothing, (-0.05, RDE.turbo_maximum(counts) * 1.05)),
+            limits = (nothing, (-0.05, maximum(counts) * 1.05)),
             xautolimitmargin = (0.0, 0.0)
         )
         lines!(ax2, ts, counts)
@@ -287,8 +287,8 @@ function plot_shifted_history(
     end
 
     if u_ps !== nothing
-        u_p_minimum = RDE.turbo_minimum(RDE.turbo_minimum.(u_ps))
-        u_p_maximum = RDE.turbo_maximum(RDE.turbo_maximum.(u_ps))
+        u_p_minimum = minimum(minimum.(u_ps))
+        u_p_maximum = maximum(maximum.(u_ps))
         ax3 = Axis(
             fig[end + 1, 1], xlabel = "t", ylabel = "uₚ",
             limits = (nothing, (0.0, max(u_p_maximum * 1.05, 1.2))),
@@ -302,8 +302,8 @@ function plot_shifted_history(
         linkxaxes!(ax, ax3)
     end
     if rewards !== nothing
-        rewards_minimum = RDE.turbo_minimum(RDE.turbo_minimum.(rewards))
-        rewards_maximum = RDE.turbo_maximum(RDE.turbo_maximum.(rewards))
+        rewards_minimum = minimum(minimum.(rewards))
+        rewards_maximum = maximum(maximum.(rewards))
         ax4 = Axis(
             fig[end + 1, 1], xlabel = "t", ylabel = "Reward",
             limits = (nothing, (rewards_minimum - 0.05, rewards_maximum + 0.05)),
