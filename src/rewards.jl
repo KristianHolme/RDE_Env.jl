@@ -18,14 +18,15 @@ function compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::ShockSpanReward) wh
     u, = RDE.split_sol_view(env.state)
     dx = env.prob.params.L / env.prob.params.N
     shocks = T(RDE.count_shocks(u, dx))
-    span = RDE.turbo_maximum(u) - RDE.turbo_minimum(u)
+    u_min, u_max = RDE.turbo_extrema(u)
+    span = u_max - u_min
     span_reward = span / max_span
     if shocks >= target_shock_count
         shock_reward = one(T)
     elseif shocks > 0
         shock_reward = shocks / (2 * target_shock_count)
     else
-        shock_reward = T(-1.0)
+        shock_reward = T(-1)
     end
 
     return λ * shock_reward + (1 - λ) * span_reward
@@ -50,7 +51,8 @@ function compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::ShockPreservingRewa
     L = env.prob.params.L
     shock_inds = RDE.shock_indices(u, dx)
 
-    span = RDE.turbo_maximum(u) - RDE.turbo_minimum(u)
+    u_min, u_max = RDE.turbo_extrema(u)
+    span = u_max - u_min
     span_reward = span / max_span
 
     if length(shock_inds) != target_shock_count
@@ -642,7 +644,7 @@ struct PeriodMinimumReward{T <: AbstractFloat} <: CachedCompositeReward
     weights::Vector{T}
     function PeriodMinimumReward{T}(;
             target_shock_count::Int = 4,
-            lowest_action_magnitude_reward::T = one(T),
+            lowest_action_magnitude_reward::T = zero(T),
             weights::Vector{T} = [one(T), one(T), T(5), one(T)],
             N::Int = 512
         ) where {T <: AbstractFloat}
@@ -655,7 +657,7 @@ struct PeriodMinimumReward{T <: AbstractFloat} <: CachedCompositeReward
     end
     function PeriodMinimumReward(;
             target_shock_count::Int = 4,
-            lowest_action_magnitude_reward::Float32 = 1.0f0,
+            lowest_action_magnitude_reward::Float32 = 0.0f0,
             weights::Vector{Float32} = Float32[1, 1, 5, 1],
             N::Int = 512
         )
@@ -881,7 +883,7 @@ function MultiSectionPeriodMinimumReward(;
         weights::Vector{T} = [1.0f0, 1.0f0, 5.0f0, 1.0f0],
         n_sections::Int = 4,
         target_shock_count::Int = 3,
-        lowest_action_magnitude_reward::T = zero(T)
+        lowest_action_magnitude_reward::T = 0.0f0
     ) where {T <: AbstractFloat}
     cache = zeros(T, 512)
     return MultiSectionPeriodMinimumReward{T}(

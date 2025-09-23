@@ -210,7 +210,8 @@ function compute_observation(env::RDEEnv{T, A, O, R, V, OBS}, obs_strategy::Mult
 
     shocks = RDE.count_shocks(current_u, dx)
     target_shock_count = obs_strategy.target_shock_count
-    span = RDE.turbo_maximum(current_u) - RDE.turbo_minimum(current_u)
+    u_min, u_max = RDE.turbo_extrema(current_u)
+    span = u_max - u_min
 
     # Pre-allocate the final matrix
     obs_length = observable_minisections * 2 + 3  # +3 for shocks, target_shock_count, span
