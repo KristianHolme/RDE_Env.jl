@@ -460,8 +460,7 @@ function _act!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action; saves_per_act
             env.done = true
             @logmsg LogLevel(-10000) "termination caused by reward"
             @logmsg LogLevel(-500) "terminated, t=$(env.t), from reward?"
-        end
-        if env.t ≥ env.prob.params.tmax
+        elseif env.t ≥ env.prob.params.tmax #dont mark as truncated if terminated by reward or solver
             env.done = true
             env.truncated = true
             @logmsg LogLevel(-10000) "tmax reached, t=$(env.t)"
@@ -501,7 +500,7 @@ function _reset!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}) where {T, A, O, RW,
     env.t = 0
     RDE.reset_state_and_pressure!(env.prob, env.prob.reset_strategy)
     env.state[1:N] = env.prob.u0
-    env.state[N+1:end] = env.prob.λ0
+    env.state[(N + 1):end] = env.prob.λ0
     set_termination_reward!(env, 0.0)
     env.steps_taken = 0
     env.done = false
