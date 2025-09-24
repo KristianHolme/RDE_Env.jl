@@ -4,7 +4,7 @@ using GLMakie
 
 params = RDEParam(tmax = 500.0f0, N = 2048)
 env = RDEEnv(
-    params, method = UpwindMethod(order = 2),
+    params, method = FiniteVolumeMethod(),
     action_type = ScalarAreaScalarPressureAction()
 );
 π = StepwiseRDEPolicy(

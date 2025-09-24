@@ -152,7 +152,14 @@ function _step!(env::RDEEnv{T, A, O, R, V, OBS, M, RS, C}, ::RDE.FiniteVolumeMet
     cache = prob.method.cache::RDE.FVCache{T}
     ode_u0::Vector{T} = ode_problem.u0::Vector{T}
     u0_view = @view ode_u0[1:params.N]
+
+    # Assertion: Check that all entries in u are finite
+    @assert all(isfinite, u0_view) "Non-finite values found in u0_view: $(u0_view)"
+
     dtmax0::T = RDE.cfl_dtmax(params, u0_view, cache)
+
+    # Assertion: Check that dt is finite and positive
+    @assert isfinite(dtmax0) && dtmax0 > 0 "Invalid dt computed: dtmax0 = $dtmax0"
 
     function cfl_affect!(integrator)
         u = @view integrator.u[1:params.N]
@@ -192,47 +199,6 @@ function _step!(env::RDEEnv{T, A, O, R, V, OBS, M, RS, C}, ::RDE.FiniteVolumeMet
     return sol
 end
 
-function _step!(env::RDEEnv{T, A, O, R, V, OBS}, ::RDE.UpwindMethod{T}; saves_per_action::Int = 10) where {T <: AbstractFloat, A, O, R, V, OBS}
-    params = env.prob.params
-    ode_problem = env.ode_problem
-    ode_u0 = ode_problem.u0
-    u0_view = @view ode_u0[1:params.N]
-    dtmax0::T = RDE.cfl_dtmax(params, u0_view, env.prob.method.cache)
-
-    function cfl_affect!(integrator)
-        u = @view integrator.u[1:params.N]
-        umax = RDE.turbo_maximum_abs(u)
-        if !isfinite(umax) || umax <= 0
-            SciMLBase.terminate!(integrator; retcode = SciMLBase.ReturnCode.Failure)
-            return
-        end
-        dt_cfl::T = RDE.cfl_dtmax(params, u, env.prob.method.cache)
-        if !isfinite(dt_cfl) || dt_cfl <= 0
-            SciMLBase.terminate!(integrator; retcode = SciMLBase.ReturnCode.Failure)
-            return
-        end
-        SciMLBase.set_proposed_dt!(integrator, dt_cfl)
-        return SciMLBase.u_modified!(integrator, false)
-    end
-    cfl_condition(u, t, integrator) = true
-    cfl_cb = SciMLBase.DiscreteCallback(cfl_condition, cfl_affect!; save_positions = (false, false))
-
-    if saves_per_action == 0
-        return OrdinaryDiffEq.solve(
-            ode_problem, OrdinaryDiffEq.SSPRK33(); adaptive = false, dt = dtmax0,
-            save_on = false, isoutofdomain = RDE.outofdomain, callback = cfl_cb,
-            verbose = env.verbose,
-        )
-    else
-        t0, t1 = ode_problem.tspan::Tuple{T, T}
-        save_times = collect(range(t0, t1; length = saves_per_action + 1))
-        return OrdinaryDiffEq.solve(
-            ode_problem, OrdinaryDiffEq.SSPRK33(); adaptive = false, dt = dtmax0,
-            saveat = save_times, save_on = false, isoutofdomain = RDE.outofdomain, callback = cfl_cb,
-            verbose = env.verbose,
-        )
-    end
-end
 
 function _step!(env::RDEEnv{T, A, O, R, V, OBS}, ::RDE.AbstractMethod; saves_per_action::Int = 10) where {T <: AbstractFloat, A, O, R, V, OBS}
     # Fallback: Tsit5 with/without saveat
