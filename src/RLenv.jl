@@ -129,92 +129,39 @@ function step_env!(env::RDEEnv{T, A, O, R, V, OBS}; saves_per_action::Int = 10) 
     return _step!(env, env.prob.method; saves_per_action = saves_per_action)
 end
 
-function _step!(env::RDEEnv{T, A, O, R, V, OBS}, ::RDE.PseudospectralMethod{T}; saves_per_action::Int = 10) where {T <: AbstractFloat, A, O, R, V, OBS}
-    if saves_per_action == 0
-        return OrdinaryDiffEq.solve(
-            env.ode_problem, OrdinaryDiffEq.Tsit5(); save_on = false,
-            isoutofdomain = RDE.outofdomain, verbose = env.verbose,
-        )
-    else
-        saveat = get_saveat(env, saves_per_action)
-        return OrdinaryDiffEq.solve(
-            env.ode_problem, OrdinaryDiffEq.Tsit5(); saveat = saveat,
-            isoutofdomain = RDE.outofdomain, verbose = env.verbose,
-        )
-    end
-end
 
 function _step!(env::RDEEnv{T, A, O, R, V, OBS, M, RS, C}, ::RDE.FiniteVolumeMethod{T}; saves_per_action::Int = 10) where {T <: AbstractFloat, A, O, R, V, OBS, M, RS, C}
-    # SSPRK33 (fixed-step, no error adaptivity). Use CFL to set proposed dt and exact saveat spacing.
+    # Assertions
     params = env.prob.params::RDEParam{T}
-    ode_problem = env.ode_problem::SciMLBase.ODEProblem
-    prob = env.prob::RDEProblem{T, M, RS, C}
-    cache = prob.method.cache::RDE.FVCache{T}
-    ode_u0::Vector{T} = ode_problem.u0::Vector{T}
+    ode_u0 = env.ode_problem.u0::Vector{T}
     u0_view = @view ode_u0[1:params.N]
-
-    # Assertion: Check that all entries in u are finite
     @assert all(isfinite, u0_view) "Non-finite values found in u0_view: $(u0_view)"
 
-    dtmax0::T = RDE.cfl_dtmax(params, u0_view, cache)
-
-    # Assertion: Check that dt is finite and positive
+    dtmax0 = RDE.cfl_dtmax(params, u0_view, env.prob.method.cache)
     @assert isfinite(dtmax0) && dtmax0 > 0 "Invalid dt computed: dtmax0 = $dtmax0"
+    @assert saves_per_action ≥ 1 "saves_per_action must be non-negative"
 
-    function cfl_affect!(integrator)
-        u = @view integrator.u[1:params.N]
-        umax = RDE.turbo_maximum_abs(u)
-        if !isfinite(umax) || umax <= 0
-            SciMLBase.terminate!(integrator, SciMLBase.ReturnCode.Failure)
-            return
-        end
-        dt_cfl::T = RDE.cfl_dtmax(params, u, cache)
-        if !isfinite(dt_cfl) || dt_cfl <= 0
-            SciMLBase.terminate!(integrator, SciMLBase.ReturnCode.Failure)
-            return
-        end
-        SciMLBase.set_proposed_dt!(integrator, dt_cfl)
-        return SciMLBase.u_modified!(integrator, false)
-    end
-    cfl_condition(u, t, integrator) = true
-    cfl_cb = SciMLBase.DiscreteCallback(cfl_condition, cfl_affect!; save_positions = (false, false))
+    # Use the new helper
+    t0, t1 = env.ode_problem.tspan::Tuple{T, T}
+    saveat = collect(range(t0, t1; length = saves_per_action + 1))
+    sol = RDE.solve_pde_step!(env.prob; tspan = (env.t, env.t + env.dt), saveat = saveat, dtmax = dtmax0)
 
-    if saves_per_action == 0
-        sol = OrdinaryDiffEq.solve(
-            ode_problem, OrdinaryDiffEq.SSPRK33(); adaptive = false, dt = dtmax0,
-            save_on = false, isoutofdomain = RDE.outofdomain, callback = cfl_cb,
-            verbose = env.verbose,
-        )::SciMLBase.ODESolution
-    else
-        t0, t1 = ode_problem.tspan::Tuple{T, T}
-        save_times = collect(range(t0, t1; length = saves_per_action + 1))
-        sol = OrdinaryDiffEq.solve(
-            ode_problem, OrdinaryDiffEq.SSPRK33(); dt = dtmax0,
-            saveat = save_times, isoutofdomain = RDE.outofdomain, callback = cfl_cb,
-            verbose = env.verbose,
-        )::SciMLBase.ODESolution
-    end
-    #Maybe not needed since we assign in _act!
-    prob.sol = sol
+    # Environment-specific updates
+    env.prob.sol = sol
     return sol
 end
 
 
 function _step!(env::RDEEnv{T, A, O, R, V, OBS}, ::RDE.AbstractMethod; saves_per_action::Int = 10) where {T <: AbstractFloat, A, O, R, V, OBS}
-    # Fallback: Tsit5 with/without saveat
-    ode_problem = env.ode_problem
-    if saves_per_action == 0
-        return OrdinaryDiffEq.solve(
-            ode_problem, OrdinaryDiffEq.Tsit5(); save_on = false,
-            isoutofdomain = RDE.outofdomain, verbose = env.verbose,
-        )
-    else
-        saveat = get_saveat(env, saves_per_action)
-        return OrdinaryDiffEq.solve(
-            ode_problem, OrdinaryDiffEq.Tsit5(); saveat = saveat,
-            isoutofdomain = RDE.outofdomain, verbose = env.verbose,
-        )
-    end
+    @assert saves_per_action ≥ 1 "saves_per_action must be non-negative"
+    # Use the new helper for other methods
+    t0, t1 = env.ode_problem.tspan::Tuple{T, T}
+    saveat = collect(range(t0, t1; length = saves_per_action + 1))
+    sol = RDE.solve_pde_step!(env.prob; tspan = (env.t, env.t + env.dt), saveat = saveat)
+
+    # Environment-specific updates
+    env.prob.sol = sol
+    return sol
 end
 
 function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::AbstractVector{T}) where {T <: AbstractFloat, A <: VectorPressureAction, O, RW, V, OBS, M, RS, C}

@@ -24,17 +24,17 @@ using Random
         @test !any(isnan, obs1)
 
         # Test seeding
-        seed!(vec_env, 42)
+        Random.seed!(vec_env, 42)
         _reset!(vec_env)
         obs2 = _observe(vec_env)
 
-        seed!(vec_env, 42)
+        Random.seed!(vec_env, 42)
         _reset!(vec_env)
         obs3 = _observe(vec_env)
 
         @test obs2 == obs3  # Same seed should give same results
 
-        seed!(vec_env, 43)
+        Random.seed!(vec_env, 43)
         _reset!(vec_env)
         obs4 = _observe(vec_env)
 
@@ -107,4 +107,4 @@ using Random
         # If we got here without errors, threading worked
         @test true
     end
-end 
+end

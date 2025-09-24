@@ -86,6 +86,7 @@ data = run_policy(policy, env, saves_per_action=10)
 """
 function run_policy(policy::AbstractRDEPolicy, env::RDEEnv{T}; saves_per_action = 10) where {T}
     _reset!(env)
+    @assert saves_per_action ≥ 1 "saves_per_action must be non-negative"
     dt = env.dt
     max_steps = ceil(env.prob.params.tmax / dt) + 2 |> Int # +1 for initial state, +1 for overshoot
     N = env.prob.params.N
@@ -99,11 +100,7 @@ function run_policy(policy::AbstractRDEPolicy, env::RDEEnv{T}; saves_per_action 
     # rewards = Vector{T}(undef, max_steps)
 
     # For saves_per_action > 0, we need more space for state data
-    max_state_points = if saves_per_action == 0
-        max_steps  # Only save at action points
-    else
-        max_steps * (saves_per_action + 1)  # +1 to account for potential extra points
-    end
+    max_state_points = max_steps * (saves_per_action + 1)
 
     energy_bal = Vector{T}(undef, max_state_points)
     chamber_p = Vector{T}(undef, max_state_points)
@@ -200,7 +197,7 @@ function run_policy(policy::AbstractRDEPolicy, env::RDEEnv{T}; saves_per_action 
         action = _predict_action(policy, _observe(env))
         if env.observation_strategy isa AbstractMultiAgentObservationStrategy && action isa Vector{Vector{T}}
             action = vcat(action...)
-            @assert action isa Vector{T} 
+            @assert action isa Vector{T}
         end
         @debug "action: $action"
         _act!(env, action; saves_per_action)

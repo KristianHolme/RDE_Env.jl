@@ -15,7 +15,7 @@
         policy = RandomRDEPolicy(env)
 
         # Test with different saves_per_action values
-        for saves_per_action in [0, 1, 2, 5]
+        for saves_per_action in [1, 2, 5]
             @testset "saves_per_action = $saves_per_action" begin
                 data = run_policy(policy, env, saves_per_action = saves_per_action)
 
@@ -27,13 +27,8 @@
                 @test length(data.rewards) == length(data.action_ts)
 
                 # Test state data length
-                if saves_per_action == 0
-                    # For saves_per_action = 0, we should only have states at action points
-                    @test length(data.states) == length(data.action_ts)
-                else
-                    # For saves_per_action > 0, we should have more state points
-                    @test length(data.states) - 1 ≥ (length(data.action_ts) - 1) * saves_per_action
-                end
+                # For saves_per_action > 0, we should have more state points
+                @test length(data.states) - 1 ≥ (length(data.action_ts) - 1) * saves_per_action
 
                 # Test time consistency
                 @test issorted(data.action_ts)
@@ -61,4 +56,4 @@
             end
         end
     end
-end 
+end
