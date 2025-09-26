@@ -45,6 +45,8 @@ env = RDEEnv(dt=5.0, smax=3.0)
 ```
 """
 
+import DiffEqCallbacks: StepsizeLimiter
+
 function RDEEnv(;
         dt = 1.0f0,
         smax = 4.0f0,
@@ -99,13 +101,15 @@ function RDEEnv(;
     RS = typeof(prob.reset_strategy)
     CS = typeof(prob.control_shift_strategy)
 
-    return RDEEnv{T, A, O, RW, V, OBS, M, RS, CS}(
+    env = RDEEnv{T, A, O, RW, V, OBS, M, RS, CS}(
         prob, initial_state, init_observation,
         dt, T(0.0), false, false, false, initial_reward, smax, u_pmax,
         momentum, τ_smooth, cache,
         action_type, observation_strategy,
         reward_type, verbose, Dict{String, Any}(), 0, ode_problem
     )
+    RDE.RDE_RHS!(zeros(T, 2 * params.N), initial_state, prob, T(0.0)) #to update caches
+    return env
 end
 
 RDEEnv(params::RDEParam{T}; kwargs...) where {T <: AbstractFloat} = RDEEnv(; params = params, kwargs...)
@@ -125,6 +129,13 @@ end
 
 @inline get_saveat(env::RDEEnv{T}, saves_per_action::Int) where {T <: AbstractFloat} = saves_per_action == 0 ? nothing : (env.dt / saves_per_action)
 
+function cfl_dtFE(u, prob, t)
+    params = prob.params
+    N = params.N
+    uview = @view u[1:N]
+    return RDE.cfl_dtmax(params, uview, prob.method.cache)
+end
+
 function step_env!(env::RDEEnv{T, A, O, R, V, OBS}; saves_per_action::Int = 10) where {T <: AbstractFloat, A, O, R, V, OBS}
     return _step!(env, env.prob.method; saves_per_action = saves_per_action)
 end
@@ -132,19 +143,28 @@ end
 
 function _step!(env::RDEEnv{T, A, O, R, V, OBS, M, RS, C}, ::RDE.FiniteVolumeMethod{T}; saves_per_action::Int = 10) where {T <: AbstractFloat, A, O, R, V, OBS, M, RS, C}
     # Assertions
-    params = env.prob.params::RDEParam{T}
+    prob = env.prob
+    params = prob.params::RDEParam{T}
+    method_cache = prob.method.cache
     ode_u0 = env.ode_problem.u0::Vector{T}
     u0_view = @view ode_u0[1:params.N]
     @assert all(isfinite, u0_view) "Non-finite values found in u0_view: $(u0_view)"
 
-    dtmax0 = RDE.cfl_dtmax(params, u0_view, env.prob.method.cache)
-    @assert isfinite(dtmax0) && dtmax0 > 0 "Invalid dt computed: dtmax0 = $dtmax0"
+    dtmax0 = RDE.cfl_dtmax(params, u0_view, method_cache)
+    # @assert isfinite(dtmax0) && dtmax0 > 0 "Invalid dt computed: dtmax0 = $dtmax0"
     @assert saves_per_action ≥ 1 "saves_per_action must be non-negative"
 
     # Use the new helper
     t0, t1 = env.ode_problem.tspan::Tuple{T, T}
     saveat = collect(range(t0, t1; length = saves_per_action + 1))
-    sol = RDE.solve_pde_step!(env.prob; tspan = (env.t, env.t + env.dt), saveat = saveat, dtmax = dtmax0)
+    # CFL logic: limit step size using official callback
+    cfl_cb = StepsizeLimiter(cfl_dtFE; safety_factor = T(1), max_step = true, cached_dtcache = zero(T))
+
+
+    sol = OrdinaryDiffEq.solve(env.ode_problem, SSPRK33(); adaptive = false, dt = dtmax0, saveat = saveat, isoutofdomain = RDE.outofdomain, callback = cfl_cb)
+    if sol.retcode != :Success
+        @warn "Failed to solve PDE step for FiniteVolumeMethod"
+    end
 
     # Environment-specific updates
     env.prob.sol = sol
@@ -157,7 +177,12 @@ function _step!(env::RDEEnv{T, A, O, R, V, OBS}, ::RDE.AbstractMethod; saves_per
     # Use the new helper for other methods
     t0, t1 = env.ode_problem.tspan::Tuple{T, T}
     saveat = collect(range(t0, t1; length = saves_per_action + 1))
-    sol = RDE.solve_pde_step!(env.prob; tspan = (env.t, env.t + env.dt), saveat = saveat)
+    # Limit adaptive steps by CFL in the Tsit5 branch as well
+    cfl_cb = StepsizeLimiter(cfl_dtFE; safety_factor = 1, max_step = false, cached_dtcache = zero(T))
+    sol = OrdinaryDiffEq.solve(env.ode_problem, Tsit5(); adaptive = true, saveat = saveat, isoutofdomain = RDE.outofdomain, callback = cfl_cb)
+    if sol.retcode != :Success
+        @warn "Failed to solve PDE step for $(typeof(env.prob.method))"
+    end
 
     # Environment-specific updates
     env.prob.sol = sol
@@ -431,6 +456,8 @@ function _reset!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}) where {T, A, O, RW,
     N = env.prob.params.N
     env.cache.prev_u .= @view env.state[1:N]
     env.cache.prev_λ .= @view env.state[(N + 1):end]
+
+    RDE.RDE_RHS!(zeros(T, 2 * env.prob.params.N), env.state, env.prob, T(0.0)) #to update caches
 
     return nothing
 end
