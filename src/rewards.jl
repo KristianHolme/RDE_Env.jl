@@ -1192,7 +1192,7 @@ function compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::TransitionBasedRewa
 end
 
 function detect_transition_realtime(rt::TransitionBasedReward{T, U}, dt::U) where {T, U <: AbstractFloat}
-    stability_steps = rt.reward_stability_length / dt |> Int
+    stability_steps = round(Int, rt.reward_stability_length / dt)
     if length(rt.past_shock_counts) < stability_steps
         @debug "Not enough shock counts to detect transition"
         return false
