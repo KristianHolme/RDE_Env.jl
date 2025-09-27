@@ -129,13 +129,6 @@ end
 
 @inline get_saveat(env::RDEEnv{T}, saves_per_action::Int) where {T <: AbstractFloat} = saves_per_action == 0 ? nothing : (env.dt / saves_per_action)
 
-function cfl_dtFE(u, prob, t)
-    params = prob.params
-    N = params.N
-    uview = @view u[1:N]
-    return RDE.cfl_dtmax(params, uview, prob.method.cache)
-end
-
 function step_env!(env::RDEEnv{T, A, O, R, V, OBS}; saves_per_action::Int = 10) where {T <: AbstractFloat, A, O, R, V, OBS}
     return _step!(env, env.prob.method; saves_per_action = saves_per_action)
 end
@@ -158,7 +151,7 @@ function _step!(env::RDEEnv{T, A, O, R, V, OBS, M, RS, C}, ::RDE.FiniteVolumeMet
     t0, t1 = env.ode_problem.tspan::Tuple{T, T}
     saveat = collect(range(t0, t1; length = saves_per_action + 1))
     # CFL logic: limit step size using official callback
-    cfl_cb = StepsizeLimiter(cfl_dtFE; safety_factor = T(1), max_step = true, cached_dtcache = zero(T))
+    cfl_cb = StepsizeLimiter(RDE.cfl_dtFE; safety_factor = T(0.62), max_step = true, cached_dtcache = zero(T))
 
 
     sol = OrdinaryDiffEq.solve(env.ode_problem, SSPRK33(); adaptive = false, dt = dtmax0, saveat = saveat, isoutofdomain = RDE.outofdomain, callback = cfl_cb)
@@ -178,8 +171,7 @@ function _step!(env::RDEEnv{T, A, O, R, V, OBS}, ::RDE.AbstractMethod; saves_per
     t0, t1 = env.ode_problem.tspan::Tuple{T, T}
     saveat = collect(range(t0, t1; length = saves_per_action + 1))
     # Limit adaptive steps by CFL in the Tsit5 branch as well
-    cfl_cb = StepsizeLimiter(cfl_dtFE; safety_factor = 1, max_step = false, cached_dtcache = zero(T))
-    sol = OrdinaryDiffEq.solve(env.ode_problem, Tsit5(); adaptive = true, saveat = saveat, isoutofdomain = RDE.outofdomain, callback = cfl_cb)
+    sol = OrdinaryDiffEq.solve(env.ode_problem, Tsit5(); adaptive = true, saveat = saveat, isoutofdomain = RDE.outofdomain)
     if sol.retcode != :Success
         @warn "Failed to solve PDE step for $(typeof(env.prob.method))"
     end
