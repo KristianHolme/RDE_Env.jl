@@ -1,3 +1,4 @@
+using Colors: distinguishable_colors
 """
     interactive_control(env::RDEEnv; callback=nothing, show_observations=false)
 
@@ -68,7 +69,7 @@ env, fig = interactive_control(env, show_observations=true)
 
 function interactive_control(
         env::RDEEnv{T, A, O, R, V, OBS};
-        callback = nothing, show_observations = false, dtmax = 1.0, kwargs...
+        callback = nothing, show_observations = false, dtmax = T(1.0), kwargs...
     ) where {T <: AbstractFloat, A, O, R, V, OBS}
     params = env.prob.params
     N = params.N
@@ -86,7 +87,77 @@ function interactive_control(
 
     # energy_bal_pts = Observable(Point2f[(env.t, energy_balance(env.state, params))])
     # chamber_p_pts = Observable(Point2f[(env.t, chamber_pressure(env.state, params))])
-    reward_pts = Observable(Point2f[(env.t, env.reward)])
+    reward_value = env.reward
+    reward_is_vector = reward_value isa AbstractVector || reward_value isa Tuple || reward_value isa NamedTuple
+
+    function reward_components(reward_current)
+        if reward_current isa AbstractVector
+            return reward_current
+        elseif reward_current isa Tuple
+            return reward_current
+        elseif reward_current isa NamedTuple
+            return values(reward_current)
+        else
+            error("Unsupported reward type $(typeof(reward_current)) for vector reward plotting; expected AbstractVector, Tuple, or NamedTuple")
+        end
+    end
+
+    reward_length = reward_is_vector ? length(reward_components(reward_value)) : 1
+    reward_pts = if reward_is_vector
+        comps = reward_components(reward_value)
+        [Observable(Point2f[(env.t, comps[i])]) for i in 1:reward_length]
+    else
+        Observable(Point2f[(env.t, reward_value)])
+    end
+
+    function reset_reward_traces!(reward_current)
+        if reward_is_vector
+            comps = reward_components(reward_current)
+            for (i, obs_pts) in enumerate(reward_pts)
+                obs_pts[] = Point2f[(env.t, comps[i])]
+            end
+        else
+            reward_pts[] = Point2f[(env.t, reward_current)]
+        end
+        return
+    end
+
+    function record_reward!(reward_current)
+        if reward_is_vector
+            comps = reward_components(reward_current)
+            for (i, obs_pts) in enumerate(reward_pts)
+                obs_pts[] = push!(obs_pts[], Point2f(env.t, comps[i]))
+            end
+        else
+            reward_pts[] = push!(reward_pts[], Point2f(env.t, reward_current))
+        end
+        return
+    end
+
+    function reward_axis_bounds()
+        if reward_is_vector
+            y_vals = Float64[]
+            t_max = 0.0
+            for obs_pts in reward_pts
+                data = obs_pts[]
+                if !isempty(data)
+                    append!(y_vals, Float64.(getindex.(data, 2)))
+                    t_max = max(t_max, Float64(data[end][1]))
+                end
+            end
+        else
+            data = reward_pts[]
+            y_vals = Float64.(getindex.(data, 2))
+            t_max = Float64(data[end][1])
+        end
+        if isempty(y_vals)
+            return (-0.1, 1.15, 0.1)
+        end
+        y_min = min(-0.1, minimum(y_vals))
+        y_max = max(1.15, maximum(y_vals))
+        x_max = max(0.1, t_max * 1.15)
+        return (y_min, y_max, x_max)
+    end
 
     # Detect action type and create appropriate controls
     action_type = env.action_type
@@ -197,8 +268,8 @@ function interactive_control(
         end
 
         # Create slider configurations
-        slider_configs = [(label = "u_p_$i", range = 0:0.001:env.u_pmax, startvalue = control_u_p_sections[i][]) for i in 1:n_sections]
-        push!(slider_configs, (label = "Δt", range = 0:0.001:dtmax, startvalue = time_step[]))
+        slider_configs = [(label = "u_p_$i", range = T(0):T(0.001):env.u_pmax::T, startvalue = control_u_p_sections[i][]) for i in 1:n_sections]
+        push!(slider_configs, (label = "Δt", range = T(0):T(0.001):dtmax::T, startvalue = time_step[]))
 
         # Create SliderGrid with all section controls plus timestep
         slider_grid = SliderGrid(control_area[1, 1], slider_configs...)
@@ -256,7 +327,7 @@ function interactive_control(
             _act!(env, dummy_action) # cached values are already set
             # energy_bal_pts[] = push!(energy_bal_pts[], Point2f(env.t, energy_balance(env.state, params)))
             # chamber_p_pts[] = push!(chamber_p_pts[], Point2f(env.t, chamber_pressure(env.state, params)))
-            reward_pts[] = push!(reward_pts[], Point2f(env.t, env.reward))
+            record_reward!(env.reward)
             update_observables!()
             if callback !== nothing
                 @debug "calling callback"
@@ -290,7 +361,7 @@ function interactive_control(
 
         # energy_bal_pts[] = Point2f[(env.t, energy_balance(env.state, params))]
         # chamber_p_pts[] = Point2f[(env.t, chamber_pressure(env.state, params))]
-        reward_pts[] = Point2f[(env.t, env.reward)]
+        reset_reward_traces!(env.reward)
     end
 
     # Create main visualization
@@ -346,12 +417,24 @@ function interactive_control(
 
     # Reward plot with auto-scaling
     reward_start_xmax = 0.5
-    ax_reward = Axis(energy_area[1, 1], title = "Reward", xlabel = "t", ylabel = "r", limits = (0, reward_start_xmax, nothing, nothing))
-    lines!(ax_reward, reward_pts)
-    on(reward_pts) do _
-        y_vals = getindex.(reward_pts[], 2)
-        ylims!(ax_reward, (min(-0.1, minimum(y_vals)), max(1.15, maximum(y_vals))))
-        xlims!(ax_reward, (0, max(0.1, reward_pts[][end][1] * 1.15)))
+    ax_reward = Axis(energy_area[1, 1], title = "Reward", xlabel = "t", limits = (0, reward_start_xmax, nothing, nothing))
+    if reward_is_vector
+        colors = distinguishable_colors(reward_length)
+        labels = reward_value isa NamedTuple ? collect(keys(reward_value)) : ["r$(i)" for i in 1:reward_length]
+        for i in 1:reward_length
+            lines!(ax_reward, reward_pts[i], color = colors[i], label = labels[i])
+        end
+        axislegend(ax_reward)
+        ax_reward.ylabel = "rᵢ"
+    else
+        lines!(ax_reward, reward_pts)
+        ax_reward.ylabel = "r"
+    end
+
+    on(time) do _
+        y_min, y_max, x_max = reward_axis_bounds()
+        ylims!(ax_reward, (y_min, y_max))
+        xlims!(ax_reward, (0, x_max))
     end
 
     rowsize!(fig.layout, 3, Auto(0.3))
@@ -387,14 +470,14 @@ function interactive_control(
                         try
                             # Create dummy action with correct length for action type
                             dummy_action = if action_type isa VectorPressureAction
-                                zeros(action_type.n_sections)  # Vector with correct length
+                                zeros(T, action_type.n_sections)  # Vector with correct length
                             else
                                 zero(T)  # Single value for scalar actions
                             end
                             _act!(env, dummy_action) #cached values are already set
                             # energy_bal_pts[] = push!(energy_bal_pts[], Point2f(env.t, energy_balance(env.state, params)))
                             # chamber_p_pts[] = push!(chamber_p_pts[], Point2f(env.t, chamber_pressure(env.state, params)))
-                            reward_pts[] = push!(reward_pts[], Point2f(env.t, env.reward))
+                            record_reward!(env.reward)
                             update_observables!()
                             if callback !== nothing
                                 @debug "calling callback"
@@ -503,7 +586,7 @@ function interactive_control(
 
                         # energy_bal_pts[] = Point2f[(env.t, energy_balance(env.state, params))]
                         # chamber_p_pts[] = Point2f[(env.t, chamber_pressure(env.state, params))]
-                        reward_pts[] = Point2f[(env.t, env.reward)]
+                        reset_reward_traces!(env.reward)
                     end
                 end
             end

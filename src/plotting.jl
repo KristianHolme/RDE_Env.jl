@@ -59,7 +59,7 @@ function plot_policy_data(
         control_history = true,
         observations = false,
         live_control = false,
-        size = (1000, 900),
+        fig_size = (1000, 900),
         kwargs...
     )
     action_ts = data.action_ts
@@ -91,7 +91,7 @@ function plot_policy_data(
     # s = @lift(ss[sparse_to_dense_ind(state_ts, action_ts, $time_idx)])
     # u_p = @lift(u_ps[sparse_to_dense_ind(state_ts, action_ts, $time_idx)])
 
-    fig = Figure(; size)
+    fig = Figure(; size = fig_size)
     upper_area = fig[1, 1] = GridLayout()
     main_layout = fig[2, 1] = GridLayout()
     if control_history || energy_and_chamber_pressure || rewards_and_shocks
@@ -221,7 +221,9 @@ function plot_policy_data(
             barplot!(ax_obs, observation)
         else
             ax_obs = Axis(fig[end + 1, 1], title = "Observations", xlabel = "index", ylabel = "Agent")
-            heatmap!(ax_obs, 1:size(observation[], 1), 1:size(observation[], 2), observation)
+            xs = 1:size(observation[], 1)
+            ys = 1:size(observation[], 2)
+            heatmap!(ax_obs, xs, ys, observation)
         end
     end
     resize_to_layout!(fig)
