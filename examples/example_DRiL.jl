@@ -28,7 +28,7 @@ env = MonitorWrapperEnv(env)
 policy = ActorCriticPolicy(observation_space(env), action_space(env))
 agent = ActorCriticAgent(policy; verbose = 2, n_steps = 4, batch_size = 32, learning_rate = 3.0f-4, epochs = 10)
 ## train agent
-learn_stats = learn!(agent, env, alg, 100_000)
+learn_stats, to = learn!(agent, env, alg, 100_000)
 ## wrap agent in DRiLAgentPolicy
 policy = DRiLRDE.DRiLAgentPolicy(agent, env isa NormalizeWrapperEnv ? env : nothing)
 ## run policy
