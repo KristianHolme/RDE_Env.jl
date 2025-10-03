@@ -329,6 +329,8 @@ function plot_shifted_history(data::PolicyRunData, x::AbstractArray, c = :auto; 
     us, = RDE.split_sol(data.states)
     saves_per_action = (length(data.state_ts) - 1) ÷ (length(data.action_ts) - 1)
     if c == :auto
+        c = get_plotting_speed_adjustments(data, x[2] - x[1])
+    elseif c == :legacy
         counts = RDE.count_shocks.(us, x[2] - x[1])
         u_ps = data.u_ps
         if eltype(u_ps) <: AbstractVector

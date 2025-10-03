@@ -24,7 +24,7 @@ export compute_observation, get_init_observation
 export set_reward!
 export RDEEnv, RDEEnvCache
 include("utils.jl")
-export sigmoid_to_linear, reward_sigmoid, sigmoid, linear_to_sigmoid
+export sigmoid_to_linear, reward_sigmoid, sigmoid, linear_to_sigmoid, get_plotting_speed_adjustments
 
 # Actions
 include("actions.jl")
