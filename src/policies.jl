@@ -242,6 +242,10 @@ function get_init_rewards(env::RDEEnv{T}, reward_type::MultiAgentCachedComposite
     return Vector{Vector{T}}(undef, max_steps)
 end
 
+function get_init_rewards(env::RDEEnv{T}, reward_type::ScalarToVectorReward, max_steps::Int) where {T}
+    return Vector{Vector{T}}(undef, max_steps)
+end
+
 function get_init_rewards(env::RDEEnv{T}, reward_type::MultiplicativeReward, max_steps::Int) where {T}
     # Check if any of the component rewards is a multi-agent reward
     if any(r isa MultiAgentCachedCompositeReward for r in reward_type.rewards)
@@ -512,7 +516,7 @@ struct DelayedPolicy{T <: AbstractFloat, P <: AbstractRDEPolicy} <: AbstractRDEP
     env::RDEEnv{T}
 end
 
-function _predict_action(π::DelayedPolicy, s::AbstractVector{T}) where {T <: AbstractFloat}
+function _predict_action(π::DelayedPolicy, s::Union{AbstractVector{T}, Matrix{T}}) where {T <: AbstractFloat}
     t = π.env.t
     if t < π.start_time
         if π.env.action_type isa ScalarAreaScalarPressureAction
