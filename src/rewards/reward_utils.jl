@@ -1,5 +1,8 @@
 # Shared reward helpers and utilities
 
+# Time aggregation tag type for time-aggregated rewards
+abstract type TimeAggregation end
+
 function action_magnitude_factor(lowest_action_magnitude_reward::AbstractFloat, action_magnitudes)
     α = lowest_action_magnitude_reward
     action_magnitude_inv = 1 .- action_magnitudes
