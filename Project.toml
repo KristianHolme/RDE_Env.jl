@@ -37,4 +37,7 @@ Observables = "0"
 POMDPTools = "1"
 Polyester = "0.7.16"
 ProgressMeter = "1.10.2"
-julia = "1.6"
+julia = "1.10"
+
+[sources]
+RDE = {rev = "main", url = "https://github.com/KristianHolme/RDE.jl"}
