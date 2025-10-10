@@ -569,46 +569,73 @@ end
 
 struct LinearPolicy{T <: AbstractFloat} <: AbstractRDEPolicy
     env::RDEEnv{T}
-    start_value::Union{Vector{T}, T}
-    end_value::Union{Vector{T}, T}
-    duration::T
-    function LinearPolicy(env::RDEEnv{T}, start_value::Union{Vector{T}, T}, end_value::Union{Vector{T}, T}, duration::T) where {T <: AbstractFloat}
+    ts::Vector{T}  # Vector of time points
+    c::Union{Vector{Vector{T}}, Vector{T}}  # Vector of control values at each time point
+
+    function LinearPolicy(env::RDEEnv{T}, ts::Vector{T}, c::Union{Vector{Vector{T}}, Vector{T}}) where {T <: AbstractFloat}
+        @assert length(ts) == length(c) "Length of time points and control values must be equal"
+        @assert issorted(ts) "Time points must be in ascending order"
+        @assert length(ts) >= 2 "At least two time points are required for linear interpolation"
         if env.action_type isa ScalarAreaScalarPressureAction
-            @assert length(start_value) == 2 && length(end_value) == 2 "Start and end values must have 2 elements"
-            new{T}(env, start_value, end_value, duration)
-        elseif env.action_type isa ScalarPressureAction
-            @assert length(start_value) == 1 && length(end_value) == 1 "Start and end values must have 1 element"
-            new{T}(env, start_value, end_value, duration)
+            @assert all(length(action) == 2 for action in c) "Each control value must have 2 elements"
+            @assert eltype(c) <: Vector{T} "Control values must be a vector of vectors"
         else
-            @error "Unknown action type $(typeof(env.action_type)) for LinearPolicy"
+            @assert eltype(c) <: T "Control values must be a vector of scalars"
         end
-        return new{T}(env, start_value, end_value, duration)
+        env.α = 0.0 # to assure that get_scaled_control works
+        return new{T}(env, ts, c)
     end
 end
 
 function _predict_action(π::LinearPolicy, s)
     t = π.env.t
+    cache = π.env.prob.method.cache
+
+    # Find the time points to interpolate between
+    past = π.ts .≤ t
+    idx = findlast(past)
+
+    if isnothing(idx)
+        # Before first time point, use first value
+        target_value = π.c[1]
+    elseif idx == length(π.ts)
+        # After last time point, use last value
+        target_value = π.c[end]
+    else
+        # Linear interpolation between time points
+        t1, t2 = π.ts[idx], π.ts[idx + 1]
+        c1, c2 = π.c[idx], π.c[idx + 1]
+
+        if π.env.action_type isa ScalarAreaScalarPressureAction
+            # Interpolate each component separately
+            target_value = c1 .+ (c2 .- c1) .* (t - t1) / (t2 - t1)
+        elseif π.env.action_type isa ScalarPressureAction
+            # Interpolate single value
+            target_value = c1 + (c2 - c1) * (t - t1) / (t2 - t1)
+        else
+            @error "Unknown action type $(typeof(π.env.action_type)) for LinearPolicy"
+        end
+    end
+
+    # Apply scaled control
     if π.env.action_type isa ScalarAreaScalarPressureAction
-        target_values = π.start_value .+ (π.end_value .- π.start_value) .* min(t, π.duration) / π.duration
-        return get_scaled_control.([π.env.prob.method.cache.s_current[1], π.env.prob.method.cache.u_p_current[1]], [π.env.smax, π.env.u_pmax], target_values)
+        return get_scaled_control.([cache.s_current[1], cache.u_p_current[1]], [π.env.smax, π.env.u_pmax], target_value)
     elseif π.env.action_type isa ScalarPressureAction
-        target_value = π.start_value + (π.end_value - π.start_value) * min(t, π.duration) / π.duration
-        scaled_control = get_scaled_control(π.env.prob.method.cache.u_p_current[1], π.env.u_pmax, target_value)
-        return scaled_control
+        return get_scaled_control(cache.u_p_current[1], π.env.u_pmax, target_value)
     else
         @error "Unknown action type $(typeof(π.env.action_type)) for LinearPolicy"
     end
 end
 
 function Base.show(io::IO, π::LinearPolicy)
-    return print(io, "LinearPolicy()")
+    return print(io, "LinearPolicy($(length(π.ts)) points)")
 end
 
 function Base.show(io::IO, ::MIME"text/plain", π::LinearPolicy)
     println(io, "LinearPolicy:")
-    println(io, "  start_value: $(π.start_value)")
-    println(io, "  end_value: $(π.end_value)")
-    return println(io, "  duration: $(π.duration)")
+    println(io, "  points: $(length(π.ts))")
+    println(io, "  env: $(typeof(π.env))")
+    return println(io, "  time range: [$(minimum(π.ts)), $(maximum(π.ts))]")
 end
 
 """
