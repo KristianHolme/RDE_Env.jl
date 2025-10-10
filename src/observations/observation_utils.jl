@@ -19,7 +19,7 @@ function compute_sectioned_observation(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C
     return minisection_observations_u, minisection_observations_λ, shocks, target_shock_count
 end
 
-function get_observable_minisections(obs_strategy::MultiSectionObservation)
+function get_observable_minisections(obs_strategy)
     n_sections = obs_strategy.n_sections
     L = obs_strategy.L
     v = obs_strategy.look_ahead_speed
