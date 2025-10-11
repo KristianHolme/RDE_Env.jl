@@ -1,5 +1,7 @@
 # RDE_Env
 
+[![Build Status](https://github.com/KristianHolme/RDE_Env.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/KristianHolme/RDE_Env.jl/actions/workflows/CI.yml?query=branch%3Amain)
+
 A Julia module providing a reinforcement learning environment interface for the Rotating Detonation Engine (RDE) simulation.
 
 ## Overview
