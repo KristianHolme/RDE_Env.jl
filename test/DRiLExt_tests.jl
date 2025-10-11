@@ -1,34 +1,41 @@
 using DRiL
+
+# Helper to get the extension
+function get_dril_ext()
+    return Base.get_extension(RDE_Env, :RDE_EnvDRiLExt)
+end
+
 function get_env()
-    env_config = RDEEnvConfig(
+    env = RDEEnv(
         observation_strategy = SectionedStateObservation(),
         action_type = ScalarPressureAction(),
+        params = RDEParam(N = 512, tmax = 100.0f0)
     )
-    env = make_env(env_config)
-    DRiLExt = Base.get_extension(RDE_Env, :RDE_EnvDRiLExt)
+    DRiLExt = get_dril_ext()
     env = DRiLExt.DRiLRDEEnv(env)
     return env
 end
 
 function get_multi_agent_env()
-    env_config = RDEEnvConfig(
+    env = RDEEnv(
         observation_strategy = MultiCenteredObservation(n_sections = 4),
         action_type = VectorPressureAction(n_sections = 4),
         reward_type = MultiSectionPeriodMinimumReward(n_sections = 4, target_shock_count = 3, lowest_action_magnitude_reward = 0.0f0, weights = [1.0f0, 1.0f0, 5.0f0, 1.0f0]),
+        params = RDEParam(N = 512, tmax = 100.0f0)
     )
-    env = make_env(env_config)
-    DRiLExt = Base.get_extension(RDE_Env, :RDE_EnvDRiLExt)
+    DRiLExt = get_dril_ext()
     env = DRiLExt.DRiLMultiAgentRDEEnv(env)
     return env
 end
+
 function get_SAVA_env()
-    env_config = RDEEnvConfig(
+    env = RDEEnv(
         observation_strategy = SectionedStateObservation(),
         action_type = VectorPressureAction(n_sections = 4),
-        reward_type = PeriodMinimumReward()
+        reward_type = PeriodMinimumReward(),
+        params = RDEParam(N = 512, tmax = 100.0f0)
     )
-    env = make_env(env_config)
-    DRiLExt = Base.get_extension(RDE_Env, :RDE_EnvDRiLExt)
+    DRiLExt = get_dril_ext()
     env = DRiLExt.DRiLRDEEnv(env)
     return env
 end
@@ -77,7 +84,7 @@ end
     @test hasmethod(DRiL.action_space, (typeof(env),))
     @test hasmethod(DRiL.number_of_envs, (typeof(env),))
     @test hasmethod(DRiL.reset!, (typeof(env),))
-    @test hasmethod(DRiL.act!, (typeof(env), Any))
+    # For parallel envs, act! takes a vector of actions
     @test hasmethod(DRiL.observe, (typeof(env),))
     @test hasmethod(DRiL.terminated, (typeof(env),))
     @test hasmethod(DRiL.truncated, (typeof(env),))
@@ -95,7 +102,7 @@ end
     @test hasmethod(DRiL.action_space, (typeof(env),))
     @test hasmethod(DRiL.number_of_envs, (typeof(env),))
     @test hasmethod(DRiL.reset!, (typeof(env),))
-    @test hasmethod(DRiL.act!, (typeof(env), Any))
+    # Multi-agent envs act like parallel envs
     @test hasmethod(DRiL.observe, (typeof(env),))
     @test hasmethod(DRiL.terminated, (typeof(env),))
     @test hasmethod(DRiL.truncated, (typeof(env),))
@@ -118,10 +125,12 @@ end
     env = get_SAVA_env()
     @test hasmethod(DRiL.observation_space, (typeof(env),))
     @test hasmethod(DRiL.action_space, (typeof(env),))
-    @test hasmethod(DRiL.number_of_envs, (typeof(env),))
+    # Single envs don't have number_of_envs method
     @test hasmethod(DRiL.reset!, (typeof(env),))
-    @test hasmethod(DRiL.act!, (typeof(env), Any))
+    @test hasmethod(DRiL.act!, (typeof(env), typeof(rand(action_space(env)))))
     @test hasmethod(DRiL.observe, (typeof(env),))
+    @test hasmethod(DRiL.terminated, (typeof(env),))
+    @test hasmethod(DRiL.truncated, (typeof(env),))
 end
 
 @testset "DRiLExt SAVA env usage" begin

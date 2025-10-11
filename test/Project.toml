@@ -2,3 +2,7 @@
 RDE = "1d57ab14-0807-4ee5-93aa-665821a12dfd"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+DRiL = "49b37b9d-a8e6-4364-9144-4677bcb8a7f0"
+
+[sources]
+DRiL = {rev = "main", url = "https://github.com/KristianHolme/DRiL.jl"}

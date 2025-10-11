@@ -11,15 +11,15 @@ using SciMLBase
 using OrdinaryDiffEq
 using Makie
 using Observables
-using Polyester
-using POMDPTools
+# using Polyester
+# using POMDPTools
 using PrecompileTools
 using ProgressMeter
 
-include("types.jl")
+include("core.jl")
 export AbstractRDEEnv, AbstractActionType, AbstractObservationStrategy, AbstractMultiAgentObservationStrategy,
     AbstractRDEReward
-export action_dim, get_standardized_actions, compute_standard_actions, _reset_action!, set_N!
+export action_dim, _reset_action!, set_N!
 export compute_observation, get_init_observation
 export set_reward!
 export RDEEnv, RDEEnvCache
@@ -27,11 +27,11 @@ include("utils.jl")
 export sigmoid_to_linear, reward_sigmoid, sigmoid, linear_to_sigmoid, get_plotting_speed_adjustments
 
 # Actions
-include("actions.jl")
+include("actions/actions.jl")
 export ScalarPressureAction, ScalarAreaScalarPressureAction, VectorPressureAction, PIDAction
 
 # Observation strategies
-include("observations.jl")
+include("observations/observations.jl")
 export
     FourierObservation, StateObservation,
     SampledStateObservation, MultiSectionObservation, SectionedStateObservation,
@@ -39,7 +39,7 @@ export
 export CompositeObservation, compute_sectioned_observation
 
 # Rewards
-include("rewards.jl")
+include("rewards/rewards.jl")
 export ShockSpanReward, ShockPreservingReward, ShockPreservingSymmetryReward
 export CompositeReward, ConstantTargetReward, MultiSectionReward, PeriodicityReward
 export TimeAggCompositeReward, TimeMin, TimeAvg, TimeMax, TimeSum, TimeProd, TimeAggMultiSectionReward
@@ -54,14 +54,14 @@ export _reset!, _act!, _observe, state, terminated
 
 include("policies.jl")
 export AbstractRDEPolicy, StepwiseRDEPolicy, RandomRDEPolicy, ConstantRDEPolicy, SinusoidalRDEPolicy,
-    DelayedPolicy, LinearPolicy, get_env, LinearCheckpoints, SawtoothPolicy, PIDControllerPolicy
+    DelayedPolicy, LinearPolicy, get_env, SawtoothPolicy, PIDControllerPolicy
 export reset_pid_cache!, _predict_action
 # Vectorized environments
-include("vec_env.jl")
-include("multi_agent_vec_env.jl")
-export RDEVecEnv, MultiAgentRDEVecEnv
-export step!, seed!
-export ThreadingMode, POLYESTER, THREADS
+# include("vec_env.jl")
+# include("multi_agent_vec_env.jl")
+# export RDEVecEnv, MultiAgentRDEVecEnv
+# export step!, seed!
+# export ThreadingMode, POLYESTER, THREADS
 
 # Policies
 export PolicyRunData, run_policy
@@ -91,21 +91,21 @@ include("displaying.jl")
         policy = RandomRDEPolicy(env)
         data = run_policy(policy, env)
 
-        # Test vectorized environment
-        envs = [
-            RDEEnv(;
-                    dt = 0.01f0,
-                    τ_smooth = 0.001f0,
-                    params = RDEParam(; N = 512, tmax = 0.05f0),
-                    observation_strategy = FourierObservation(8),
-                    action_type = ScalarPressureAction(),
-                    reward_type = PeriodMinimumReward()
-                ) for _ in 1:2
-        ]
-        vec_env = RDEVecEnv(envs)
-        _reset!(vec_env)
-        actions = Float32.(rand(1, 2) .- 0.5)
-        step!(vec_env, actions)
+        # # Test vectorized environment
+        # envs = [
+        #     RDEEnv(;
+        #             dt = 0.01f0,
+        #             τ_smooth = 0.001f0,
+        #             params = RDEParam(; N = 512, tmax = 0.05f0),
+        #             observation_strategy = FourierObservation(8),
+        #             action_type = ScalarPressureAction(),
+        #             reward_type = PeriodMinimumReward()
+        #         ) for _ in 1:2
+        # ]
+        # vec_env = RDEVecEnv(envs)
+        # _reset!(vec_env)
+        # actions = Float32.(rand(1, 2) .- 0.5)
+        # step!(vec_env, actions)
 
     catch e
         rethrow(e)

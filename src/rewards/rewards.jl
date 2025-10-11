@@ -1,3 +1,38 @@
+@kwdef struct ShockSpanReward <: AbstractRDEReward
+    target_shock_count::Int = 3
+    span_scale::Float32 = 4.0f0
+    shock_weight::Float32 = 0.8f0
+end
+
+
+@kwdef mutable struct ShockPreservingReward <: AbstractRDEReward
+    target_shock_count::Int = 3
+    span_scale::Float32 = 4.0f0
+    shock_weight::Float32 = 0.8f0
+    abscence_limit::Float32 = 5.0f0
+    abscence_start::Union{Float32, Nothing} = nothing
+end
+
+
+mutable struct ShockPreservingSymmetryReward <: AbstractRDEReward
+    target_shock_count::Int
+    cache::Vector{Float32}
+    function ShockPreservingSymmetryReward(;
+            target_shock_count::Int = 4,
+            N::Int = 512
+        )
+        return new(target_shock_count, zeros(Float32, N))
+    end
+end
+
+
+mutable struct PeriodicityReward{T <: AbstractFloat} <: AbstractRDEReward
+    cache::Vector{T}
+end
+
+# Constructors
+PeriodicityReward{T}(; N::Int = 512) where {T <: AbstractFloat} = PeriodicityReward{T}(zeros(T, N))
+PeriodicityReward(; N::Int = 512) = PeriodicityReward{Float32}(; N = N)
 # Default reset interface for rewards - does nothing by default
 function reset_reward!(rt::AbstractRDEReward)
     return nothing

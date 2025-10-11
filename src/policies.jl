@@ -232,19 +232,23 @@ function run_policy(policy::AbstractRDEPolicy, env::RDEEnv{T}; saves_per_action 
     return PolicyRunData{T}(ts, ss, u_ps, rewards, energy_bal, chamber_p, state_ts, states, observations)
 end
 
-
 function get_init_rewards(env::RDEEnv{T}, reward_type::AbstractRDEReward, max_steps::Int) where {T}
-    return Vector{T}(undef, max_steps)
+    reward_type = typeof(env.reward)
+    return Vector{reward_type}(undef, max_steps)
 end
 
-function get_init_rewards(env::RDEEnv{T}, reward_type::MultiAgentCachedCompositeReward, max_steps::Int) where {T}
-    # n_section = reward_type.n_sections
-    return Vector{Vector{T}}(undef, max_steps)
-end
+# function get_init_rewards(env::RDEEnv{T}, reward_type::AbstractRDEReward, max_steps::Int) where {T}
+#     return Vector{T}(undef, max_steps)
+# end
 
-function get_init_rewards(env::RDEEnv{T}, reward_type::ScalarToVectorReward, max_steps::Int) where {T}
-    return Vector{Vector{T}}(undef, max_steps)
-end
+# function get_init_rewards(env::RDEEnv{T}, reward_type::MultiAgentCachedCompositeReward, max_steps::Int) where {T}
+#     # n_section = reward_type.n_sections
+#     return Vector{Vector{T}}(undef, max_steps)
+# end
+
+# function get_init_rewards(env::RDEEnv{T}, reward_type::ScalarToVectorReward, max_steps::Int) where {T}
+#     return Vector{Vector{T}}(undef, max_steps)
+# end
 
 function get_init_rewards(env::RDEEnv{T}, reward_type::MultiplicativeReward, max_steps::Int) where {T}
     # Check if any of the component rewards is a multi-agent reward
@@ -634,85 +638,6 @@ end
 function Base.show(io::IO, ::MIME"text/plain", π::LinearPolicy)
     println(io, "LinearPolicy:")
     println(io, "  points: $(length(π.ts))")
-    println(io, "  env: $(typeof(π.env))")
-    return println(io, "  time range: [$(minimum(π.ts)), $(maximum(π.ts))]")
-end
-
-"""
-    LinearCheckpoints{T<:AbstractFloat} <: AbstractRDEPolicy
-
-Policy that applies linearly interpolated control values between specified checkpoints.
-
-# Fields
-- `env::RDEEnv{T}`: RDE environment
-- `ts::Vector{T}`: Vector of time checkpoints
-- `c::Union{Vector{Vector{T}}, Vector{T}}`: Vector of control actions at checkpoints
-
-# Notes
-- Supports both ScalarAreaScalarPressureAction and ScalarPressureAction
-- Requires sorted time checkpoints
-- Each control action must have 2 elements for ScalarAreaScalarPressureAction
-- Linear interpolation is performed between checkpoints
-"""
-struct LinearCheckpoints{T <: AbstractFloat} <: AbstractRDEPolicy
-    env::RDEEnv{T}
-    ts::Vector{T}  # Vector of time checkpoints
-    c::Union{Vector{Vector{T}}, Vector{T}}  # Vector of control actions at checkpoints
-
-    function LinearCheckpoints(env::RDEEnv{T}, ts::Vector{T}, c::Union{Vector{Vector{T}}, Vector{T}}) where {T <: AbstractFloat}
-        @assert length(ts) == length(c) "Length of time checkpoints and control actions must be equal"
-        @assert issorted(ts) "Time checkpoints must be in ascending order"
-        if env.action_type isa ScalarAreaScalarPressureAction
-            @assert all(length(action) == 2 for action in c) "Each control action must have 2 elements"
-            @assert eltype(c) <: Vector{T} "Control actions must be a vector of vectors"
-        else
-            @assert eltype(c) <: T "Control actions must be a vector of scalars"
-        end
-        env.α = 0.0 #to assure that get_scaled_control works
-        return new{T}(env, ts, c)
-    end
-end
-
-function _predict_action(π::LinearCheckpoints, s)
-    t = π.env.t
-    cache = π.env.prob.method.cache
-
-    # Find the checkpoints to interpolate between
-    past = π.ts .≤ t
-    idx = findlast(past)
-
-    if isnothing(idx)
-        # Before first checkpoint, use first checkpoint value
-        return π.c[1]
-    elseif idx == length(π.ts)
-        # After last checkpoint, use last checkpoint value
-        return π.c[end]
-    end
-
-    # Linear interpolation between checkpoints
-    t1, t2 = π.ts[idx], π.ts[idx + 1]
-    c1, c2 = π.c[idx], π.c[idx + 1]
-
-    if π.env.action_type isa ScalarAreaScalarPressureAction
-        # Interpolate each component separately
-        target_values = c1 .+ (c2 .- c1) .* (t - t1) / (t2 - t1)
-        return get_scaled_control.([cache.s_current[1], cache.u_p_current[1]], [π.env.smax, π.env.u_pmax], target_values)
-    elseif π.env.action_type isa ScalarPressureAction
-        # Interpolate single value
-        target_value = c1 + (c2 - c1) * (t - t1) / (t2 - t1)
-        return get_scaled_control(cache.u_p_current[1], π.env.u_pmax, target_value)
-    else
-        @error "Unknown action type $(typeof(π.env.action_type)) for LinearCheckpoints"
-    end
-end
-
-function Base.show(io::IO, π::LinearCheckpoints)
-    return print(io, "LinearCheckpoints($(length(π.ts)) checkpoints)")
-end
-
-function Base.show(io::IO, ::MIME"text/plain", π::LinearCheckpoints)
-    println(io, "LinearCheckpoints:")
-    println(io, "  checkpoints: $(length(π.ts))")
     println(io, "  env: $(typeof(π.env))")
     return println(io, "  time range: [$(minimum(π.ts)), $(maximum(π.ts))]")
 end

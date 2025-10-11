@@ -1,122 +1,57 @@
 abstract type _AbstractEnv end
 abstract type AbstractRDEEnv <: _AbstractEnv end
 
+# Actions
 abstract type AbstractActionType end
+"""
+    action_dim(action_type::AbstractActionType)
 
-@kwdef mutable struct ScalarPressureAction <: AbstractActionType
-    N::Int = 512 #number of grid points
-end
-
-
-@kwdef mutable struct ScalarAreaScalarPressureAction <: AbstractActionType
-    N::Int = 512 #number of grid points
-end
-
-
-@kwdef mutable struct VectorPressureAction <: AbstractActionType
-    n_sections::Int = 1 #number of sections
-    N::Int = 512 #number of grid points
-end
+Return the dimension of the action space for the given action type.
+"""
+function action_dim end
 
 """
-    PIDAction <: AbstractActionType
+    _reset_action!(action_type::AbstractActionType)
 
-Action type where the agent supplies PID gains `[Kp, Ki, Kd]` and the
-environment produces a scalar pressure action in `[-1, 1]` using a
-built-in PID computation against a target value for the injection pressure.
-
-State for the PID accumulators is stored on the action type and is reset
-on environment reset via `_reset_action!`.
+Reset the action type to its initial state. Mainly used for resetting cache. Called when environment is reset.
 """
-@kwdef mutable struct PIDAction{T <: AbstractFloat} <: AbstractActionType
-    N::Int = 512
-    target::T = zero(T)
-    integral::T = zero(T)
-    previous_error::T = zero(T)
-end
+function _reset_action! end
 
 # Constructors
 # PIDAction(; N::Int = 512, target::Float32 = 0.0f0) = PIDAction{Float32}(N = N, target = target)
 
-
-function get_standardized_actions end
-function action_dim end
-function compute_standard_actions end
-function _reset_action! end
-
-
 #Observations
 abstract type AbstractObservationStrategy end
 abstract type AbstractMultiAgentObservationStrategy <: AbstractObservationStrategy end
-function compute_observation end
 
+"""
+    compute_observation!(obs, env::RDEEnv, observation_strategy::AbstractObservationStrategy)
+
+Compute the observation from the environment and store it in obs.
+"""
+function compute_observation! end
+
+"""
+    get_init_observation(observation_strategy::AbstractObservationStrategy, N::Int, T::Type{<:AbstractFloat})
+
+Returns an array of the correct size and type for the observation. Called at env construction.
+"""
 function get_init_observation end
-
-struct FourierObservation <: AbstractObservationStrategy
-    fft_terms::Int
-end
-
-
-struct StateObservation <: AbstractObservationStrategy end
-
-
-@kwdef struct SectionedStateObservation <: AbstractObservationStrategy
-    minisections::Int = 32
-    target_shock_count::Int = 3
-end
-
-
-struct SampledStateObservation <: AbstractObservationStrategy
-    n_samples::Int
-end
-
 
 #Rewards
 
 abstract type AbstractRDEReward end
 
+"""
+    set_reward!(env::AbstractRDEEnv, rt::AbstractRDEReward)
+
+Set the reward for the environment in env.reward.
+"""
+function set_reward! end
+
 abstract type CachedCompositeReward <: AbstractRDEReward end
 
 abstract type MultiAgentCachedCompositeReward <: CachedCompositeReward end
-
-@kwdef struct ShockSpanReward <: AbstractRDEReward
-    target_shock_count::Int = 3
-    span_scale::Float32 = 4.0f0
-    shock_weight::Float32 = 0.8f0
-end
-
-
-@kwdef mutable struct ShockPreservingReward <: AbstractRDEReward
-    target_shock_count::Int = 3
-    span_scale::Float32 = 4.0f0
-    shock_weight::Float32 = 0.8f0
-    abscence_limit::Float32 = 5.0f0
-    abscence_start::Union{Float32, Nothing} = nothing
-end
-
-
-mutable struct ShockPreservingSymmetryReward <: AbstractRDEReward
-    target_shock_count::Int
-    cache::Vector{Float32}
-    function ShockPreservingSymmetryReward(;
-            target_shock_count::Int = 4,
-            N::Int = 512
-        )
-        return new(target_shock_count, zeros(Float32, N))
-    end
-end
-
-
-mutable struct PeriodicityReward{T <: AbstractFloat} <: AbstractRDEReward
-    cache::Vector{T}
-end
-
-# Constructors
-PeriodicityReward{T}(; N::Int = 512) where {T <: AbstractFloat} = PeriodicityReward{T}(zeros(T, N))
-PeriodicityReward(; N::Int = 512) = PeriodicityReward{Float32}(; N = N)
-
-function set_reward! end
-
 
 ## env
 """
@@ -183,5 +118,6 @@ mutable struct RDEEnv{T, A, O, RW, V, OBS, M, RS, C} <: AbstractRDEEnv where {
 end
 
 # Helper functions to determine observation array type
+#TODO remove
 observation_array_type(::Type{T}, ::AbstractObservationStrategy) where {T} = Vector{T}  # Default: Vector
 observation_array_type(::Type{T}, ::AbstractMultiAgentObservationStrategy) where {T} = Matrix{T}  # Multi-agent: Matrix

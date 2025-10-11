@@ -1,3 +1,4 @@
+import DiffEqCallbacks: StepsizeLimiter
 """
     RDEEnv{T<:AbstractFloat} <: AbstractRDEEnv
 
@@ -44,9 +45,6 @@ RDEEnv{T}(;
 env = RDEEnv(dt=5.0, smax=3.0)
 ```
 """
-
-import DiffEqCallbacks: StepsizeLimiter
-
 function RDEEnv(;
         dt = 1.0f0,
         smax = 4.0f0,
@@ -82,6 +80,7 @@ function RDEEnv(;
     # Use helper functions to determine type parameters
     V = reward_value_type(T, reward_type)
     OBS = observation_array_type(T, observation_strategy)
+    @assert OBS == typeof(init_observation) "Observation array type mismatch"
 
     # Initialize reward with correct type
     initial_reward = if V <: Vector
@@ -181,122 +180,6 @@ function _step!(env::RDEEnv{T, A, O, R, V, OBS}, ::RDE.AbstractMethod; saves_per
     return sol
 end
 
-function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::AbstractVector{T}) where {T <: AbstractFloat, A <: VectorPressureAction, O, RW, V, OBS, M, RS, C}
-    action_type = env.action_type
-    a = compute_standard_actions(action_type, action, env)
-    env.cache.action[:, 1] = a[1]
-    env.cache.action[:, 2] = a[2]
-
-    method_cache = env.prob.method.cache
-    env_cache = env.cache
-
-    if any(abs.(a[1]) .> one(T)) || any(abs.(a[2]) .> one(T))
-        @warn "action out of bounds [-1,1]"
-    end
-
-    copyto!(method_cache.u_p_previous, method_cache.u_p_current)
-
-    @assert action_type.N > 0 "Action type N not set"
-    @assert length(action) == action_type.n_sections "Action length ($(length(action))) must match n_sections ($(action_type.n_sections))"
-    @assert action_type.N % action_type.n_sections == 0 "N ($(action_type.N)) must be divisible by n_sections ($(action_type.n_sections))"
-
-    # Calculate how many points per section
-    points_per_section = action_type.N ÷ action_type.n_sections
-
-    current_section_controls = @view method_cache.u_p_current[1:points_per_section:end]
-    section_controls = action_to_control.(action, current_section_controls, env.u_pmax, env.α)
-    # Initialize pressure actions array
-    new_pressures = zeros(T, action_type.N)
-
-    # Fill each section with its corresponding action value
-    for i in 1:action_type.n_sections
-        start_idx = (i - 1) * points_per_section + 1
-        end_idx = i * points_per_section
-        new_pressures[start_idx:end_idx] .= section_controls[i]
-        env_cache.action[start_idx:end_idx, 2] .= action[i]
-    end
-
-    method_cache.u_p_current .= new_pressures
-    return nothing
-end
-
-# Specialization: ScalarPressureAction — scalar action updates only u_p channel
-function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::T) where {T <: AbstractFloat, A <: ScalarPressureAction, O, RW, V, OBS, M, RS, C}
-    env_cache = env.cache
-    method_cache = env.prob.method.cache
-    if abs(action) > one(T)
-        @warn "action (u_p) out of bounds [-1,1]"
-    end
-    # Keep cache.action updated without allocating
-    env_cache.action[:, 1] .= zero(T)
-    env_cache.action[:, 2] .= action
-
-    copyto!(method_cache.u_p_previous, method_cache.u_p_current)
-    method_cache.u_p_current .= action_to_control(action, method_cache.u_p_current[1], env.u_pmax, env.α)
-
-    copyto!(method_cache.s_previous, method_cache.s_current)
-    return nothing
-end
-
-# Convenience: accept array-like scalar for ScalarPressureAction
-function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::AbstractArray{T}) where {T <: AbstractFloat, A <: ScalarPressureAction, O, RW, V, OBS, M, RS, C}
-    return apply_action!(env, action[1])
-end
-
-# Specialization: ScalarAreaScalarPressureAction — two scalar actions (s, u_p)
-function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::AbstractVector{T}) where {T <: AbstractFloat, A <: ScalarAreaScalarPressureAction, O, RW, V, OBS, M, RS, C}
-    @assert length(action) == 2
-    a_s, a_up = action[1], action[2]
-    method_cache = env.prob.method.cache
-    env_cache = env.cache
-
-    if abs(a_s) > one(T) || abs(a_up) > one(T)
-        @warn "action (s/u_p) out of bounds [-1,1]"
-    end
-
-    env_cache.action[:, 1] .= a_s
-    env_cache.action[:, 2] .= a_up
-
-    copyto!(method_cache.s_previous, method_cache.s_current)
-    method_cache.s_current .= action_to_control(a_s, method_cache.s_current[1], env.smax, env.α)
-
-    copyto!(method_cache.u_p_previous, method_cache.u_p_current)
-    method_cache.u_p_current .= action_to_control(a_up, method_cache.u_p_current[1], env.u_pmax, env.α)
-    return nothing
-end
-
-# function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::NTuple{2, T}) where {T <: AbstractFloat, A <: ScalarAreaScalarPressureAction, O, RW, V, OBS, M, RS, C}
-#     return apply_action!(env, collect(action))
-# end
-
-# Specialization: PIDAction — gains => scalar u_p set via PID, s unchanged
-function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, gains::AbstractVector{T}) where {T <: AbstractFloat, A <: PIDAction, O, RW, V, OBS, M, RS, C}
-    @assert length(gains) == 3 "PIDAction expects [Kp, Ki, Kd]"
-    Kp, Ki, Kd = gains
-
-    method_cache = env.prob.method.cache
-    env_cache = env.cache
-    u_p_mean::T = mean(cache.u_p_current)
-
-    # PID terms (keep in T)
-    err::T = env.action_type.target - u_p_mean
-    env.action_type.integral += err * env.dt
-    deriv::T = (err - env.action_type.previous_error) / env.dt
-    u_p_action::T = clamp(Kp * err + Ki * env.action_type.integral + Kd * deriv, -one(T), one(T))
-    env.action_type.previous_error = err
-
-    # Keep cache.action updated (no allocations)
-    env_cache.action[:, 1] .= zero(T)
-    env_cache.action[:, 2] .= u_p_action
-
-    # Apply control (only u_p)
-    copyto!(method_cache.u_p_previous, method_cache.u_p_current)
-    method_cache.u_p_current .= action_to_control(u_p_action, method_cache.u_p_current[1], env.u_pmax, env.α)
-
-    # s channel unchanged, still keep previous in sync
-    copyto!(method_cache.s_previous, method_cache.s_current)
-    return nothing
-end
 
 """
     _act!(env::RDEEnv{T}, action; saves_per_action::Int=0) where {T<:AbstractFloat}
@@ -317,10 +200,8 @@ Take an action in the environment.
 - Supports multiple action types
 """
 function _act!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action; saves_per_action::Int = 10) where {T <: AbstractFloat, A, O, RW, V, OBS, M, RS, C}
-    t_start = time()
     params = env.prob.params::RDEParam{T}
     prob = env.prob::RDEProblem{T}
-
     tmax = params.tmax
     t = env.t
     dt = env.dt
@@ -330,24 +211,14 @@ function _act!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action; saves_per_act
         @warn "t > tmax! ($(t) > $(tmax))"
     end
     # Store current state before taking action
-    @logmsg LogLevel(-10000) "Starting act! for environment on thread $(Threads.threadid())"
     N::Int = params.N
     env_cache.prev_u .= @view env.state[1:N]
     env_cache.prev_λ .= @view env.state[(N + 1):end]
-    @logmsg LogLevel(-10000) "Stored previous state" prev_u = env_cache.prev_u prev_λ = env_cache.prev_λ
 
     t_span = (t, t + dt)::Tuple{T, T}
-    @logmsg LogLevel(-10000) "Set time span" t_span = t_span
     method_cache.control_time::T = t
-    @logmsg LogLevel(-10000) "Set control time" control_time = method_cache.control_time
 
-    @logmsg LogLevel(-10000) "Initial controls" prev_s = method_cache.s_current prev_up = method_cache.u_p_current
-
-    prev_means = mean.([method_cache.s_current, method_cache.u_p_current])
     apply_action!(env, action)
-    curr_means = mean.([method_cache.s_current, method_cache.u_p_current])
-
-    @logmsg LogLevel(-10000) "taking action $action at time $(env.t), controls: $(prev_means) to $(curr_means)"
 
     # Construct a fully-specialized ODEProblem to keep types concrete
     env.ode_problem = ODEProblem{true, SciMLBase.FullSpecialize}(RDE_RHS!, env.state, t_span, env.prob)
@@ -368,7 +239,6 @@ function _act!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action; saves_per_act
         if any(isnan, last_u)
             @warn "NaN state detected"
         end
-        @logmsg LogLevel(-10000) "ODE solver failed, controls: $(prev_means) to $(curr_means)"
         env.terminated = true
         env.done = true
         set_termination_reward!(env, -100.0)
@@ -379,12 +249,12 @@ function _act!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action; saves_per_act
     else #advance environment
         prob.sol = sol::SciMLBase.ODESolution
         env.t = tvec[end]::T
-        env.state = last_u
+        env.state .= last_u
 
         env.steps_taken += 1
 
         set_reward!(env, env.reward_type)
-        env.observation .= compute_observation(env, env.observation_strategy)::OBS
+        compute_observation!(env.observation, env, env.observation_strategy)
         if env.terminated #maybe reward caused termination
             # set_termination_reward!(env, -2.0)
             env.done = true
@@ -401,12 +271,8 @@ function _act!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action; saves_per_act
     if env.done != xor(env.truncated, env.terminated)
         @warn "done is not xor(truncated, terminated), at t=$(env.t)" env.done, env.truncated, env.terminated
         @info "info: $(env.info)"
-        @logmsg LogLevel(-500) sol.retcode
     end
-    @logmsg LogLevel(-10000) "End of step reward: $(env.reward)"
-    t_end = time()
-    t_elapsed = t_end - t_start
-    @debug "act! took $(round(t_elapsed * 1000, digits = 3)) ms"
+
     return env.reward
 end
 
@@ -438,7 +304,7 @@ function _reset!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}) where {T, A, O, RW,
     env.terminated = false
     reset_reward!(env.reward_type)  # Reset reward state (e.g., exponential averages)
     set_reward!(env, env.reward_type)
-    env.observation .= compute_observation(env, env.observation_strategy)::OBS
+    compute_observation!(env.observation, env, env.observation_strategy)
     env.info = Dict{String, Any}()
 
     reset_cache!(env.prob.method.cache, τ_smooth = env.τ_smooth, params = env.prob.params)
