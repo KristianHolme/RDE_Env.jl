@@ -147,4 +147,4 @@ function step!(env::MultiAgentRDEVecEnv, actions::AbstractArray)
         copy(env.dones),
         copy(env.infos),
     )
-end 
+end

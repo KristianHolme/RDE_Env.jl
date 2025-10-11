@@ -46,4 +46,4 @@
         # Test that it errors on non-float types
         @test_throws MethodError sigmoid_to_linear(1)
     end
-end 
+end
