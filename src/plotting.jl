@@ -258,7 +258,9 @@ function plot_shifted_history(
         action_ts = ts,
         plot_shocks = true,
         title = nothing,
-        size = (1200, 600)
+        size = (1200, 600),
+        u_hm_kwargs = (),
+        u_ax_kwargs = ()
     )
     pre_check_ts!(ts)
     pre_check_ts!(action_ts)
@@ -266,9 +268,10 @@ function plot_shifted_history(
 
     fig = Figure(size = size)
     ax = Axis(
-        fig[1, 1], title = "u(ψ, t)", xlabel = "t",
+        fig[1, 1]; title = "u(ψ, t)", xlabel = "t",
         ylabel = "ψ", yzoomlock = true, ypanlock = true,
-        limits = (extrema(ts), extrema(x)), xautolimitmargin = (0.0, 0.0)
+        limits = (extrema(ts), extrema(x)), xautolimitmargin = (0.0, 0.0),
+        u_ax_kwargs...
     )
     hm = heatmap!(ax, ts, x, stack(shifted_us)', colorscale = identity)
     Colorbar(fig[1, 2], hm)
