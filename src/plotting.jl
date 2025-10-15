@@ -273,7 +273,7 @@ function plot_shifted_history(
         limits = (extrema(ts), extrema(x)), xautolimitmargin = (0.0, 0.0),
         u_ax_kwargs...
     )
-    hm = heatmap!(ax, ts, x, stack(shifted_us)', colorscale = identity)
+    hm = heatmap!(ax, ts, x, stack(shifted_us)', colorscale = identity, u_hm_kwargs...)
     Colorbar(fig[1, 2], hm)
     if plot_shocks
         counts = RDE.count_shocks.(us, x[2] - x[1])
