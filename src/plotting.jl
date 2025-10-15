@@ -294,14 +294,48 @@ function plot_shifted_history(
     if u_ps !== nothing
         u_p_minimum = minimum(minimum.(u_ps))
         u_p_maximum = maximum(maximum.(u_ps))
-        ax3 = Axis(
-            fig[end + 1, 1], xlabel = "t", ylabel = "uₚ",
-            limits = (nothing, (0.0, max(u_p_maximum * 1.05, 1.2))),
-            xautolimitmargin = (0.0, 0.0)
-        )
         if eltype(u_ps) <: AbstractVector
-            lines!.(Ref(ax3), Ref(action_ts), eachrow(stack(u_ps)), color = :royalblue)
+            #TODO: factor out some utils here?
+            # u_ps is a vector field - plot on same spatial grid as u
+            ax3 = Axis(
+                fig[end + 1, 1]; xlabel = "t", ylabel = "ψ",
+                yzoomlock = true, ypanlock = true,
+                limits = (extrema(ts), extrema(x)),
+                xautolimitmargin = (0.0, 0.0),
+                u_ax_kwargs...
+            )
+            points_per_section = length(x) ÷ length(u_ps[1])
+
+            # Upsample spatially: from coarse sections to fine grid (piecewise constant)
+            spatially_upsampled = map(u_ps) do u_p_coarse
+                # Each coarse value gets repeated points_per_section times
+                reduce(vcat, [fill(u_p_coarse[i], points_per_section) for i in 1:length(u_p_coarse)])
+            end
+
+            # For each fine timestep, find corresponding action timestep and shift appropriately
+            # This preserves the stationary nature of u_ps in the lab frame
+            upsampled_u_ps = map(enumerate(ts)) do (i, t)
+                # Find which action timestep this corresponds to (piecewise constant in time)
+                action_idx = searchsortedlast(action_ts, t)
+                action_idx = clamp(action_idx, 1, length(spatially_upsampled))
+                spatially_upsampled[action_idx]
+            end
+
+            # Now shift with fine grid - this shows u_ps drifting backward in the moving frame
+            shifted_u_ps = Array.(RDE.shift_inds(upsampled_u_ps, x, ts, c))
+            hm_u_ps = heatmap!(ax3, ts, x, stack(shifted_u_ps)')
+            Colorbar(fig[end, 2], hm_u_ps)
+            # lines!.(Ref(ax3), Ref(action_ts), eachrow(stack(u_ps)), color = :royalblue)
+            linkyaxes!(ax, ax3)
         else
+            ax3 = Axis(
+                fig[end + 1, 1], xlabel = "t", ylabel = "uₚ",
+                limits = (nothing, (0.0, max(u_p_maximum * 1.05, 1.2))),
+                xautolimitmargin = (0.0, 0.0),
+            )
+            if !isempty(u_ax_kwargs) && haskey(u_ax_kwargs, :xticks)
+                ax3.xticks = u_ax_kwargs[:xticks]
+            end
             lines!(ax3, action_ts, u_ps, color = :royalblue)
         end
         linkxaxes!(ax, ax3)
@@ -311,7 +345,7 @@ function plot_shifted_history(
         rewards_maximum = maximum(maximum.(rewards))
         ax4 = Axis(
             fig[end + 1, 1], xlabel = "t", ylabel = "Reward",
-            limits = (nothing, (rewards_minimum - 0.05, rewards_maximum + 0.05)),
+            limits = (rewards_minimum - 0.05, rewards_maximum + 0.05),
             xautolimitmargin = (0.0, 0.0)
         )
         if eltype(rewards) <: AbstractVector
