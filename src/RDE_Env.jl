@@ -29,6 +29,7 @@ export sigmoid_to_linear, reward_sigmoid, sigmoid, linear_to_sigmoid, get_plotti
 # Actions
 include("actions/actions.jl")
 export ScalarPressureAction, ScalarAreaScalarPressureAction, VectorPressureAction, PIDAction
+export DirectScalarPressureAction, DirectVectorPressureAction
 
 # Observation strategies
 include("observations/observations.jl")

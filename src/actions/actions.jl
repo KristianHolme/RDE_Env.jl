@@ -1,17 +1,43 @@
-@kwdef mutable struct ScalarPressureAction <: AbstractActionType
+@kwdef struct ScalarPressureAction <: AbstractActionType
     N::Int = 512 #number of grid points
 end
 
 
-@kwdef mutable struct ScalarAreaScalarPressureAction <: AbstractActionType
+@kwdef struct ScalarAreaScalarPressureAction <: AbstractActionType
     N::Int = 512 #number of grid points
 end
 
 
-@kwdef mutable struct VectorPressureAction <: AbstractActionType
+@kwdef struct VectorPressureAction <: AbstractActionType
     n_sections::Int = 1 #number of sections
     N::Int = 512 #number of grid points
 end
+
+"""
+    DirectScalarPressureAction <: AbstractActionType
+
+Action type where a single scalar action in `[-1, 1]` directly maps linearly  
+to pressure control in `[0, u_pmax]` via: `control = 0.5 * u_pmax * (action + 1)`.
+Unlike `ScalarPressureAction`, the mapping is constant and independent of 
+the previous control state.
+"""
+struct DirectScalarPressureAction <: AbstractActionType end
+
+"""
+    DirectVectorPressureAction <: AbstractActionType
+
+Vector action type where each section's action in `[-1, 1]` directly maps linearly  
+to pressure control in `[0, u_pmax]` via: `control = 0.5 * u_pmax * (action + 1)`.
+Unlike `VectorPressureAction`, the mapping is constant and independent of 
+the previous control state.
+
+# Fields
+- `n_sections::Int`: Number of sections to control independently (default: 1)
+"""
+@kwdef struct DirectVectorPressureAction <: AbstractActionType
+    n_sections::Int = 1
+end
+
 
 """
     PIDAction <: AbstractActionType
@@ -46,12 +72,47 @@ function action_dim(at::PIDAction)
     return 3
 end
 
-function set_N!(action_type::AbstractActionType, N::Int)
-    if action_type isa VectorPressureAction
-        @assert N % action_type.n_sections == 0 "N ($N) must be divisible by n_sections ($(action_type.n_sections))"
-    end
-    setfield!(action_type, :N, N)
-    return action_type
+function action_dim(::DirectScalarPressureAction)
+    return 1
+end
+
+function action_dim(at::DirectVectorPressureAction)
+    return at.n_sections
+end
+
+# function set_N!(action_type::AbstractActionType, N::Int)
+#     if action_type isa VectorPressureAction
+#         @assert N % action_type.n_sections == 0 "N ($N) must be divisible by n_sections ($(action_type.n_sections))"
+#     end
+#     setfield!(action_type, :N, N)
+#     return action_type
+# end
+
+# Scalar-action overloads (avoid building action vectors)
+@inline function control_target(a::T, c_prev::T, c_max::T) where {T <: AbstractFloat}
+    target = ifelse(a < 0, c_prev * (a + one(T)), c_prev + (c_max - c_prev) * a)::T
+    return target
+end
+
+#linear function from [-1,1] to [0, u_p_max]
+@inline function direct_control_target(a::T, c_max::T) where {T <: AbstractFloat}
+    target = T(0.5) * c_max * (a + T(1))
+    return target
+end
+
+function momentum_target(control_target::T, previous_target::T, momentum::T) where {T <: AbstractFloat}
+    return momentum * previous_target + (one(T) - momentum) * control_target
+end
+
+# translate action ∈ [-1,1] to a target injection pressure, using a piecewise linear function, where 0 maps to the current control, -1 to 0 and 1 to the max allowed control
+@inline function action_to_control(a::T, c_prev::T, c_max::T, α::T) where {T <: AbstractFloat}
+    target::T = control_target(a, c_prev, c_max)
+    return α * c_prev + (one(T) - α) * target
+end
+
+function direct_action_to_control(a::T, c_prev::T, c_max::T, α::T) where {T <: AbstractFloat}
+    control_target = direct_control_target(a, c_max)
+    return momentum_target(control_target, c_prev, α)
 end
 
 # Reset hook: default no-op and PID-specific state reset
@@ -153,7 +214,7 @@ function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, gains::Abstra
 
     method_cache = env.prob.method.cache
     env_cache = env.cache
-    u_p_mean::T = mean(cache.u_p_current)
+    u_p_mean::T = mean(method_cache.u_p_current)
 
     # PID terms (keep in T)
     err::T = env.action_type.target - u_p_mean
@@ -172,5 +233,64 @@ function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, gains::Abstra
 
     # s channel unchanged, still keep previous in sync
     copyto!(method_cache.s_previous, method_cache.s_current)
+    return nothing
+end
+
+function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::Vector{T}) where {T <: AbstractFloat, A <: DirectScalarPressureAction, O, RW, V, OBS, M, RS, C}
+    @assert length(action) == 1 "DirectScalarPressureAction expects a single action"
+    apply_action!(env, action[1])
+    return nothing
+end
+
+function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::T) where {T <: AbstractFloat, A <: DirectScalarPressureAction, O, RW, V, OBS, M, RS, C}
+    env_cache = env.cache
+    method_cache = env.prob.method.cache
+    if abs(action) > one(T)
+        @warn "action (u_p) out of bounds [-1,1]"
+    end
+    # Keep cache.action updated without allocating
+    env_cache.action[:, 1] .= zero(T)
+    env_cache.action[:, 2] .= action
+
+    copyto!(method_cache.u_p_previous, method_cache.u_p_current)
+    method_cache.u_p_current .= direct_action_to_control(action, method_cache.u_p_current[1], env.u_pmax, env.α)
+
+    copyto!(method_cache.s_previous, method_cache.s_current)
+    return nothing
+end
+
+function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::AbstractVector{T}) where {T <: AbstractFloat, A <: DirectVectorPressureAction, O, RW, V, OBS, M, RS, C}
+    action_type = env.action_type
+    N = env.prob.params.N
+    @assert N > 0 "Action type N not set"
+    @assert length(action) == action_type.n_sections "Action length ($(length(action))) must match n_sections ($(action_type.n_sections))"
+    @assert N % action_type.n_sections == 0 "N ($(N)) must be divisible by n_sections ($(action_type.n_sections))"
+
+    # full_domain_action_vector = fill_standardized_vector_actions!(env.cache.actions[:, 2], env, action)
+    # env.cache.action[:, 1] = a[1]
+    # env.cache.action[:, 2] = full_action_vector #done in place above
+
+    method_cache = env.prob.method.cache
+    env_cache = env.cache
+
+    if any(abs.(action) .> one(T))
+        @warn "action out of bounds [-1,1]"
+    end
+
+    copyto!(method_cache.u_p_previous, method_cache.u_p_current)
+
+
+    # Calculate how many points per section
+    points_per_section = N ÷ action_type.n_sections
+
+    current_section_controls = @view method_cache.u_p_current[1:points_per_section:end]
+    section_controls = direct_action_to_control.(action, current_section_controls, env.u_pmax, env.α)
+    # Fill each section with its corresponding action value, directly writing into method_cache.u_p_current (no new allocation)
+    for i in 1:action_type.n_sections
+        start_idx = (i - 1) * points_per_section + 1
+        end_idx = i * points_per_section
+        method_cache.u_p_current[start_idx:end_idx] .= section_controls[i]
+        env_cache.action[start_idx:end_idx, 2] .= action[i]
+    end
     return nothing
 end

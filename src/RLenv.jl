@@ -69,8 +69,9 @@ function RDEEnv(;
     RDE.reset_state_and_pressure!(prob, prob.reset_strategy)
     reset_cache!(prob.method.cache, τ_smooth = τ_smooth, params = params)
 
-    # Set N in action_type
-    set_N!(action_type, params.N)
+    #TODO: remove
+    # # Set N in action_type
+    # set_N!(action_type, params.N)
 
     initial_state = vcat(prob.u0, prob.λ0)
     init_observation = get_init_observation(observation_strategy, params.N, T)
@@ -115,16 +116,6 @@ RDEEnv(params::RDEParam{T}; kwargs...) where {T <: AbstractFloat} = RDEEnv(; par
 
 _observe(env::RDEEnv) = copy(env.observation)
 
-# Scalar-action overloads (avoid building action vectors)
-@inline function control_target(a::T, c_prev::T, c_max::T) where {T <: AbstractFloat}
-    target = ifelse(a < 0, c_prev * (a + one(T)), c_prev + (c_max - c_prev) * a)::T
-    return target
-end
-
-@inline function action_to_control(a::T, c_prev::T, c_max::T, α::T) where {T <: AbstractFloat}
-    target::T = control_target(a, c_prev, c_max)
-    return α * c_prev + (one(T) - α) * target
-end
 
 @inline get_saveat(env::RDEEnv{T}, saves_per_action::Int) where {T <: AbstractFloat} = saves_per_action == 0 ? nothing : (env.dt / saves_per_action)
 
