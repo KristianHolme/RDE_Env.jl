@@ -4,12 +4,11 @@
     @testset "run_policy with different saves_per_action" begin
         # Setup a small environment for testing
         env = RDEEnv(;
-            dt = 0.01,
+            dt = 0.1,
             smax = 4.0,
             u_pmax = 1.2,
             params = RDEParam(; N = 32, tmax = 0.05),
-            τ_smooth = 0.001,  # Small smoothing time to avoid discontinuities
-            momentum = 0.0,    # No momentum for simpler testing
+            τ_smooth = 0.5,  # Small smoothing time to avoid discontinuities
             observation_strategy = FourierObservation(8),
             action_type = ScalarPressureAction(),
             reward_type = CompositeReward(; N = 32)

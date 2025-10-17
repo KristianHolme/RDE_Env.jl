@@ -303,6 +303,7 @@ struct ConstantRDEPolicy <: AbstractRDEPolicy
 end
 
 function _predict_action(π::ConstantRDEPolicy, s::AbstractVector{T}) where {T <: AbstractFloat}
+    @assert !(π.env.action_type isa DirectScalarPressureAction) && !(π.env.action_type isa DirectVectorPressureAction) "ConstantRDEPolicy not supported with direct actions"
     if π.env.action_type isa ScalarAreaScalarPressureAction
         return zeros(T, 2)
     elseif π.env.action_type isa ScalarPressureAction
@@ -349,6 +350,7 @@ struct SinusoidalRDEPolicy{T <: AbstractFloat} <: AbstractRDEPolicy
 end
 
 function _predict_action(π::SinusoidalRDEPolicy, s::AbstractVector{T}) where {T <: AbstractFloat}
+    @assert !(π.env.action_type isa DirectScalarPressureAction) && !(π.env.action_type isa DirectVectorPressureAction) "SinusoidalRDEPolicy not supported with direct actions"
     t = π.env.t
     action1 = T(sin(π.w_1 * t))
     action2 = T(sin(π.w_2 * t))
@@ -393,15 +395,15 @@ struct StepwiseRDEPolicy{T <: AbstractFloat} <: AbstractRDEPolicy
     c::Union{Vector{Vector{T}}, Vector{T}}  # Vector of control actions
 
     function StepwiseRDEPolicy(env::RDEEnv{T}, ts::Vector{T}, c::Union{Vector{Vector{T}}, Vector{T}}) where {T <: AbstractFloat}
+        @assert env.action_type isa DirectScalarPressureAction || env.action_type isa DirectVectorPressureAction "StepwiseRDEPolicy requires direct action types"
         @assert length(ts) == length(c) "Length of time steps and control actions must be equal"
         @assert issorted(ts) "Time steps must be in ascending order"
-        if env.action_type isa ScalarAreaScalarPressureAction
-            @assert all(length(action) == 2 for action in c) "Each control action must have 2 elements"
-            @assert eltype(c) <: Vector{T} "Control actions must be a vector of vectors"
+        if env.action_type isa DirectVectorPressureAction
+            @assert eltype(c) <: Vector{T} "Control actions must be a vector of vectors for DirectVectorPressureAction"
+            @assert all(length(action) == env.action_type.n_sections for action in c) "Each control action must match n_sections"
         else
-            @assert eltype(c) <: T "Control actions must be a vector of scalars"
+            @assert eltype(c) <: T "Control actions must be a vector of scalars for DirectScalarPressureAction"
         end
-        env.α = 0.0 #to assure that get_scaled_control works
         return new{T}(env, ts, c)
     end
 end
@@ -414,10 +416,12 @@ function _predict_action(π::StepwiseRDEPolicy, s::AbstractVector{T}) where {T <
     if isnothing(idx)
         return zeros(T, length(π.c[1]))
     end
-    if π.env.action_type isa ScalarAreaScalarPressureAction
-        return get_scaled_control.([cache.s_current[1], cache.u_p_current[1]], [π.env.smax, π.env.u_pmax], π.c[idx])
-    elseif π.env.action_type isa ScalarPressureAction
-        return get_scaled_control(cache.u_p_current[1], π.env.u_pmax, π.c[idx])
+    if π.env.action_type isa DirectVectorPressureAction
+        u_pmax = π.env.u_pmax
+        return clamp.(π.c[idx], zero(T), u_pmax)
+    elseif π.env.action_type isa DirectScalarPressureAction
+        u_pmax = π.env.u_pmax
+        return clamp(π.c[idx], zero(T), u_pmax)
     else
         @error "Unknown action type $(typeof(π.env.action_type)) for StepwiseRDEPolicy"
     end
@@ -448,7 +452,7 @@ Scale control value to [-1, 1] range based on current value and target.
 Scaled control value in [-1, 1]
 
 # Notes
-Assumes zero momentum (env.α = 0)
+Assumes zero momentum (action momentum = 0)
 """
 function get_scaled_control(current::T, max_val::T, target::T) where {T <: AbstractFloat}
     if target < current
@@ -577,16 +581,16 @@ struct LinearPolicy{T <: AbstractFloat} <: AbstractRDEPolicy
     c::Union{Vector{Vector{T}}, Vector{T}}  # Vector of control values at each time point
 
     function LinearPolicy(env::RDEEnv{T}, ts::Vector{T}, c::Union{Vector{Vector{T}}, Vector{T}}) where {T <: AbstractFloat}
+        @assert env.action_type isa DirectScalarPressureAction || env.action_type isa DirectVectorPressureAction "LinearPolicy requires direct action types"
         @assert length(ts) == length(c) "Length of time points and control values must be equal"
         @assert issorted(ts) "Time points must be in ascending order"
         @assert length(ts) >= 2 "At least two time points are required for linear interpolation"
-        if env.action_type isa ScalarAreaScalarPressureAction
-            @assert all(length(action) == 2 for action in c) "Each control value must have 2 elements"
-            @assert eltype(c) <: Vector{T} "Control values must be a vector of vectors"
+        if env.action_type isa DirectVectorPressureAction
+            @assert eltype(c) <: Vector{T} "Control values must be a vector of vectors for DirectVectorPressureAction"
+            @assert all(length(action) == env.action_type.n_sections for action in c) "Each control value must match n_sections"
         else
-            @assert eltype(c) <: T "Control values must be a vector of scalars"
+            @assert eltype(c) <: T "Control values must be a vector of scalars for DirectScalarPressureAction"
         end
-        env.α = 0.0 # to assure that get_scaled_control works
         return new{T}(env, ts, c)
     end
 end
@@ -600,32 +604,27 @@ function _predict_action(π::LinearPolicy, s)
     idx = findlast(past)
 
     if isnothing(idx)
-        # Before first time point, use first value
         target_value = π.c[1]
     elseif idx == length(π.ts)
-        # After last time point, use last value
         target_value = π.c[end]
     else
-        # Linear interpolation between time points
         t1, t2 = π.ts[idx], π.ts[idx + 1]
         c1, c2 = π.c[idx], π.c[idx + 1]
-
-        if π.env.action_type isa ScalarAreaScalarPressureAction
-            # Interpolate each component separately
+        if π.env.action_type isa DirectVectorPressureAction
             target_value = c1 .+ (c2 .- c1) .* (t - t1) / (t2 - t1)
-        elseif π.env.action_type isa ScalarPressureAction
-            # Interpolate single value
+        elseif π.env.action_type isa DirectScalarPressureAction
             target_value = c1 + (c2 - c1) * (t - t1) / (t2 - t1)
         else
             @error "Unknown action type $(typeof(π.env.action_type)) for LinearPolicy"
         end
     end
 
-    # Apply scaled control
-    if π.env.action_type isa ScalarAreaScalarPressureAction
-        return get_scaled_control.([cache.s_current[1], cache.u_p_current[1]], [π.env.smax, π.env.u_pmax], target_value)
-    elseif π.env.action_type isa ScalarPressureAction
-        return get_scaled_control(cache.u_p_current[1], π.env.u_pmax, target_value)
+    if π.env.action_type isa DirectVectorPressureAction
+        u_pmax = π.env.u_pmax
+        return clamp.(target_value, zero(eltype(target_value)), u_pmax)
+    elseif π.env.action_type isa DirectScalarPressureAction
+        u_pmax = π.env.u_pmax
+        return clamp(target_value, zero(typeof(target_value)), u_pmax)
     else
         @error "Unknown action type $(typeof(π.env.action_type)) for LinearPolicy"
     end
@@ -664,10 +663,9 @@ struct SawtoothPolicy{T <: AbstractFloat} <: AbstractRDEPolicy
     min_value::T
 
     function SawtoothPolicy(env::RDEEnv{T}, timescale::T, max_value::T, min_value::T) where {T <: AbstractFloat}
-        @assert env.action_type isa ScalarPressureAction "SawtoothPolicy only supports ScalarPressureAction"
+        @assert env.action_type isa DirectScalarPressureAction "SawtoothPolicy requires direct scalar action"
         @assert timescale > 0 "Timescale must be positive"
         @assert max_value > min_value "Max value must be greater than min value"
-        env.α = 0.0 #to assure that get_scaled_control works
         return new{T}(env, timescale, max_value, min_value)
     end
 end
@@ -685,7 +683,8 @@ function _predict_action(π::SawtoothPolicy, s)
     min_value = period_number == 1 ? π.env.prob.params.u_p : π.min_value
     target_value = min_value + (max_value - min_value) * phase / π.timescale
 
-    return get_scaled_control(cache.u_p_current[1], π.env.u_pmax, target_value)
+    # Direct control target (clamped)
+    return clamp(target_value, zero(typeof(target_value)), π.env.u_pmax)
 end
 
 function Base.show(io::IO, π::SawtoothPolicy)

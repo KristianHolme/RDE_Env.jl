@@ -162,17 +162,6 @@ max_steps = 200_000
 learn_stats, to = learn!(agent, parallel_env, alg, max_steps)
 ```
 
-### Control Smoothing
-The environment supports smooth control transitions through the `τ_smooth` parameter:
-```julia
-env = RDEEnv(dt=0.5f0, τ_smooth=0.01f0)  # τ_smooth should be < dt
-```
-
-### Action Momentum
-Control changes can be smoothed using momentum:
-```julia
-env = RDEEnv(dt=0.5f0, momentum=0.8f0)  # 0.8 momentum factor
-```
 
 ### Interactive Control
 For debugging and exploration:

@@ -16,7 +16,6 @@ Reinforcement learning environment for the RDE system.
 - `reward::T`: Current reward
 - `smax::T`: Maximum value for s parameter
 - `u_pmax::T`: Maximum value for u_p parameter
-- `α::T`: Action momentum parameter
 - `τ_smooth::T`: Control smoothing time constant
 - `cache::RDEEnvCache{T}`: Environment cache
 - `action_type::AbstractActionType`: Type of control actions
@@ -29,7 +28,7 @@ RDEEnv{T}(;
     smax=4.0,
     u_pmax=1.2,
     params::RDEParam{T}=RDEParam{T}(),
-    momentum=0.5,
+    
     τ_smooth=1.25,
     fft_terms::Int=32,
     observation_strategy::AbstractObservationStrategy=FourierObservation(fft_terms),
@@ -50,7 +49,6 @@ function RDEEnv(;
         smax = 4.0f0,
         u_pmax = 1.2f0,
         params::RDEParam{T} = RDEParam(),
-        momentum = 0.0f0,
         τ_smooth = 0.1f0,
         action_type::A = ScalarPressureAction(),
         observation_strategy::O = SectionedStateObservation(),
@@ -68,10 +66,6 @@ function RDEEnv(;
     prob = RDEProblem(params; kwargs...)
     RDE.reset_state_and_pressure!(prob, prob.reset_strategy)
     reset_cache!(prob.method.cache, τ_smooth = τ_smooth, params = params)
-
-    #TODO: remove
-    # # Set N in action_type
-    # set_N!(action_type, params.N)
 
     initial_state = vcat(prob.u0, prob.λ0)
     init_observation = get_init_observation(observation_strategy, params.N, T)
@@ -104,7 +98,7 @@ function RDEEnv(;
     env = RDEEnv{T, A, O, RW, V, OBS, M, RS, CS}(
         prob, initial_state, init_observation,
         dt, T(0.0), false, false, false, initial_reward, smax, u_pmax,
-        momentum, τ_smooth, cache,
+        τ_smooth, cache,
         action_type, observation_strategy,
         reward_type, verbose, Dict{String, Any}(), 0, ode_problem
     )

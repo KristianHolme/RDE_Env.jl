@@ -29,6 +29,7 @@ export sigmoid_to_linear, reward_sigmoid, sigmoid, linear_to_sigmoid, get_plotti
 # Actions
 include("actions/actions.jl")
 export ScalarPressureAction, ScalarAreaScalarPressureAction, VectorPressureAction, PIDAction
+export LinearScalarPressureAction, LinearVectorPressureAction
 export DirectScalarPressureAction, DirectVectorPressureAction
 
 # Observation strategies
@@ -82,32 +83,14 @@ include("displaying.jl")
     try
         # Create and run a small environment with random policy
         env = RDEEnv(;
-            dt = 0.01f0,
-            params = RDEParam(; N = 512, tmax = 0.05f0),
-            τ_smooth = 0.001f0,
-            momentum = 0.8f0,
+            dt = 0.1f0,
+            params = RDEParam(; N = 512, tmax = 0.5f0),
+            τ_smooth = 0.05f0,
             observation_strategy = FourierObservation(8),
             action_type = ScalarPressureAction()
         )
         policy = RandomRDEPolicy(env)
         data = run_policy(policy, env)
-
-        # # Test vectorized environment
-        # envs = [
-        #     RDEEnv(;
-        #             dt = 0.01f0,
-        #             τ_smooth = 0.001f0,
-        #             params = RDEParam(; N = 512, tmax = 0.05f0),
-        #             observation_strategy = FourierObservation(8),
-        #             action_type = ScalarPressureAction(),
-        #             reward_type = PeriodMinimumReward()
-        #         ) for _ in 1:2
-        # ]
-        # vec_env = RDEVecEnv(envs)
-        # _reset!(vec_env)
-        # actions = Float32.(rand(1, 2) .- 0.5)
-        # step!(vec_env, actions)
-
     catch e
         rethrow(e)
     end

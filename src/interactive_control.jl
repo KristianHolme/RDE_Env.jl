@@ -159,7 +159,7 @@ function interactive_control(
         return (y_min, y_max, x_max)
     end
 
-    # Detect action type and create appropriate controls
+    # Detect action type and create appropriate controls (direct-only)
     action_type = env.action_type
 
     # Always have timestep control
@@ -169,131 +169,57 @@ function interactive_control(
         env.prob.method.cache.τ_smooth = val
     end
 
-    # Initialize control observables and sliders based on action type
-    if action_type isa ScalarAreaScalarPressureAction
-        # Two controls: s and u_p
-        control_s = Observable(params.s)
-        s_start = params.s
-        on(control_s) do val
-            env.prob.method.cache.s_current .= val
-        end
+    # Enforce supported action types and zero momentum
+    if !(action_type isa DirectScalarPressureAction || action_type isa DirectVectorPressureAction)
+        error("interactive_control supports only DirectScalarPressureAction or DirectVectorPressureAction")
+    end
 
-        control_u_p = Observable(params.u_p)
-        u_p_start = params.u_p
-        on(control_u_p) do val
-            env.prob.method.cache.u_p_current .= val
-        end
+    # Action observables and sliders
+    is_vector_action = action_type isa DirectVectorPressureAction
+    n_sections = is_vector_action ? action_type.n_sections : 1
 
-        # Create sliders using SliderGrid
-        slider_grid = SliderGrid(
-            control_area[1, 1],
-            (label = "s", range = 0:0.001:env.smax, startvalue = control_s[]),
-            (label = "u_p", range = 0:0.001:env.u_pmax, startvalue = control_u_p[]),
-            (label = "Δt", range = 0:0.001:dtmax, startvalue = time_step[])
-        )
+    # action_obs holds current action(s) in [-1, 1]
+    init_action_value = mean(env.prob.method.cache.u_p_current)
+    action_obs = is_vector_action ? Observable(fill(init_action_value, n_sections)) : Observable(init_action_value)
 
-        sliders = slider_grid.sliders
-        slider_s = sliders[1]
-        slider_u_p = sliders[2]
-        slider_dt = sliders[3]
-
-        on(slider_s.value) do val
-            control_s[] = val
-        end
-        on(slider_u_p.value) do val
-            control_u_p[] = val
-        end
-        on(slider_dt.value) do val
-            time_step[] = val
-        end
-
-        # Labels
-        s_label = slider_grid.labels[1]
-        u_p_label = slider_grid.labels[2]
-        dt_label = slider_grid.labels[3]
-
-    elseif action_type isa ScalarPressureAction
-        # Single control: u_p only
-        control_u_p = Observable(params.u_p)
-        u_p_start = params.u_p
-        on(control_u_p) do val
-            env.prob.method.cache.u_p_current .= val
-        end
-
-        # Create sliders using SliderGrid
-        slider_grid = SliderGrid(
-            control_area[1, 1],
-            (label = "u_p", range = 0:0.001:env.u_pmax, startvalue = control_u_p[]),
-            (label = "Δt", range = 0:0.001:dtmax, startvalue = time_step[])
-        )
-
-        sliders = slider_grid.sliders
-        slider_u_p = sliders[1]
-        slider_dt = sliders[2]
-
-        on(slider_u_p.value) do val
-            control_u_p[] = val
-        end
-        on(slider_dt.value) do val
-            time_step[] = val
-        end
-
-        # Labels
-        u_p_label = slider_grid.labels[1]
-        dt_label = slider_grid.labels[2]
-
-    elseif action_type isa VectorPressureAction
-        # Multiple pressure controls: one per section
-        n_sections = action_type.n_sections
-
-        # Create observables for each section
-        control_u_p_sections = [Observable(params.u_p) for _ in 1:n_sections]
-        u_p_start = params.u_p
-
-        # Set up listeners to update the cache when any section changes
-        function update_cache()
-            points_per_section = N ÷ n_sections
-            for i in 1:n_sections
-                start_idx = (i - 1) * points_per_section + 1
-                end_idx = i * points_per_section
-                env.prob.method.cache.u_p_current[start_idx:end_idx] .= control_u_p_sections[i][]
-            end
-            return
-        end
-
-        for i in 1:n_sections
-            on(control_u_p_sections[i]) do val
-                update_cache()
-            end
-        end
-
-        # Create slider configurations
-        slider_configs = [(label = "u_p_$i", range = T(0):T(0.001):env.u_pmax::T, startvalue = control_u_p_sections[i][]) for i in 1:n_sections]
+    # Slider grid: action slider(s) + dt
+    minimum_action = T(0)
+    maximum_action = T(1.2)
+    if is_vector_action
+        # Build per-section action sliders
+        slider_configs = [(label = "a_$(i)", range = minimum_action:T(0.001):maximum_action, startvalue = zero(T)) for i in 1:n_sections]
         push!(slider_configs, (label = "Δt", range = T(0):T(0.001):dtmax::T, startvalue = time_step[]))
-
-        # Create SliderGrid with all section controls plus timestep
         slider_grid = SliderGrid(control_area[1, 1], slider_configs...)
-
         sliders = slider_grid.sliders
-        slider_u_p_sections = sliders[1:n_sections]
+        action_sliders = sliders[1:n_sections]
         slider_dt = sliders[end]
 
-        # Set up slider listeners
+        # Keep action_obs and sliders in sync
         for i in 1:n_sections
-            on(slider_u_p_sections[i].value) do val
-                control_u_p_sections[i][] = val
+            on(action_sliders[i].value) do val
+                action_obs[][i] = clamp(val, minimum_action, maximum_action)
             end
         end
         on(slider_dt.value) do val
             time_step[] = val
         end
-
-        # Labels
-        u_p_labels = slider_grid.labels[1:n_sections]
-        dt_label = slider_grid.labels[end]
-
     else
-        error("Unsupported action type: $(typeof(action_type))")
+        # Single scalar action slider
+        slider_grid = SliderGrid(
+            control_area[1, 1],
+            (label = "a", range = minimum_action:T(0.001):maximum_action, startvalue = action_obs[]),
+            (label = "Δt", range = T(0):T(0.001):dtmax::T, startvalue = time_step[])
+        )
+        sliders = slider_grid.sliders
+        action_slider = sliders[1]
+        slider_dt = sliders[2]
+
+        on(action_slider.value) do val
+            action_obs[] = clamp(val, minimum_action, maximum_action)
+        end
+        on(slider_dt.value) do val
+            time_step[] = val
+        end
     end
 
     # Add control buttons
@@ -318,13 +244,7 @@ function interactive_control(
     # Button event handlers
     on(step_button.clicks) do _
         try
-            # Create dummy action with correct length for action type
-            dummy_action = if action_type isa VectorPressureAction
-                zeros(action_type.n_sections)  # Vector with correct length
-            else
-                zero(T)  # Single value for scalar actions
-            end
-            _act!(env, dummy_action) # cached values are already set
+            _act!(env, action_obs[])
             # energy_bal_pts[] = push!(energy_bal_pts[], Point2f(env.t, energy_balance(env.state, params)))
             # chamber_p_pts[] = push!(chamber_p_pts[], Point2f(env.t, chamber_pressure(env.state, params)))
             record_reward!(env.reward)
@@ -343,20 +263,14 @@ function interactive_control(
         _reset!(env)
         update_observables!()
 
-        # Reset controls to initial values
-        if action_type isa ScalarAreaScalarPressureAction
-            control_s[] = s_start
-            control_u_p[] = u_p_start
-            set_close_to!(slider_s, control_s[])
-            set_close_to!(slider_u_p, control_u_p[])
-        elseif action_type isa ScalarPressureAction
-            control_u_p[] = u_p_start
-            set_close_to!(slider_u_p, control_u_p[])
-        elseif action_type isa VectorPressureAction
-            for i in 1:action_type.n_sections
-                control_u_p_sections[i][] = u_p_start
-                set_close_to!(slider_u_p_sections[i], control_u_p_sections[i][])
+        if is_vector_action
+            action_obs[] = fill(init_action_value, n_sections)
+            for i in 1:n_sections
+                set_close_to!(action_sliders[i], action_obs[][i])
             end
+        else
+            action_obs[] = init_action_value
+            set_close_to!(action_slider, action_obs[])
         end
 
         # energy_bal_pts[] = Point2f[(env.t, energy_balance(env.state, params))]
@@ -394,26 +308,6 @@ function interactive_control(
         end
         colsize!(obs_area, 1, Auto(0.3))
     end
-
-    # Energy balance plot with auto-scaling (commented out)
-    # eb_start_xmax = 0.5
-    # ax_eb = Axis(energy_area[1, 1], title="Energy balance", xlabel="t", ylabel=L"Ė", limits=(0, eb_start_xmax, nothing, nothing))
-    # lines!(ax_eb, energy_bal_pts)
-    # on(energy_bal_pts) do _
-    #     y_vals = getindex.(energy_bal_pts[], 2)
-    #     ylims!(ax_eb, (min(0, minimum(y_vals)), maximum(y_vals)))
-    #     xlims!(ax_eb, (0, max(eb_start_xmax, energy_bal_pts[][end][1])))
-    # end
-
-    # Chamber pressure plot with auto-scaling (commented out)
-    # cp_start_xmax = 0.5
-    # ax_cp = Axis(energy_area[1, 2], title="Chamber Pressure", xlabel="t", ylabel=L"P_c", limits=(0, cp_start_xmax, nothing, nothing))
-    # lines!(ax_cp, chamber_p_pts)
-    # on(chamber_p_pts) do _
-    #     y_vals = getindex.(chamber_p_pts[], 2)
-    #     ylims!(ax_cp, (min(0, minimum(y_vals)), maximum(y_vals)))
-    #     xlims!(ax_cp, (0, max(cp_start_xmax, chamber_p_pts[][end][1])))
-    # end
 
     # Reward plot with auto-scaling
     reward_start_xmax = 0.5
@@ -468,13 +362,7 @@ function interactive_control(
                         set_close_to!(slider_dt, time_step[])
                     elseif key == Keyboard.right
                         try
-                            # Create dummy action with correct length for action type
-                            dummy_action = if action_type isa VectorPressureAction
-                                zeros(T, action_type.n_sections)  # Vector with correct length
-                            else
-                                zero(T)  # Single value for scalar actions
-                            end
-                            _act!(env, dummy_action) #cached values are already set
+                            _act!(env, action_obs[])
                             # energy_bal_pts[] = push!(energy_bal_pts[], Point2f(env.t, energy_balance(env.state, params)))
                             # chamber_p_pts[] = push!(chamber_p_pts[], Point2f(env.t, chamber_pressure(env.state, params)))
                             record_reward!(env.reward)
@@ -487,79 +375,25 @@ function interactive_control(
                             @error "error taking action" exception = (e, Base.catch_backtrace())
                             rethrow()  # preserve original backtrace
                         end
-                    elseif action_type isa ScalarAreaScalarPressureAction
-                        # Both s and u_p controls available
-                        if key == Keyboard.w
-                            change = 0.01
-                            control_s[] += change
-                            set_close_to!(slider_s, control_s[])
-                        elseif key == Keyboard.s
-                            control_s[] -= 0.01
-                            set_close_to!(slider_s, control_s[])
-                        elseif key == Keyboard.e
-                            control_u_p[] += 0.01
-                            control_u_p[] = clamp(control_u_p[], 0.0, env.u_pmax)
-                            set_close_to!(slider_u_p, control_u_p[])
-                        elseif key == Keyboard.d
-                            control_u_p[] -= 0.01
-                            control_u_p[] = clamp(control_u_p[], 0.0, env.u_pmax)
-                            set_close_to!(slider_u_p, control_u_p[])
-                        elseif key == Keyboard._3 || key == Keyboard.c
-                            # Fine control: increase/decrease u_p by 0.001
-                            if key == Keyboard._3
-                                control_u_p[] += 0.001
-                            else  # key == Keyboard.c
-                                control_u_p[] -= 0.001
-                            end
-                            control_u_p[] = clamp(control_u_p[], 0.0, env.u_pmax)
-                            set_close_to!(slider_u_p, control_u_p[])
-                        end
-                    elseif action_type isa ScalarPressureAction
-                        # Only u_p control available
-                        if key == Keyboard.e
-                            control_u_p[] += 0.01
-                            control_u_p[] = clamp(control_u_p[], 0.0, env.u_pmax)
-                            set_close_to!(slider_u_p, control_u_p[])
-                        elseif key == Keyboard.d
-                            control_u_p[] -= 0.01
-                            control_u_p[] = clamp(control_u_p[], 0.0, env.u_pmax)
-                            set_close_to!(slider_u_p, control_u_p[])
-                        elseif key == Keyboard._3 || key == Keyboard.c
-                            # Fine control: increase/decrease u_p by 0.001
-                            if key == Keyboard._3
-                                control_u_p[] += 0.001
-                            else  # key == Keyboard.c
-                                control_u_p[] -= 0.001
-                            end
-                            control_u_p[] = clamp(control_u_p[], 0.0, env.u_pmax)
-                            set_close_to!(slider_u_p, control_u_p[])
-                        end
-                    elseif action_type isa VectorPressureAction
-                        # All sections controlled simultaneously with e/d keys
-                        if key == Keyboard.e
-                            # Increase pressure in all sections
-                            for i in 1:action_type.n_sections
-                                control_u_p_sections[i][] += 0.01
-                                control_u_p_sections[i][] = clamp(control_u_p_sections[i][], 0.0, env.u_pmax)
-                                set_close_to!(slider_u_p_sections[i], control_u_p_sections[i][])
-                            end
-                        elseif key == Keyboard.d
-                            # Decrease pressure in all sections
-                            for i in 1:action_type.n_sections
-                                control_u_p_sections[i][] -= 0.01
-                                control_u_p_sections[i][] = clamp(control_u_p_sections[i][], 0.0, env.u_pmax)
-                                set_close_to!(slider_u_p_sections[i], control_u_p_sections[i][])
-                            end
-                        elseif key == Keyboard._3 || key == Keyboard.c
-                            # Fine control: increase/decrease u_p in all sections by 0.001
-                            for i in 1:action_type.n_sections
-                                if key == Keyboard._3
-                                    control_u_p_sections[i][] += 0.001
-                                else  # key == Keyboard.c
-                                    control_u_p_sections[i][] -= 0.001
+                    else
+                        # Direct action types: adjust action observable(s)
+                        if is_vector_action
+                            if key == Keyboard.e || key == Keyboard.d || key == Keyboard._3 || key == Keyboard.c
+                                delta = key == Keyboard._3 || key == Keyboard.c ? T(0.001) : T(0.01)
+                                sign = (key == Keyboard.e || key == Keyboard._3) ? T(1) : T(-1)
+                                a = clamp.(action_obs[] .+ sign * delta, minimum_action, maximum_action)
+                                action_obs[] = a
+                                # Sync sliders to action_obs
+                                for i in 1:n_sections
+                                    set_close_to!(action_sliders[i], action_obs[][i])
                                 end
-                                control_u_p_sections[i][] = clamp(control_u_p_sections[i][], 0.0, env.u_pmax)
-                                set_close_to!(slider_u_p_sections[i], control_u_p_sections[i][])
+                            end
+                        else
+                            if key == Keyboard.e || key == Keyboard.d || key == Keyboard._3 || key == Keyboard.c
+                                delta = key == Keyboard._3 || key == Keyboard.c ? T(0.001) : T(0.01)
+                                sign = (key == Keyboard.e || key == Keyboard._3) ? T(1) : T(-1)
+                                action_obs[] = clamp(action_obs[] + sign * delta, minimum_action, maximum_action)
+                                set_close_to!(action_slider, action_obs[])
                             end
                         end
                     end
@@ -568,20 +402,15 @@ function interactive_control(
                         _reset!(env)
                         update_observables!()
 
-                        # Reset controls to initial values
-                        if action_type isa ScalarAreaScalarPressureAction
-                            control_s[] = s_start
-                            control_u_p[] = u_p_start
-                            set_close_to!(slider_s, control_s[])
-                            set_close_to!(slider_u_p, control_u_p[])
-                        elseif action_type isa ScalarPressureAction
-                            control_u_p[] = u_p_start
-                            set_close_to!(slider_u_p, control_u_p[])
-                        elseif action_type isa VectorPressureAction
-                            for i in 1:action_type.n_sections
-                                control_u_p_sections[i][] = u_p_start
-                                set_close_to!(slider_u_p_sections[i], control_u_p_sections[i][])
+                        # Reset actions to zero and sync sliders
+                        if is_vector_action
+                            action_obs[] = fill(init_action_value, n_sections)
+                            for i in 1:n_sections
+                                set_close_to!(action_sliders[i], init_action_value)
                             end
+                        else
+                            action_obs[] = init_action_value
+                            set_close_to!(action_slider, init_action_value)
                         end
 
                         # energy_bal_pts[] = Point2f[(env.t, energy_balance(env.state, params))]

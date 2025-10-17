@@ -105,7 +105,6 @@ mutable struct RDEEnv{T, A, O, RW, V, OBS, M, RS, C} <: AbstractRDEEnv where {
     reward::V
     smax::T
     u_pmax::T
-    α::T #action momentum
     τ_smooth::T #smoothing time constant
     cache::RDEEnvCache{T}
     action_type::A
