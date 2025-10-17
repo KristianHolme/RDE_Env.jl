@@ -1,70 +1,35 @@
-using DRiL
+@testitem "DRiLExt Single env methods" begin
+    using DRiL
+    using RDE
 
-# Helper to get the extension
-function get_dril_ext()
-    return Base.get_extension(RDE_Env, :RDE_EnvDRiLExt)
-end
+    # Helper functions
+    function get_dril_ext()
+        return Base.get_extension(RDE_Env, :RDE_EnvDRiLExt)
+    end
 
-function get_env()
-    env = RDEEnv(
-        observation_strategy = SectionedStateObservation(),
-        action_type = ScalarPressureAction(),
-        params = RDEParam(N = 512, tmax = 100.0f0)
-    )
-    DRiLExt = get_dril_ext()
-    env = DRiLExt.DRiLRDEEnv(env)
-    return env
-end
+    function get_env()
+        env = RDEEnv(
+            observation_strategy = SectionedStateObservation(),
+            action_type = ScalarPressureAction(),
+            params = RDEParam(N = 512, tmax = 100.0f0)
+        )
+        DRiLExt = get_dril_ext()
+        env = DRiLExt.DRiLRDEEnv(env)
+        return env
+    end
 
-function get_multi_agent_env()
-    env = RDEEnv(
-        observation_strategy = MultiCenteredObservation(n_sections = 4),
-        action_type = VectorPressureAction(n_sections = 4),
-        reward_type = MultiSectionPeriodMinimumReward(n_sections = 4, target_shock_count = 3, lowest_action_magnitude_reward = 0.0f0, weights = [1.0f0, 1.0f0, 5.0f0, 1.0f0]),
-        params = RDEParam(N = 512, tmax = 100.0f0)
-    )
-    DRiLExt = get_dril_ext()
-    env = DRiLExt.DRiLMultiAgentRDEEnv(env)
-    return env
-end
+    function test_single_env_usage(env)
+        rand_obs = rand(observation_space(env))
+        obs = observe(env)
+        action = rand(action_space(env))
+        reward = act!(env, action)
+        random_obs = rand(observation_space(env))
+        reset!(env)
+        terminated(env)
+        truncated(env)
+        return true
+    end
 
-function get_SAVA_env()
-    env = RDEEnv(
-        observation_strategy = SectionedStateObservation(),
-        action_type = VectorPressureAction(n_sections = 4),
-        reward_type = PeriodMinimumReward(),
-        params = RDEParam(N = 512, tmax = 100.0f0)
-    )
-    DRiLExt = get_dril_ext()
-    env = DRiLExt.DRiLRDEEnv(env)
-    return env
-end
-function test_single_env_usage(env)
-    rand_obs = rand(observation_space(env))
-    obs = observe(env)
-    action = rand(action_space(env))
-    reward = act!(env, action)
-    random_obs = rand(observation_space(env))
-    reset!(env)
-    terminated(env)
-    truncated(env)
-    return true
-end
-function test_parallel_env_usage(env)
-    rand_obs = rand(observation_space(env))
-    obs = observe(env)
-    @assert length(obs) == number_of_envs(env)
-    actions = rand(action_space(env), number_of_envs(env))
-    rewards, _, _, _ = act!(env, actions)
-    @assert length(rewards) == number_of_envs(env) "length of rewards: $(length(rewards)) != number of envs: $(number_of_envs(env))"
-    random_obs = rand(observation_space(env))
-    reset!(env)
-    terminated(env)
-    truncated(env)
-    return true
-end
-
-@testset "DRiLExt Single env methods" begin
     env = get_env()
     @test hasmethod(DRiL.observation_space, (typeof(env),))
     @test hasmethod(DRiL.act!, (typeof(env), Any))
@@ -77,7 +42,40 @@ end
     @test test_single_env_usage(env)
 end
 
-@testset "DRiLExt single env usage" begin
+@testitem "DRiLExt single env usage" begin
+    using DRiL
+    using RDE
+
+    # Helper functions
+    function get_dril_ext()
+        return Base.get_extension(RDE_Env, :RDE_EnvDRiLExt)
+    end
+
+    function get_env()
+        env = RDEEnv(
+            observation_strategy = SectionedStateObservation(),
+            action_type = ScalarPressureAction(),
+            params = RDEParam(N = 512, tmax = 100.0f0)
+        )
+        DRiLExt = get_dril_ext()
+        env = DRiLExt.DRiLRDEEnv(env)
+        return env
+    end
+
+    function test_parallel_env_usage(env)
+        rand_obs = rand(observation_space(env))
+        obs = observe(env)
+        @assert length(obs) == number_of_envs(env)
+        actions = rand(action_space(env), number_of_envs(env))
+        rewards, _, _, _ = act!(env, actions)
+        @assert length(rewards) == number_of_envs(env) "length of rewards: $(length(rewards)) != number of envs: $(number_of_envs(env))"
+        random_obs = rand(observation_space(env))
+        reset!(env)
+        terminated(env)
+        truncated(env)
+        return true
+    end
+
     envs = [get_env() for _ in 1:4]
     env = BroadcastedParallelEnv(envs)
     @test hasmethod(DRiL.observation_space, (typeof(env),))
@@ -96,7 +94,41 @@ end
     @test test_parallel_env_usage(norm_env)
 end
 
-@testset "DRiLExt multi-agent env" begin
+@testitem "DRiLExt multi-agent env" begin
+    using DRiL
+    using RDE
+
+    # Helper functions
+    function get_dril_ext()
+        return Base.get_extension(RDE_Env, :RDE_EnvDRiLExt)
+    end
+
+    function get_multi_agent_env()
+        env = RDEEnv(
+            observation_strategy = MultiCenteredObservation(n_sections = 4),
+            action_type = VectorPressureAction(n_sections = 4),
+            reward_type = MultiSectionPeriodMinimumReward(n_sections = 4, target_shock_count = 3, lowest_action_magnitude_reward = 0.0f0, weights = [1.0f0, 1.0f0, 5.0f0, 1.0f0]),
+            params = RDEParam(N = 512, tmax = 100.0f0)
+        )
+        DRiLExt = get_dril_ext()
+        env = DRiLExt.DRiLMultiAgentRDEEnv(env)
+        return env
+    end
+
+    function test_parallel_env_usage(env)
+        rand_obs = rand(observation_space(env))
+        obs = observe(env)
+        @assert length(obs) == number_of_envs(env)
+        actions = rand(action_space(env), number_of_envs(env))
+        rewards, _, _, _ = act!(env, actions)
+        @assert length(rewards) == number_of_envs(env) "length of rewards: $(length(rewards)) != number of envs: $(number_of_envs(env))"
+        random_obs = rand(observation_space(env))
+        reset!(env)
+        terminated(env)
+        truncated(env)
+        return true
+    end
+
     env = get_multi_agent_env()
     @test hasmethod(DRiL.observation_space, (typeof(env),))
     @test hasmethod(DRiL.action_space, (typeof(env),))
@@ -110,8 +142,41 @@ end
     @test test_parallel_env_usage(env)
 end
 
+@testitem "DRiLExt multi-agent env usage" begin
+    using DRiL
+    using RDE
 
-@testset "DRiLExt multi-agent env usage" begin
+    # Helper functions
+    function get_dril_ext()
+        return Base.get_extension(RDE_Env, :RDE_EnvDRiLExt)
+    end
+
+    function get_multi_agent_env()
+        env = RDEEnv(
+            observation_strategy = MultiCenteredObservation(n_sections = 4),
+            action_type = VectorPressureAction(n_sections = 4),
+            reward_type = MultiSectionPeriodMinimumReward(n_sections = 4, target_shock_count = 3, lowest_action_magnitude_reward = 0.0f0, weights = [1.0f0, 1.0f0, 5.0f0, 1.0f0]),
+            params = RDEParam(N = 512, tmax = 100.0f0)
+        )
+        DRiLExt = get_dril_ext()
+        env = DRiLExt.DRiLMultiAgentRDEEnv(env)
+        return env
+    end
+
+    function test_parallel_env_usage(env)
+        rand_obs = rand(observation_space(env))
+        obs = observe(env)
+        @assert length(obs) == number_of_envs(env)
+        actions = rand(action_space(env), number_of_envs(env))
+        rewards, _, _, _ = act!(env, actions)
+        @assert length(rewards) == number_of_envs(env) "length of rewards: $(length(rewards)) != number of envs: $(number_of_envs(env))"
+        random_obs = rand(observation_space(env))
+        reset!(env)
+        terminated(env)
+        truncated(env)
+        return true
+    end
+
     envs = [get_multi_agent_env() for _ in 1:4]
     env = MultiAgentParallelEnv(envs)
     @test test_parallel_env_usage(env)
@@ -121,7 +186,27 @@ end
     @test test_parallel_env_usage(norm_env)
 end
 
-@testset "DRiLExt SAVA env" begin
+@testitem "DRiLExt SAVA env" begin
+    using DRiL
+    using RDE
+
+    # Helper functions
+    function get_dril_ext()
+        return Base.get_extension(RDE_Env, :RDE_EnvDRiLExt)
+    end
+
+    function get_SAVA_env()
+        env = RDEEnv(
+            observation_strategy = SectionedStateObservation(),
+            action_type = VectorPressureAction(n_sections = 4),
+            reward_type = PeriodMinimumReward(),
+            params = RDEParam(N = 512, tmax = 100.0f0)
+        )
+        DRiLExt = get_dril_ext()
+        env = DRiLExt.DRiLRDEEnv(env)
+        return env
+    end
+
     env = get_SAVA_env()
     @test hasmethod(DRiL.observation_space, (typeof(env),))
     @test hasmethod(DRiL.action_space, (typeof(env),))
@@ -133,7 +218,53 @@ end
     @test hasmethod(DRiL.truncated, (typeof(env),))
 end
 
-@testset "DRiLExt SAVA env usage" begin
+@testitem "DRiLExt SAVA env usage" begin
+    using DRiL
+    using RDE
+
+    # Helper functions
+    function get_dril_ext()
+        return Base.get_extension(RDE_Env, :RDE_EnvDRiLExt)
+    end
+
+    function get_SAVA_env()
+        env = RDEEnv(
+            observation_strategy = SectionedStateObservation(),
+            action_type = VectorPressureAction(n_sections = 4),
+            reward_type = PeriodMinimumReward(),
+            params = RDEParam(N = 512, tmax = 100.0f0)
+        )
+        DRiLExt = get_dril_ext()
+        env = DRiLExt.DRiLRDEEnv(env)
+        return env
+    end
+
+    function test_single_env_usage(env)
+        rand_obs = rand(observation_space(env))
+        obs = observe(env)
+        action = rand(action_space(env))
+        reward = act!(env, action)
+        random_obs = rand(observation_space(env))
+        reset!(env)
+        terminated(env)
+        truncated(env)
+        return true
+    end
+
+    function test_parallel_env_usage(env)
+        rand_obs = rand(observation_space(env))
+        obs = observe(env)
+        @assert length(obs) == number_of_envs(env)
+        actions = rand(action_space(env), number_of_envs(env))
+        rewards, _, _, _ = act!(env, actions)
+        @assert length(rewards) == number_of_envs(env) "length of rewards: $(length(rewards)) != number of envs: $(number_of_envs(env))"
+        random_obs = rand(observation_space(env))
+        reset!(env)
+        terminated(env)
+        truncated(env)
+        return true
+    end
+
     env = get_SAVA_env()
     @test test_single_env_usage(env)
     envs = [get_SAVA_env() for _ in 1:4]

@@ -1,4 +1,4 @@
-@testset "Utils" begin
+@testitem "Utils" begin
     @testset "sigmoid" begin
         # Test basic sigmoid properties
         @test sigmoid(0.0) ≈ 0.5

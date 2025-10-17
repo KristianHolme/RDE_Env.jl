@@ -1,4 +1,6 @@
-@testset "RDEEnv Initialization" begin
+@testitem "RDEEnv Initialization" begin
+    using RDE
+
     @test begin
         params = RDEParam(; N = 16, tmax = 0.01)
         prob = RDEProblem(params)
@@ -11,7 +13,9 @@
     end
 end
 
-@testset "RDEEnv Policies" begin
+@testitem "RDEEnv Policies" begin
+    using RDE
+
     @test begin
         ConstPolicy = ConstantRDEPolicy()
         data = run_policy(ConstPolicy, RDEEnv(RDEParam(; N = 512, tmax = 0.1), reset_strategy = NShock(1)))
@@ -19,7 +23,9 @@ end
     end
 end
 
-@testset "Observation Strategies" begin
+@testitem "Observation Strategies" begin
+    using RDE
+
     N = 16  # Number of spatial points for testing
     params = RDEParam(; N = N, tmax = 0.1)
 

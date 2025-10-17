@@ -1,3 +1,10 @@
+#=
+DEPRECATED: This file contains tests for the old VecEnv implementation.
+These tests have not been converted to the testitem framework and are kept for reference only.
+The VecEnv implementation is deprecated and should not be used in new code.
+=#
+
+#=
 #TODO:deprecate
 using Test
 using RDE
@@ -109,3 +116,4 @@ using Random
         @test true
     end
 end
+=#

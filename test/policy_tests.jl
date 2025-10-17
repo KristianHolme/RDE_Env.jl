@@ -1,4 +1,6 @@
-@testset "Policy Execution" begin
+@testitem "Policy Execution" begin
+    using RDE
+
     @testset "run_policy with different saves_per_action" begin
         # Setup a small environment for testing
         env = RDEEnv(;
