@@ -187,7 +187,7 @@ function interactive_control(
     maximum_action = T(1.2)
     if is_vector_action
         # Build per-section action sliders
-        slider_configs = [(label = "a_$(i)", range = minimum_action:T(0.001):maximum_action, startvalue = zero(T)) for i in 1:n_sections]
+        slider_configs = [(label = "u_p_$(i)", range = minimum_action:T(0.001):maximum_action, startvalue = zero(T)) for i in 1:n_sections]
         push!(slider_configs, (label = "Δt", range = T(0):T(0.001):dtmax::T, startvalue = time_step[]))
         slider_grid = SliderGrid(control_area[1, 1], slider_configs...)
         sliders = slider_grid.sliders
@@ -207,7 +207,7 @@ function interactive_control(
         # Single scalar action slider
         slider_grid = SliderGrid(
             control_area[1, 1],
-            (label = "a", range = minimum_action:T(0.001):maximum_action, startvalue = action_obs[]),
+            (label = "u_p", range = minimum_action:T(0.001):maximum_action, startvalue = action_obs[]),
             (label = "Δt", range = T(0):T(0.001):dtmax::T, startvalue = time_step[])
         )
         sliders = slider_grid.sliders
