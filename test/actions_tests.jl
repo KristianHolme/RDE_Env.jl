@@ -21,7 +21,7 @@
     # Test momentum: α=0 gives direct mapping
     env_no_momentum = RDEEnv(params, action_type = LinearScalarPressureAction())
     _reset!(env_no_momentum)
-    @reset env_no_momentum.action_type.α = 0.0f0
+    @reset env_no_momentum.action_type.momentum = 0.0f0
     RDE_Env.apply_action!(env_no_momentum, 0.0f0)
     @test env_no_momentum.prob.method.cache.u_p_current[1] ≈ 0.5f0 * env_no_momentum.u_pmax
 
@@ -76,7 +76,7 @@ end
 
     # Test Float64
     params64 = RDEParam{Float64}(tmax = 0.01)
-    env64 = RDEEnv(params64, action_type = LinearScalarPressureAction(α = 0.0))
+    env64 = RDEEnv(params64, action_type = LinearScalarPressureAction(momentum = 0.0))
     _reset!(env64)
     RDE_Env.apply_action!(env64, 0.5)
     @test eltype(env64.prob.method.cache.u_p_current) == Float64

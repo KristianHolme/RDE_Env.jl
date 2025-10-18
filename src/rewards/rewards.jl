@@ -267,7 +267,6 @@ function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::ShockPreservingRew
     return λ * shock_reward + (1 - λ) * span_reward
 end
 
-reward_value_type(::Type{T}, ::ShockPreservingReward) where {T} = T
 # ----------------------------------------------------------------------------
 # ShockPreservingSymmetryReward
 # ----------------------------------------------------------------------------
@@ -301,7 +300,6 @@ function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::ShockPreservingSym
     return T(1) - (maxerr - T(0.1)) / T(0.5)
 end
 
-reward_value_type(::Type{T}, ::ShockPreservingSymmetryReward) where {T} = T
 # ----------------------------------------------------------------------------
 # PeriodicityReward
 # ----------------------------------------------------------------------------
@@ -345,7 +343,6 @@ function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::PeriodicityReward,
     return (periodicity_reward::T + shock_spacing_reward::T) / T(2)
 end
 
-reward_value_type(::Type{T}, ::PeriodicityReward) where {T} = T
 
 function Base.show(io::IO, rt::PeriodicityReward)
     return print(io, "PeriodicityReward()")
@@ -360,35 +357,10 @@ end
 # MultiSectionReward
 # ----------------------------------------------------------------------------
 
-mutable struct MultiSectionReward{T <: AbstractFloat} <: MultiAgentCachedCompositeReward
-    n_sections::Int
-    lowest_action_magnitude_reward::T #reward will be \in [lowest_action_magnitude_reward, 1]
-    weights::Vector{T}
-end
-
-# Ensure T is known when building defaults
-function MultiSectionReward{T}(;
-        n_sections::Int = 4,
-        lowest_action_magnitude_reward::T = zero(T),
-        weights::Vector{T} = [one(T), one(T), T(5), one(T)]
-    ) where {T <: AbstractFloat}
-    return MultiSectionReward{T}(
-        n_sections,
-        lowest_action_magnitude_reward,
-        weights
-    )
-end
-
-function MultiSectionReward(;
-        n_sections::Int = 4,
-        lowest_action_magnitude_reward::Float32 = 0.0f0,
-        weights::Vector{Float32} = [1.0f0, 1.0f0, 5.0f0, 1.0f0]
-    )
-    return MultiSectionReward{Float32}(
-        n_sections,
-        lowest_action_magnitude_reward,
-        weights
-    )
+@kwdef mutable struct MultiSectionReward{T <: AbstractFloat} <: MultiAgentCachedCompositeReward
+    n_sections::Int = 8
+    lowest_action_magnitude_reward::T = 0.0f0 #reward will be \in [lowest_action_magnitude_reward, 1]
+    weights::Vector{T} = Float32[1, 1, 5, 1]
 end
 
 initialize_cache(::MultiSectionReward, N::Int, ::Type{T}) where {T} = RewardShiftBufferCache{T}(zeros(T, N))
@@ -951,36 +923,10 @@ function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::PeriodMinimumVaria
     return global_reward * action_effort_modifier
 end
 
-mutable struct MultiSectionPeriodMinimumReward{T <: AbstractFloat} <: MultiAgentCachedCompositeReward
-    n_sections::Int
-    lowest_action_magnitude_reward::T
-    weights::Vector{T}
-end
-
-# Default constructor with Float32 type
-function MultiSectionPeriodMinimumReward(;
-        weights::Vector{T} = [1.0f0, 1.0f0, 5.0f0, 1.0f0],
-        n_sections::Int = 4,
-        lowest_action_magnitude_reward::T = 0.0f0
-    ) where {T <: AbstractFloat}
-    return MultiSectionPeriodMinimumReward{T}(
-        n_sections,
-        lowest_action_magnitude_reward,
-        weights
-    )
-end
-
-# Constructor with explicit type parameter
-function MultiSectionPeriodMinimumReward{T}(
-        n_sections::Int = 4,
-        lowest_action_magnitude_reward::T = zero(T),
-        weights::Vector{T} = [one(T), one(T), T(5), one(T)]
-    ) where {T <: AbstractFloat}
-    return MultiSectionPeriodMinimumReward{T}(
-        n_sections,
-        lowest_action_magnitude_reward,
-        weights
-    )
+@kwdef mutable struct MultiSectionPeriodMinimumReward{T <: AbstractFloat} <: MultiAgentCachedCompositeReward
+    n_sections::Int = 8
+    lowest_action_magnitude_reward::T = 0.0f0
+    weights::Vector{T} = Float32[1, 1, 5, 1]
 end
 
 initialize_cache(::MultiSectionPeriodMinimumReward, N::Int, ::Type{T}) where {T} = RewardShiftBufferCache{T}(zeros(T, N))
@@ -1091,14 +1037,14 @@ The exponential average is computed as:
 - If wrapped reward returns vector, this returns element-wise exponential averages
 - The average state is stored in the cache and reset on `reset_cache!()` calls
 """
-struct ExponentialAverageReward{T <: AbstractRDEReward, U <: AbstractFloat} <: AbstractRDEReward
-    wrapped_reward::T
-    α::U  # averaging parameter
+struct ExponentialAverageReward{R <: AbstractRDEReward, T <: AbstractFloat} <: AbstractRDEReward
+    wrapped_reward::R
+    α::T  # averaging parameter
 
-    function ExponentialAverageReward{T, U}(wrapped_reward::T; α::U = U(0.2)) where {T <: AbstractRDEReward, U <: AbstractFloat}
-        return new{T, U}(wrapped_reward, α)
+    function ExponentialAverageReward{R, T}(wrapped_reward::R; α::T = T(0.2)) where {R <: AbstractRDEReward, T <: AbstractFloat}
+        return new{R, T}(wrapped_reward, α)
     end
-    function ExponentialAverageReward(wrapped_reward::T; α::Float32 = 0.2f0) where {T <: AbstractRDEReward}
+    function ExponentialAverageReward(wrapped_reward::R; α::Float32 = 0.2f0) where {R <: AbstractRDEReward}
         return ExponentialAverageReward{T, Float32}(wrapped_reward, α = α)
     end
 end
@@ -1156,29 +1102,27 @@ then terminates the environment. Uses transition detection logic similar to dete
 - Transition occurs when: shock count reaches target AND rewards stay above threshold for stability_length time
 - Internal state (past_rewards, past_shock_counts, transition_found) is stored in the cache
 """
-struct TransitionBasedReward{T <: AbstractRDEReward, U <: AbstractFloat} <: AbstractRDEReward
-    wrapped_reward::T
-    target_shocks::Int
-    reward_stability_length::U  # in time units
-    reward_threshold::U
+struct TransitionBasedReward{R <: AbstractRDEReward, T <: AbstractFloat} <: AbstractRDEReward
+    wrapped_reward::R
+    reward_stability_length::T  # in time units
+    reward_threshold::T
 
-    function TransitionBasedReward{T, U}(
-            wrapped_reward::T;
+    function TransitionBasedReward{R, T}(
+            wrapped_reward::R;
             target_shocks::Int = 3,
-            reward_stability_length::U = U(20),
-            reward_threshold::U = U(0.99)
-        ) where {T <: AbstractRDEReward, U <: AbstractFloat}
-        return new{T, U}(
+            reward_stability_length::T = T(20),
+            reward_threshold::T = T(0.99)
+        ) where {R <: AbstractRDEReward, T <: AbstractFloat}
+        return new{R, U}(
             wrapped_reward, target_shocks, reward_stability_length, reward_threshold
         )
     end
     function TransitionBasedReward(
-            wrapped_reward::T;
-            target_shocks::Int = 3,
+            wrapped_reward::R;
             reward_stability_length::Float32 = 20.0f0,
             reward_threshold::Float32 = 0.99f0
-        ) where {T <: AbstractRDEReward}
-        return TransitionBasedReward{T, Float32}(
+        ) where {R <: AbstractRDEReward}
+        return TransitionBasedReward{R, Float32}(
             wrapped_reward, target_shocks = target_shocks, reward_stability_length = reward_stability_length, reward_threshold = reward_threshold
         )
     end

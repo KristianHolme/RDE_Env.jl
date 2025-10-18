@@ -107,7 +107,7 @@ end
         env = RDEEnv(
             observation_strategy = MultiCenteredObservation(n_sections = 4),
             action_type = VectorPressureAction(n_sections = 4),
-            reward_type = MultiSectionPeriodMinimumReward(n_sections = 4, target_shock_count = 3, lowest_action_magnitude_reward = 0.0f0, weights = [1.0f0, 1.0f0, 5.0f0, 1.0f0]),
+            reward_type = MultiSectionPeriodMinimumReward(n_sections = 4, lowest_action_magnitude_reward = 0.0f0, weights = [1.0f0, 1.0f0, 5.0f0, 1.0f0]),
             params = RDEParam(N = 512, tmax = 100.0f0)
         )
         DRiLExt = get_dril_ext()
@@ -155,7 +155,7 @@ end
         env = RDEEnv(
             observation_strategy = MultiCenteredObservation(n_sections = 4),
             action_type = VectorPressureAction(n_sections = 4),
-            reward_type = MultiSectionPeriodMinimumReward(n_sections = 4, target_shock_count = 3, lowest_action_magnitude_reward = 0.0f0, weights = [1.0f0, 1.0f0, 5.0f0, 1.0f0]),
+            reward_type = MultiSectionPeriodMinimumReward(n_sections = 4, lowest_action_magnitude_reward = 0.0f0, weights = [1.0f0, 1.0f0, 5.0f0, 1.0f0]),
             params = RDEParam(N = 512, tmax = 100.0f0)
         )
         DRiLExt = get_dril_ext()
