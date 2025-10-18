@@ -3,6 +3,8 @@ abstract type AbstractRDEEnv <: _AbstractEnv end
 
 # Actions
 abstract type AbstractActionType end
+abstract type AbstractVectorActionType <: AbstractActionType end
+abstract type AbstractScalarActionType <: AbstractActionType end
 """
     action_dim(action_type::AbstractActionType)
 
@@ -53,6 +55,20 @@ abstract type CachedCompositeReward <: AbstractRDEReward end
 
 abstract type MultiAgentCachedCompositeReward <: CachedCompositeReward end
 
+# Cache API
+abstract type AbstractCache end
+struct NoCache <: AbstractCache end
+
+mutable struct GoalCache <: AbstractCache
+    target_shock_count::Int
+end
+
+initialize_cache(::Any, ::Int, ::Type{T}) where {T} = NoCache()
+reset_cache!(::AbstractCache) = nothing
+
+get_target_shock_count(env::AbstractRDEEnv) = env.cache.goal.target_shock_count
+set_target_shock_count!(env::AbstractRDEEnv, v::Int) = env.cache.goal.target_shock_count = v
+
 ## env
 """
     RDEEnvCache{T<:AbstractFloat}
@@ -65,21 +81,30 @@ Cache for RDE environment computations and state tracking.
 - `prev_u::Vector{T}`: Previous velocity field
 - `prev_λ::Vector{T}`: Previous reaction progress
 """
-mutable struct RDEEnvCache{T <: AbstractFloat} #TODO remove circ
-    circ_u::CircularVector{T, Vector{T}}
-    circ_λ::CircularVector{T, Vector{T}}
+mutable struct RDEEnvCache{T <: AbstractFloat, RC <: AbstractCache, AC <: AbstractCache, OC <: AbstractCache, GC <: GoalCache} <: AbstractCache
     prev_u::Vector{T}  # Previous step's u values
     prev_λ::Vector{T}  # Previous step's λ values
-    action::Matrix{T} # column 1 = s action, column 2 = u_p action
-    function RDEEnvCache{T}(N::Int) where {T <: AbstractFloat}
+    # New subcaches
+    reward_cache::RC
+    action_cache::AC
+    observation_cache::OC
+    goal::GC
+    function RDEEnvCache{T, RC, AC, OC, GC}(N::Int; reward_cache, action_cache, observation_cache, goal) where {T <: AbstractFloat, RC <: AbstractCache, AC <: AbstractCache, OC <: AbstractCache, GC <: GoalCache}
         # Initialize all arrays with zeros instead of undefined values
-        circ_u = CircularArray(zeros(T, N))
-        circ_λ = CircularArray(zeros(T, N))
         prev_u = zeros(T, N)
         prev_λ = zeros(T, N)
-        action = zeros(T, N, 2)
-        return new{T}(circ_u, circ_λ, prev_u, prev_λ, action)
+        # Default subcaches are NoCache(), and GoalCache defaults to 3 shocks
+        return new{T, RC, AC, OC, GC}(prev_u, prev_λ, reward_cache, action_cache, observation_cache, goal)
     end
+end
+
+function reset_cache!(cache::RDEEnvCache{T}) where {T}
+    reset_cache!(cache.reward_cache)
+    reset_cache!(cache.action_cache)
+    reset_cache!(cache.observation_cache)
+    cache.prev_u .= zero(T)
+    cache.prev_λ .= zero(T)
+    return nothing
 end
 
 #TODO_is it necessary to parametrize by A, O, R?

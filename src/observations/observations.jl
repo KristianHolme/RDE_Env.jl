@@ -1,20 +1,59 @@
+# ============================================================================
+# Cache Types
+# ============================================================================
+
+struct ObservationMinisectionCache{T <: AbstractFloat} <: AbstractCache
+    minisection_u::Vector{T}
+    minisection_λ::Vector{T}
+end
+
+# ============================================================================
+# Observation Types and Implementations
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# FourierObservation
+# ----------------------------------------------------------------------------
+
 struct FourierObservation <: AbstractObservationStrategy
     fft_terms::Int
 end
 
+initialize_cache(::FourierObservation, N::Int, ::Type{T}) where {T} = NoCache()
+
+# ----------------------------------------------------------------------------
+# StateObservation
+# ----------------------------------------------------------------------------
 
 struct StateObservation <: AbstractObservationStrategy end
 
+initialize_cache(::StateObservation, N::Int, ::Type{T}) where {T} = NoCache()
+
+
+# ----------------------------------------------------------------------------
+# SectionedStateObservation
+# ----------------------------------------------------------------------------
 
 @kwdef struct SectionedStateObservation <: AbstractObservationStrategy
     minisections::Int = 32
-    target_shock_count::Int = 3
 end
 
+initialize_cache(obs::SectionedStateObservation, N::Int, ::Type{T}) where {T} = begin
+    minisection_size = N ÷ obs.minisections
+    n_total_minisections = N ÷ minisection_size
+    ObservationMinisectionCache{T}(zeros(T, n_total_minisections), zeros(T, n_total_minisections))
+end
+
+
+# ----------------------------------------------------------------------------
+# SampledStateObservation
+# ----------------------------------------------------------------------------
 
 struct SampledStateObservation <: AbstractObservationStrategy
     n_samples::Int
 end
+
+initialize_cache(::SampledStateObservation, N::Int, ::Type{T}) where {T} = NoCache()
 function compute_observation!(obs, env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, strategy::FourierObservation) where {T, A, O, RW, V, OBS, M, RS, C}
     N = env.prob.params.N
 
@@ -87,10 +126,6 @@ function compute_sectioned_observation!(minisection_observations_u, minisection_
     N = prob.params.N
     current_u = @view env.state[1:N]
     current_λ = @view env.state[(N + 1):end]
-    # env.cache.circ_u[:] .= current_u
-    # env.cache.circ_λ[:] .= current_λ
-    # circ_u = env.cache.circ_u
-    # circ_λ = env.cache.circ_λ
     max_shocks = T(6)
     #TODO: change to 3?
     max_pressure = T(6)
@@ -104,7 +139,7 @@ function compute_sectioned_observation!(minisection_observations_u, minisection_
     get_minisection_observations!(minisection_observations_λ, current_λ, minisection_size)
 
     shocks::T = RDE.count_shocks(current_u, dx) / max_shocks
-    target_shock_count::T = obs_strategy.target_shock_count / max_shocks
+    target_shock_count::T = get_target_shock_count(env) / max_shocks
 
     return shocks, target_shock_count
 end
@@ -177,15 +212,24 @@ function get_init_observation(strategy::SectionedStateObservation, N::Int, ::Typ
     return Vector{T}(undef, 2 * strategy.minisections + 2)
 end
 
+# ----------------------------------------------------------------------------
+# MultiSectionObservation
+# ----------------------------------------------------------------------------
+
 @kwdef struct MultiSectionObservation <: AbstractMultiAgentObservationStrategy
     n_sections::Int = 4
-    target_shock_count::Int = 3
     look_ahead_speed::Float32 = 1.65f0
     minisections_per_section::Int = 8
     dt::Float32 = 1.0f0
     L::Float32 = 2.0f0 * π
 end
 MultiSectionObservation(n::Int) = MultiSectionObservation(n_sections = n)
+
+initialize_cache(obs::MultiSectionObservation, N::Int, ::Type{T}) where {T} = begin
+    minisection_size = N ÷ (obs.n_sections * obs.minisections_per_section)
+    n_total_minisections = N ÷ minisection_size
+    ObservationMinisectionCache{T}(zeros(T, n_total_minisections), zeros(T, n_total_minisections))
+end
 
 function Base.show(io::IO, obs_strategy::MultiSectionObservation)
     return if get(io, :compact, false)::Bool
@@ -224,11 +268,10 @@ function compute_observation!(obs, env::RDEEnv{T, A, O, R, V, OBS}, obs_strategy
 
     observable_minisections = get_observable_minisections(obs_strategy)
 
-    # Allocate temporary buffers for all minisection observations
-    # (these need to be full-length to compute all minisections once)
-    n_total_minisections = N ÷ minisection_size
-    minisection_observations_u = Vector{T}(undef, n_total_minisections)
-    minisection_observations_λ = Vector{T}(undef, n_total_minisections)
+    # Use cached buffers for minisection observations
+    obs_cache = env.cache.observation_cache::ObservationMinisectionCache{T}
+    minisection_observations_u = obs_cache.minisection_u
+    minisection_observations_λ = obs_cache.minisection_λ
 
     get_minisection_observations!(minisection_observations_u, current_u, minisection_size)
     get_minisection_observations!(minisection_observations_λ, current_λ, minisection_size)
@@ -239,7 +282,7 @@ function compute_observation!(obs, env::RDEEnv{T, A, O, R, V, OBS}, obs_strategy
     # end
 
     shocks = RDE.count_shocks(current_u, dx)
-    target_shock_count = obs_strategy.target_shock_count
+    target_shock_count = get_target_shock_count(env)
     u_min, u_max = RDE.turbo_extrema(current_u)
     span = u_max - u_min
 
@@ -269,39 +312,20 @@ function compute_observation!(obs, env::RDEEnv{T, A, O, R, V, OBS}, obs_strategy
     return obs
 end
 
-function get_observable_minisections(obs_strategy::MultiSectionObservation)
-    n_sections = obs_strategy.n_sections
-    L = obs_strategy.L
-    v = obs_strategy.look_ahead_speed
-    dt = obs_strategy.dt
-    m = obs_strategy.minisections_per_section
-
-
-    observable_minisections = Int(floor(m * (1 + n_sections * v * dt / L)))
-    return observable_minisections
-end
-
-function get_minisection_observations!(output, data, minisection_size)
-    minisection_data = reshape(data, minisection_size, :)
-    RDE.turbo_column_maximum!(output, minisection_data)
-    return output
-end
-
-function get_minisection_observations(data, minisection_size)
-    minisection_u = reshape(data, minisection_size, :)
-    minisection_observations = RDE.turbo_column_maximum(minisection_u)
-    return minisection_observations
-end
-
 function get_init_observation(obs_strategy::MultiSectionObservation, N::Int, ::Type{T}) where {T <: AbstractFloat}
     obs_dim = get_observable_minisections(obs_strategy) * 2 + 3
     return Matrix{T}(undef, obs_dim, obs_strategy.n_sections)
 end
 
+# ----------------------------------------------------------------------------
+# CompositeObservation
+# ----------------------------------------------------------------------------
+
 @kwdef mutable struct CompositeObservation <: AbstractObservationStrategy
     fft_terms::Int = 8
-    target_shock_count::Int = 4
 end
+
+initialize_cache(::CompositeObservation, N::Int, ::Type{T}) where {T} = NoCache()
 
 function Base.show(io::IO, obs::CompositeObservation)
     return print(io, "CompositeObservation(fft_terms=$(obs.fft_terms))")
@@ -309,8 +333,7 @@ end
 
 function Base.show(io::IO, ::MIME"text/plain", obs::CompositeObservation)
     println(io, "CompositeObservation:")
-    println(io, "  fft_terms: $(obs.fft_terms)")
-    return println(io, "  target_shock_count: $(obs.target_shock_count)")
+    return println(io, "  fft_terms: $(obs.fft_terms)")
 end
 
 function compute_observation!(obs, env::RDEEnv{T, A, O, R, V, OBS}, strategy::CompositeObservation) where {T, A, O, R, V, OBS}
@@ -344,7 +367,7 @@ function compute_observation!(obs, env::RDEEnv{T, A, O, R, V, OBS}, strategy::Co
     # Write scalar values directly to the end of obs
     obs[n_terms + 1] = mean(env.prob.method.cache.u_p_current) / env.u_pmax
     obs[n_terms + 2] = RDE.count_shocks(current_u, dx) / max_shocks
-    obs[n_terms + 3] = strategy.target_shock_count / max_shocks
+    obs[n_terms + 3] = get_target_shock_count(env) / max_shocks
     obs[n_terms + 4] = span / T(3)
 
     return obs
@@ -354,10 +377,12 @@ function get_init_observation(strategy::CompositeObservation, N::Int, ::Type{T})
     return Vector{T}(undef, 2 * strategy.fft_terms + 5)
 end
 
+# ----------------------------------------------------------------------------
+# MultiCenteredObservation
+# ----------------------------------------------------------------------------
 
 @kwdef struct MultiCenteredObservation <: AbstractMultiAgentObservationStrategy
     n_sections::Int = 4
-    target_shock_count::Int = 4
     minisections::Int = 32
 end
 MultiCenteredObservation(n::Int) = MultiCenteredObservation(n_sections = n)
@@ -366,14 +391,19 @@ function Base.show(io::IO, obs_strategy::MultiCenteredObservation)
     return if get(io, :compact, false)::Bool
         print(io, "MultiCenteredObservation(n_sections=$(obs_strategy.n_sections))")
     else
-        print(io, "MultiCenteredObservation(n_sections=$(obs_strategy.n_sections), target_shock_count=$(obs_strategy.target_shock_count))")
+        print(io, "MultiCenteredObservation(n_sections=$(obs_strategy.n_sections), minisections=$(obs_strategy.minisections))")
     end
+end
+
+initialize_cache(obs::MultiCenteredObservation, N::Int, ::Type{T}) where {T} = begin
+    minisection_size = N ÷ obs.minisections
+    n_total_minisections = N ÷ minisection_size
+    ObservationMinisectionCache{T}(zeros(T, n_total_minisections), zeros(T, n_total_minisections))
 end
 
 function Base.show(io::IO, ::MIME"text/plain", obs_strategy::MultiCenteredObservation)
     println(io, "MultiCenteredObservation:")
     println(io, "  n_sections: $(obs_strategy.n_sections)")
-    println(io, "  target_shock_count: $(obs_strategy.target_shock_count)")
     return println(io, "  minisections: $(obs_strategy.minisections)")
 end
 
@@ -382,9 +412,10 @@ function compute_observation!(obs, env::RDEEnv{T, A, O, R, V, OBS}, obs_strategy
     minisections = obs_strategy.minisections
     minisections_per_section = minisections ÷ n_sections
 
-    # Allocate temporary buffers for minisection observations
-    minisection_observations_u = Vector{T}(undef, minisections)
-    minisection_observations_λ = Vector{T}(undef, minisections)
+    # Use cached buffers for minisection observations
+    obs_cache = env.cache.observation_cache::ObservationMinisectionCache{T}
+    minisection_observations_u = obs_cache.minisection_u
+    minisection_observations_λ = obs_cache.minisection_λ
 
     shocks, target_shock_count = compute_sectioned_observation!(
         minisection_observations_u, minisection_observations_λ, env, obs_strategy
@@ -413,7 +444,13 @@ function get_init_observation(obs_strategy::MultiCenteredObservation, N::Int, ::
     return Matrix{T}(undef, obs_dim, obs_strategy.n_sections)
 end
 
+# ----------------------------------------------------------------------------
+# MeanInjectionPressureObservation
+# ----------------------------------------------------------------------------
+
 struct MeanInjectionPressureObservation <: AbstractObservationStrategy end
+
+initialize_cache(::MeanInjectionPressureObservation, N::Int, ::Type{T}) where {T} = NoCache()
 
 function compute_observation!(obs, env::RDEEnv{T, A, O, R, V, OBS}, strategy::MeanInjectionPressureObservation) where {T, A, O, R, V, OBS}
     obs[1] = mean(env.prob.method.cache.u_p_current)
@@ -422,4 +459,31 @@ end
 
 function get_init_observation(strategy::MeanInjectionPressureObservation, N::Int, ::Type{T}) where {T <: AbstractFloat}
     return Vector{T}(undef, 1)
+end
+
+# ============================================================================
+# Shared Helper Functions (at end to avoid forward reference issues)
+# ============================================================================
+
+function get_minisection_observations!(output, data, minisection_size)
+    minisection_data = reshape(data, minisection_size, :)
+    RDE.turbo_column_maximum!(output, minisection_data)
+    return output
+end
+
+function get_minisection_observations(data, minisection_size)
+    minisection_u = reshape(data, minisection_size, :)
+    minisection_observations = RDE.turbo_column_maximum(minisection_u)
+    return minisection_observations
+end
+
+function get_observable_minisections(obs_strategy::MultiSectionObservation)
+    n_sections = obs_strategy.n_sections
+    L = obs_strategy.L
+    v = obs_strategy.look_ahead_speed
+    dt = obs_strategy.dt
+    m = obs_strategy.minisections_per_section
+
+    observable_minisections = Int(floor(m * (1 + n_sections * v * dt / L)))
+    return observable_minisections
 end

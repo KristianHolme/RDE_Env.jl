@@ -23,6 +23,8 @@ export action_dim, _reset_action!, set_N!
 export compute_observation, get_init_observation
 export set_reward!
 export RDEEnv, RDEEnvCache
+export AbstractCache, NoCache, GoalCache, CompositeRewardCache, initialize_cache, reset_cache!
+export get_target_shock_count, set_target_shock_count!
 include("utils.jl")
 export sigmoid_to_linear, reward_sigmoid, sigmoid, linear_to_sigmoid, get_plotting_speed_adjustments
 

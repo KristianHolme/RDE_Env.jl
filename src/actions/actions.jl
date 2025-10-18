@@ -12,7 +12,9 @@ end
     n_sections::Int = 1 #number of sections
     α::T = 0.0f0
 end
-
+struct VectorActionCache{T <: AbstractFloat} <: AbstractCache
+    section_controls::Vector{T}
+end
 """
     LinearScalarPressureAction <: AbstractActionType
 
@@ -168,13 +170,16 @@ function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::Abstr
     points_per_section = N ÷ action_type.n_sections
 
     current_section_controls = @view method_cache.u_p_current[1:points_per_section:end]
-    section_controls = action_to_control.(action, current_section_controls, env.u_pmax, momentum(env.action_type))
+    # Use action-cache buffer to avoid per-step allocation
+    @assert env.cache.action_cache isa VectorActionCache{T}
+    section_controls = env.cache.action_cache.section_controls
+    section_controls .= action_to_control.(action, current_section_controls, env.u_pmax, momentum(env.action_type))
     # Fill each section with its corresponding action value, directly writing into method_cache.u_p_current (no new allocation)
     for i in 1:action_type.n_sections
         start_idx = (i - 1) * points_per_section + 1
         end_idx = i * points_per_section
         method_cache.u_p_current[start_idx:end_idx] .= section_controls[i]
-        env_cache.action[start_idx:end_idx, 2] .= action[i]
+        # env_cache.action[start_idx:end_idx, 2] .= action[i] # TODO: deprecated, remove
     end
     return nothing
 end
@@ -186,9 +191,8 @@ function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::T) wh
     if abs(action) > one(T)
         @warn "action (u_p) out of bounds [-1,1]"
     end
-    # Keep cache.action updated without allocating
-    env_cache.action[:, 1] .= zero(T)
-    env_cache.action[:, 2] .= action
+    # env_cache.action[:, 1] .= zero(T)
+    # env_cache.action[:, 2] .= action # TODO: deprecated, remove
 
     copyto!(method_cache.u_p_previous, method_cache.u_p_current)
     method_cache.u_p_current .= action_to_control(action, method_cache.u_p_current[1], env.u_pmax, momentum(env.action_type))
@@ -213,8 +217,8 @@ function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::Abstr
         @warn "action (s/u_p) out of bounds [-1,1]"
     end
 
-    env_cache.action[:, 1] .= a_s
-    env_cache.action[:, 2] .= a_up
+    # env_cache.action[:, 1] .= a_s
+    # env_cache.action[:, 2] .= a_up # TODO: deprecated, remove
 
     copyto!(method_cache.s_previous, method_cache.s_current)
     method_cache.s_current .= action_to_control(a_s, method_cache.s_current[1], env.smax, momentum(env.action_type))
@@ -244,9 +248,8 @@ function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, gains::Abstra
     u_p_action::T = clamp(Kp * err + Ki * env.action_type.integral + Kd * deriv, -one(T), one(T))
     env.action_type.previous_error = err
 
-    # Keep cache.action updated (no allocations)
-    env_cache.action[:, 1] .= zero(T)
-    env_cache.action[:, 2] .= u_p_action
+    # env_cache.action[:, 1] .= zero(T)
+    # env_cache.action[:, 2] .= u_p_action # TODO: deprecated, remove
 
     # Apply control (only u_p)
     copyto!(method_cache.u_p_previous, method_cache.u_p_current)
@@ -269,9 +272,8 @@ function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::T) wh
     if abs(action) > one(T)
         @warn "action (u_p) out of bounds [-1,1]"
     end
-    # Keep cache.action updated without allocating
-    env_cache.action[:, 1] .= zero(T)
-    env_cache.action[:, 2] .= action
+    # env_cache.action[:, 1] .= zero(T)
+    # env_cache.action[:, 2] .= action # TODO: deprecated, remove
 
     copyto!(method_cache.u_p_previous, method_cache.u_p_current)
     method_cache.u_p_current .= linear_action_to_control(action, method_cache.u_p_current[1], env.u_pmax, momentum(env.action_type))
@@ -305,13 +307,15 @@ function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::Abstr
     points_per_section = N ÷ action_type.n_sections
 
     current_section_controls = @view method_cache.u_p_current[1:points_per_section:end]
-    section_controls = linear_action_to_control.(action, current_section_controls, env.u_pmax, momentum(env.action_type))
+    @assert env.cache.action_cache isa VectorActionCache{T}
+    section_controls = (env.cache.action_cache::VectorActionCache{T}).section_controls
+    section_controls .= linear_action_to_control.(action, current_section_controls, env.u_pmax, momentum(env.action_type))
     # Fill each section with its corresponding action value, directly writing into method_cache.u_p_current (no new allocation)
     for i in 1:action_type.n_sections
         start_idx = (i - 1) * points_per_section + 1
         end_idx = i * points_per_section
         method_cache.u_p_current[start_idx:end_idx] .= section_controls[i]
-        env_cache.action[start_idx:end_idx, 2] .= action[i]
+        # env_cache.action[start_idx:end_idx, 2] .= action[i] # TODO: deprecated, remove
     end
     return nothing
 end
@@ -325,9 +329,8 @@ end
 function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::T) where {T <: AbstractFloat, A <: DirectScalarPressureAction, O, RW, V, OBS, M, RS, C}
     env_cache = env.cache
     method_cache = env.prob.method.cache
-    # Keep cache.action updated without allocating
-    env_cache.action[:, 1] .= zero(T)
-    env_cache.action[:, 2] .= action
+    # env_cache.action[:, 1] .= zero(T)
+    # env_cache.action[:, 2] .= action # TODO: deprecated, remove
 
     copyto!(method_cache.u_p_previous, method_cache.u_p_current)
 
@@ -357,13 +360,25 @@ function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::Abstr
     points_per_section = N ÷ action_type.n_sections
 
     current_section_controls = @view method_cache.u_p_current[1:points_per_section:end]
-    section_controls = momentum_target.(action, current_section_controls, momentum(env.action_type))
+    @assert env.cache.action_cache isa VectorActionCache{T}
+    section_controls = env.cache.action_cache.section_controls
+    section_controls .= momentum_target.(action, current_section_controls, momentum(env.action_type))
     # Fill each section with its corresponding action value, directly writing into method_cache.u_p_current (no new allocation)
     for i in 1:action_type.n_sections
         start_idx = (i - 1) * points_per_section + 1
         end_idx = i * points_per_section
         method_cache.u_p_current[start_idx:end_idx] .= section_controls[i]
-        env_cache.action[start_idx:end_idx, 2] .= action[i]
+        # env_cache.action[start_idx:end_idx, 2] .= action[i] # TODO: deprecated, remove
     end
     return nothing
 end
+
+# Action cache initializers for vector action types
+initialize_cache(at::VectorPressureAction{T}, N::Int, ::Type{T}) where {T <: AbstractFloat} =
+    VectorActionCache{T}(Vector{T}(undef, at.n_sections))
+
+initialize_cache(at::LinearVectorPressureAction{T}, N::Int, ::Type{T}) where {T <: AbstractFloat} =
+    VectorActionCache{T}(Vector{T}(undef, at.n_sections))
+
+initialize_cache(at::DirectVectorPressureAction{T}, N::Int, ::Type{T}) where {T <: AbstractFloat} =
+    VectorActionCache{T}(Vector{T}(undef, at.n_sections))

@@ -65,11 +65,19 @@ function RDEEnv(;
 
     prob = RDEProblem(params; kwargs...)
     RDE.reset_state_and_pressure!(prob, prob.reset_strategy)
-    reset_cache!(prob.method.cache, τ_smooth = τ_smooth, params = params)
+    RDE.reset_cache!(prob.method.cache; τ_smooth, params)
 
     initial_state = vcat(prob.u0, prob.λ0)
     init_observation = get_init_observation(observation_strategy, params.N, T)
-    cache = RDEEnvCache{T}(params.N)
+    # Initialize typed subcaches (no env dependency)
+    reward_cache = initialize_cache(reward_type, params.N, T)
+    action_cache = initialize_cache(action_type, params.N, T)
+    observation_cache = initialize_cache(observation_strategy, params.N, T)
+    # Initialize goal cache with current target shocks if present on types, else default 3
+    goal = GoalCache(2)
+    cache = RDEEnvCache{T, typeof(reward_cache), typeof(action_cache), typeof(observation_cache), typeof(goal)}(
+        params.N; reward_cache, action_cache, observation_cache, goal
+    )
     ode_problem = ODEProblem{true, SciMLBase.FullSpecialize}(RDE_RHS!, initial_state, (zero(T), dt), prob)
 
     # Use helper functions to determine type parameters
@@ -292,7 +300,10 @@ function _reset!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}) where {T, A, O, RW,
     compute_observation!(env.observation, env, env.observation_strategy)
     env.info = Dict{String, Any}()
 
-    reset_cache!(env.prob.method.cache, τ_smooth = env.τ_smooth, params = env.prob.params)
+    RDE.reset_cache!(env.prob.method.cache, τ_smooth = env.τ_smooth, params = env.prob.params)
+    reset_cache!(env.cache.reward_cache)
+    reset_cache!(env.cache.action_cache)
+    reset_cache!(env.cache.observation_cache)
     _reset_action!(env.action_type, env)
     env.prob.sol = nothing
     # Initialize previous state
