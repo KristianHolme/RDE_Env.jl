@@ -140,8 +140,3 @@ mutable struct RDEEnv{T, A, O, RW, V, OBS, M, RS, C} <: AbstractRDEEnv where {
     steps_taken::Int
     ode_problem::SciMLBase.ODEProblem
 end
-
-# Helper functions to determine observation array type
-#TODO remove
-observation_array_type(::Type{T}, ::AbstractObservationStrategy) where {T} = Vector{T}  # Default: Vector
-observation_array_type(::Type{T}, ::AbstractMultiAgentObservationStrategy) where {T} = Matrix{T}  # Multi-agent: Matrix

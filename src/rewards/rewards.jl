@@ -17,6 +17,39 @@ function reset_cache!(cache::CompositeRewardCache)
     return nothing
 end
 
+struct WrappedRewardCache{IC <: AbstractCache, OC <: AbstractCache} <: AbstractCache
+    inner_cache::IC  # wrapped reward's cache
+    outer_cache::OC  # wrapper's own state
+end
+
+function reset_cache!(cache::WrappedRewardCache)
+    reset_cache!(cache.inner_cache)
+    reset_cache!(cache.outer_cache)
+    return nothing
+end
+
+mutable struct ExponentialAverageCache{T <: AbstractFloat} <: AbstractCache
+    average::Union{Nothing, T, Vector{T}}
+end
+
+function reset_cache!(cache::ExponentialAverageCache)
+    cache.average = nothing
+    return nothing
+end
+
+mutable struct TransitionBasedCache{T <: AbstractFloat} <: AbstractCache
+    past_rewards::Vector{T}
+    past_shock_counts::Vector{Int}
+    transition_found::Bool
+end
+
+function reset_cache!(cache::TransitionBasedCache)
+    empty!(cache.past_rewards)
+    empty!(cache.past_shock_counts)
+    cache.transition_found = false
+    return nothing
+end
+
 # ============================================================================
 # Reward Types and Implementations
 # ============================================================================
@@ -92,10 +125,6 @@ struct PeriodicityReward <: AbstractRDEReward end
 
 reward_value_type(::Type{T}, ::PeriodicityReward) where {T} = T
 initialize_cache(::PeriodicityReward, N::Int, ::Type{T}) where {T} = RewardShiftBufferCache{T}(zeros(T, N))
-# Default reset interface for rewards - does nothing by default
-function reset_reward!(rt::AbstractRDEReward)
-    return nothing
-end
 
 function set_reward!(env::AbstractRDEEnv, rt::AbstractRDEReward)
     #not doing in place because reward can change size
@@ -255,8 +284,6 @@ end
 
 function MultiSectionReward(;
         n_sections::Int = 4,
-        target_shock_count::Int = 3,  # Ignored, kept for backward compat
-        N::Int = 512,  # Ignored, kept for backward compat
         lowest_action_magnitude_reward::Float32 = 0.0f0,
         weights::Vector{Float32} = [1.0f0, 1.0f0, 5.0f0, 1.0f0]
     )
@@ -397,11 +424,9 @@ mutable struct CompositeReward{T <: AbstractFloat} <: CachedCompositeReward
         )
     end
     function CompositeReward(;
-            target_shock_count::Int = 4,  # Ignored, kept for backward compat
             lowest_action_magnitude_reward::Float32 = 1.0f0,
             span_reward::Bool = true,
             weights::Vector{Float32} = [0.25f0, 0.25f0, 0.25f0, 0.25f0],
-            N::Int = 512  # Ignored, kept for backward compat
         )
         return CompositeReward{Float32}(
             lowest_action_magnitude_reward = lowest_action_magnitude_reward,
@@ -451,7 +476,6 @@ struct TimeAggCompositeReward{T <: AbstractFloat} <: CachedCompositeReward
             lowest_action_magnitude_reward::T = one(T),
             span_reward::Bool = true,
             weights::Vector{T} = [T(0.25), T(0.25), T(0.25), T(0.25)],
-            N::Int = 512  # Ignored, kept for backward compat
         ) where {T <: AbstractFloat}
         return new{T}(
             aggregation,
@@ -461,11 +485,9 @@ struct TimeAggCompositeReward{T <: AbstractFloat} <: CachedCompositeReward
     end
     function TimeAggCompositeReward(;
             aggregation::TimeAggregation = TimeMin(),
-            target_shock_count::Int = 4,  # Ignored, kept for backward compat
             lowest_action_magnitude_reward::T = T(1.0),
             span_reward::Bool = true,
             weights::Vector{T} = [T(0.25), T(0.25), T(0.25), T(0.25)],
-            N::Int = 512  # Ignored, kept for backward compat
         ) where {T <: AbstractFloat}
         return TimeAggCompositeReward{T}(
             aggregation = aggregation,
@@ -611,8 +633,6 @@ end
 function TimeAggMultiSectionReward{T}(;
         aggregation::TimeAggregation = TimeMin(),
         n_sections::Int = 4,
-        target_shock_count::Int = 3,  # Ignored, kept for backward compat
-        N::Int = 512,  # Ignored, kept for backward compat
         lowest_action_magnitude_reward::T = zero(T),
         weights::Vector{T} = [one(T), one(T), T(5), one(T)]
     ) where {T <: AbstractFloat}
@@ -627,8 +647,6 @@ end
 function TimeAggMultiSectionReward(;
         aggregation::TimeAggregation = TimeMin(),
         n_sections::Int = 4,
-        target_shock_count::Int = 3,  # Ignored, kept for backward compat
-        N::Int = 512,  # Ignored, kept for backward compat
         lowest_action_magnitude_reward::Float32 = 0.0f0,
         weights::Vector{Float32} = [1.0f0, 1.0f0, 5.0f0, 1.0f0]
     )
@@ -690,10 +708,8 @@ struct PeriodMinimumReward{T <: AbstractFloat} <: CachedCompositeReward
     lowest_action_magnitude_reward::T #reward will be \in [lowest_action_magnitude_reward, 1]
     weights::Vector{T}
     function PeriodMinimumReward{T}(;
-            target_shock_count::Int = 4,  # Ignored, kept for backward compat
             lowest_action_magnitude_reward::T = zero(T),
             weights::Vector{T} = [one(T), one(T), T(5), one(T)],
-            N::Int = 512  # Ignored, kept for backward compat
         ) where {T <: AbstractFloat}
         return new{T}(
             lowest_action_magnitude_reward,
@@ -701,10 +717,8 @@ struct PeriodMinimumReward{T <: AbstractFloat} <: CachedCompositeReward
         )
     end
     function PeriodMinimumReward(;
-            target_shock_count::Int = 4,  # Ignored, kept for backward compat
             lowest_action_magnitude_reward::Float32 = 0.0f0,
             weights::Vector{Float32} = Float32[1, 1, 5, 1],
-            N::Int = 512  # Ignored, kept for backward compat
         )
         return PeriodMinimumReward{Float32}(
             lowest_action_magnitude_reward = lowest_action_magnitude_reward,
@@ -785,11 +799,9 @@ struct PeriodMinimumVariationReward{T <: AbstractFloat} <: CachedCompositeReward
     variation_penalties::Vector{T}  # α values for each component [span, periodicity, shock, shock_spacing]
 end
 function PeriodMinimumVariationReward{T}(;
-        target_shock_count::Int = 4,  # Ignored, kept for backward compat
         lowest_action_magnitude_reward::T = one(T),
         weights::Vector{T} = [one(T), one(T), T(5), one(T)],
         variation_penalties::Vector{T} = [T(2), T(2), T(2), T(2)],
-        N::Int = 512  # Ignored, kept for backward compat
     ) where {T <: AbstractFloat}
     return PeriodMinimumVariationReward{T}(
         lowest_action_magnitude_reward,
@@ -798,11 +810,9 @@ function PeriodMinimumVariationReward{T}(;
     )
 end
 function PeriodMinimumVariationReward(;
-        target_shock_count::Int = 4,  # Ignored, kept for backward compat
         lowest_action_magnitude_reward::Float32 = 1.0f0,
         weights::Vector{Float32} = Float32[1, 1, 5, 1],
         variation_penalties::Vector{Float32} = Float32[2.0, 2.0, 2.0, 2.0],
-        N::Int = 512  # Ignored, kept for backward compat
     )
     return PeriodMinimumVariationReward{Float32}(
         lowest_action_magnitude_reward = lowest_action_magnitude_reward,
@@ -921,7 +931,6 @@ end
 function MultiSectionPeriodMinimumReward(;
         weights::Vector{T} = [1.0f0, 1.0f0, 5.0f0, 1.0f0],
         n_sections::Int = 4,
-        target_shock_count::Int = 3,  # Ignored, kept for backward compat
         lowest_action_magnitude_reward::T = 0.0f0
     ) where {T <: AbstractFloat}
     return MultiSectionPeriodMinimumReward{T}(
@@ -934,7 +943,6 @@ end
 # Constructor with explicit type parameter
 function MultiSectionPeriodMinimumReward{T}(
         n_sections::Int = 4,
-        target_shock_count::Int = 3,  # Ignored, kept for backward compat
         lowest_action_magnitude_reward::T = zero(T),
         weights::Vector{T} = [one(T), one(T), T(5), one(T)]
     ) where {T <: AbstractFloat}
@@ -1036,15 +1044,6 @@ function reward_value_type(::Type{T}, rt::MultiplicativeReward) where {T}
     return reward_value_from_wrapper(T, rt.rewards)
 end
 
-# Reset method for MultiplicativeReward - pass through to sub-rewards
-function reset_reward!(rt::MultiplicativeReward)
-    for r in rt.rewards
-        reset_reward!(r)
-    end
-    return nothing
-end
-
-
 """
 ExponentialAverageReward{T<:AbstractRDEReward} <: AbstractRDEReward
 
@@ -1056,20 +1055,18 @@ The exponential average is computed as:
 # Fields
 - `wrapped_reward::T`: The underlying reward to wrap
 - `α::Float32`: Averaging parameter (0 < α ≤ 1). Higher values give more weight to recent rewards
-- `average::Union{Nothing, Float32, Vector{Float32}}`: Current exponential average (initialized on first use)
 
 # Notes
 - If wrapped reward returns scalar, this returns scalar exponential average
 - If wrapped reward returns vector, this returns element-wise exponential averages
-- The average is reset to `nothing` on `reset_reward!()` calls
+- The average state is stored in the cache and reset on `reset_cache!()` calls
 """
-mutable struct ExponentialAverageReward{T <: AbstractRDEReward, U <: AbstractFloat} <: AbstractRDEReward
+struct ExponentialAverageReward{T <: AbstractRDEReward, U <: AbstractFloat} <: AbstractRDEReward
     wrapped_reward::T
     α::U  # averaging parameter
-    average::Union{Nothing, U, Vector{U}}  # current exponential average
 
     function ExponentialAverageReward{T, U}(wrapped_reward::T; α::U = U(0.2)) where {T <: AbstractRDEReward, U <: AbstractFloat}
-        return new{T, U}(wrapped_reward, α, nothing)
+        return new{T, U}(wrapped_reward, α)
     end
     function ExponentialAverageReward(wrapped_reward::T; α::Float32 = 0.2f0) where {T <: AbstractRDEReward}
         return ExponentialAverageReward{T, Float32}(wrapped_reward, α = α)
@@ -1083,8 +1080,7 @@ end
 function Base.show(io::IO, ::MIME"text/plain", rt::ExponentialAverageReward)
     println(io, "ExponentialAverageReward:")
     println(io, "  α: $(rt.α)")
-    println(io, "  wrapped_reward: $(typeof(rt.wrapped_reward))")
-    return println(io, "  current_average: $(rt.average)")
+    return println(io, "  wrapped_reward: $(typeof(rt.wrapped_reward))")
 end
 
 function reward_value_type(::Type{T}, rt::ExponentialAverageReward) where {T}
@@ -1092,27 +1088,24 @@ function reward_value_type(::Type{T}, rt::ExponentialAverageReward) where {T}
 end
 
 initialize_cache(rt::ExponentialAverageReward, N::Int, ::Type{T}) where {T} =
-    initialize_cache(rt.wrapped_reward, N, T)
+    WrappedRewardCache(
+    initialize_cache(rt.wrapped_reward, N, T),
+    ExponentialAverageCache{T}(nothing)
+)
 
-function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::ExponentialAverageReward, cache) where {T, A, O, R, V, OBS}
-    # Use the cache for the wrapped reward (no composite needed since only one sub-reward)
-    current_reward = _compute_reward(env, rt.wrapped_reward, cache)
+function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::ExponentialAverageReward, cache::WrappedRewardCache) where {T, A, O, R, V, OBS}
+    # Use the inner cache for the wrapped reward
+    current_reward = _compute_reward(env, rt.wrapped_reward, cache.inner_cache)
 
-    if isnothing(rt.average)
+    if isnothing(cache.outer_cache.average)
         # Initialize average with first reward
-        rt.average = current_reward
+        cache.outer_cache.average = current_reward
         return current_reward
     else
         # Apply exponential averaging: new_avg = α * current + (1-α) * old_avg
-        rt.average = rt.α .* current_reward .+ (1 - rt.α) .* rt.average
-        return rt.average
+        cache.outer_cache.average = rt.α .* current_reward .+ (1 - rt.α) .* cache.outer_cache.average
+        return cache.outer_cache.average
     end
-end
-
-function reset_reward!(rt::ExponentialAverageReward)
-    rt.average = nothing
-    reset_reward!(rt.wrapped_reward)  # Reset the wrapped reward too
-    return nothing
 end
 
 """
@@ -1126,26 +1119,18 @@ then terminates the environment. Uses transition detection logic similar to dete
 - `target_shocks::Int`: Target number of shocks for transition
 - `reward_stability_length::Float32`: Time duration (in env time units) to maintain stable rewards
 - `reward_threshold::Float32`: Minimum reward threshold for stability check
-- `past_rewards::Vector{Float32}`: History of wrapped reward values
-- `past_shock_counts::Vector{Int}`: History of shock counts
-- `past_times::Vector{Float32}`: History of time stamps
-- `transition_found::Bool`: Whether transition has been detected
 
 # Notes
 - Returns -1.0*dt until transition is found
 - When transition is detected, sets env.terminated = true
 - Transition occurs when: shock count reaches target AND rewards stay above threshold for stability_length time
+- Internal state (past_rewards, past_shock_counts, transition_found) is stored in the cache
 """
-mutable struct TransitionBasedReward{T <: AbstractRDEReward, U <: AbstractFloat} <: AbstractRDEReward
+struct TransitionBasedReward{T <: AbstractRDEReward, U <: AbstractFloat} <: AbstractRDEReward
     wrapped_reward::T
     target_shocks::Int
     reward_stability_length::U  # in time units
     reward_threshold::U
-
-    # Internal state tracking
-    past_rewards::Vector{U}
-    past_shock_counts::Vector{Int}
-    transition_found::Bool
 
     function TransitionBasedReward{T, U}(
             wrapped_reward::T;
@@ -1154,8 +1139,7 @@ mutable struct TransitionBasedReward{T <: AbstractRDEReward, U <: AbstractFloat}
             reward_threshold::U = U(0.99)
         ) where {T <: AbstractRDEReward, U <: AbstractFloat}
         return new{T, U}(
-            wrapped_reward, target_shocks, reward_stability_length, reward_threshold,
-            U[], Int[], false
+            wrapped_reward, target_shocks, reward_stability_length, reward_threshold
         )
     end
     function TransitionBasedReward(
@@ -1179,18 +1163,19 @@ function Base.show(io::IO, ::MIME"text/plain", rt::TransitionBasedReward)
     println(io, "  target_shocks: $(rt.target_shocks)")
     println(io, "  reward_stability_length: $(rt.reward_stability_length)")
     println(io, "  reward_threshold: $(rt.reward_threshold)")
-    println(io, "  wrapped_reward: $(typeof(rt.wrapped_reward))")
-    println(io, "  transition_found: $(rt.transition_found)")
-    return println(io, "  history_length: $(length(rt.past_rewards))")
+    return println(io, "  wrapped_reward: $(typeof(rt.wrapped_reward))")
 end
 reward_value_type(::Type{T}, ::TransitionBasedReward) where {T} = T
 
 initialize_cache(rt::TransitionBasedReward, N::Int, ::Type{T}) where {T} =
-    initialize_cache(rt.wrapped_reward, N, T)
+    WrappedRewardCache(
+    initialize_cache(rt.wrapped_reward, N, T),
+    TransitionBasedCache{T}(T[], Int[], false)
+)
 
-function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::TransitionBasedReward{S, T}, cache) where {T, A, O, R, V, OBS, S}
-    # Compute the wrapped reward
-    wrapped_reward_value = _compute_reward(env, rt.wrapped_reward, cache)
+function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::TransitionBasedReward{S, T}, cache::WrappedRewardCache) where {T, A, O, R, V, OBS, S}
+    # Compute the wrapped reward using inner cache
+    wrapped_reward_value = _compute_reward(env, rt.wrapped_reward, cache.inner_cache)
 
     # Handle vector rewards by taking minimum (similar to detect_transition)
     reward_scalar = if wrapped_reward_value isa AbstractVector
@@ -1205,15 +1190,15 @@ function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::TransitionBasedRew
     dx = env.prob.x[2] - env.prob.x[1]
     current_shock_count = RDE.count_shocks(u, dx)
 
-    # Update history
-    push!(rt.past_rewards, T(reward_scalar))
-    push!(rt.past_shock_counts, current_shock_count)
+    # Update history in outer cache
+    push!(cache.outer_cache.past_rewards, T(reward_scalar))
+    push!(cache.outer_cache.past_shock_counts, current_shock_count)
 
     # Check for transition (only if we have enough history)
-    if length(rt.past_shock_counts) >= 2
-        rt.transition_found = detect_transition_realtime(rt, env.dt)
+    if length(cache.outer_cache.past_shock_counts) >= 2
+        cache.outer_cache.transition_found = detect_transition_realtime(rt, cache.outer_cache, env.dt)
 
-        if rt.transition_found
+        if cache.outer_cache.transition_found
             env.terminated = true
             @logmsg LogLevel(-500) "Transition detected! Terminating environment at t=$(env.t)"
             env.info["Termination.Reason"] = "Transition detected"
@@ -1226,29 +1211,21 @@ function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::TransitionBasedRew
     return T(-env.dt)
 end
 
-function detect_transition_realtime(rt::TransitionBasedReward{T, U}, dt::U) where {T, U <: AbstractFloat}
+function detect_transition_realtime(rt::TransitionBasedReward{T, U}, cache::TransitionBasedCache{U}, dt::U) where {T, U <: AbstractFloat}
     stability_steps = round(Int, rt.reward_stability_length / dt)
-    if length(rt.past_shock_counts) < stability_steps
+    if length(cache.past_shock_counts) < stability_steps
         @debug "Not enough shock counts to detect transition"
         return false
     end
 
 
     # Check if we've had stable rewards for long enough since then
-    stability_rewards = rt.past_rewards[(end - stability_steps + 1):end]
-    stability_shock_counts = rt.past_shock_counts[(end - stability_steps + 1):end]
+    stability_rewards = cache.past_rewards[(end - stability_steps + 1):end]
+    stability_shock_counts = cache.past_shock_counts[(end - stability_steps + 1):end]
     if all(stability_shock_counts .== rt.target_shocks) && minimum(stability_rewards) > rt.reward_threshold
         return true
     end
     return false
-end
-
-function reset_reward!(rt::TransitionBasedReward)
-    empty!(rt.past_rewards)
-    empty!(rt.past_shock_counts)
-    rt.transition_found = false
-    reset_reward!(rt.wrapped_reward)  # Reset the wrapped reward too
-    return nothing
 end
 
 struct ScalarToVectorReward{T <: AbstractRDEReward} <: AbstractRDEReward
@@ -1259,13 +1236,12 @@ end
 reward_value_type(::Type{T}, ::ScalarToVectorReward) where {T} = Vector{T}
 
 initialize_cache(rt::ScalarToVectorReward, N::Int, ::Type{T}) where {T} =
-    initialize_cache(rt.wrapped_reward, N, T)
+    WrappedRewardCache(
+    initialize_cache(rt.wrapped_reward, N, T),
+    NoCache()
+)
 
-function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::ScalarToVectorReward, cache) where {T, A, O, R, V, OBS}
-    reward = _compute_reward(env, rt.wrapped_reward, cache)
+function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::ScalarToVectorReward, cache::WrappedRewardCache) where {T, A, O, R, V, OBS}
+    reward = _compute_reward(env, rt.wrapped_reward, cache.inner_cache)
     return fill(reward, rt.n)
-end
-
-function reset_reward!(rt::ScalarToVectorReward)
-    return reset_reward!(rt.wrapped_reward)
 end

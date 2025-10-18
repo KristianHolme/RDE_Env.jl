@@ -1,20 +1,32 @@
 @kwdef mutable struct ScalarPressureAction{T <: AbstractFloat} <: AbstractActionType
-    α::T = 0.0f0
+    momentum::T = 0.0f0
 end
 
 
 @kwdef mutable struct ScalarAreaScalarPressureAction{T <: AbstractFloat} <: AbstractActionType
-    α::T = 0.0f0
+    momentum::T = 0.0f0
 end
 
 
 @kwdef mutable struct VectorPressureAction{T <: AbstractFloat} <: AbstractActionType
     n_sections::Int = 1 #number of sections
-    α::T = 0.0f0
+    momentum::T = 0.0f0
 end
 struct VectorActionCache{T <: AbstractFloat} <: AbstractCache
     section_controls::Vector{T}
 end
+
+mutable struct PIDActionCache{T <: AbstractFloat} <: AbstractCache
+    integral::T
+    previous_error::T
+end
+
+function reset_cache!(cache::PIDActionCache{T}) where {T}
+    cache.integral = zero(T)
+    cache.previous_error = zero(T)
+    return nothing
+end
+
 """
     LinearScalarPressureAction <: AbstractActionType
 
@@ -24,7 +36,7 @@ Unlike `ScalarPressureAction`, the mapping is constant and independent of
 the previous control state.
 """
 @kwdef struct LinearScalarPressureAction{T <: AbstractFloat} <: AbstractActionType
-    α::T = 0.0f0
+    momentum::T = 0.0f0
 end
 
 """
@@ -40,16 +52,16 @@ the previous control state.
 """
 @kwdef struct LinearVectorPressureAction{T <: AbstractFloat} <: AbstractActionType
     n_sections::Int = 1
-    α::T = 0.0f0
+    momentum::T = 0.0f0
 end
 
 @kwdef struct DirectScalarPressureAction{T <: AbstractFloat} <: AbstractActionType
-    α::T = 0.0f0
+    momentum::T = 0.0f0
 end
 
 @kwdef struct DirectVectorPressureAction{T <: AbstractFloat} <: AbstractActionType
     n_sections::Int = 1
-    α::T = 0.0f0
+    momentum::T = 0.0f0
 end
 
 """
@@ -59,25 +71,18 @@ Action type where the agent supplies PID gains `[Kp, Ki, Kd]` and the
 environment produces a scalar pressure action in `[-1, 1]` using a
 built-in PID computation against a target value for the injection pressure.
 
-State for the PID accumulators is stored on the action type and is reset
-on environment reset via `_reset_action!`.
+State for PID accumulators (integral, previous_error) is stored in PIDActionCache.
+Target value is derived from RDE.SHOCK_PRESSURES[target_shock_count] where 
+target_shock_count comes from env.cache.goal.
+
+# Fields
+- `momentum::T`: Optional momentum parameter (default: 0.0), can be used for smoothing
 """
-@kwdef mutable struct PIDAction{T <: AbstractFloat} <: AbstractActionType
-    target::T = zero(T)
-    integral::T = zero(T)
-    previous_error::T = zero(T)
-    α::T = 0.0f0
+@kwdef struct PIDAction{T <: AbstractFloat} <: AbstractActionType
+    momentum::T = 0.0f0
 end
 # Momentum API
-momentum(at::AbstractActionType) = error("momentum not used by $(typeof(at))")
-momentum(at::ScalarPressureAction{T}) where {T} = at.α
-momentum(at::ScalarAreaScalarPressureAction{T}) where {T} = at.α
-momentum(at::VectorPressureAction{T}) where {T} = at.α
-momentum(at::PIDAction{T}) where {T} = at.α
-momentum(at::LinearScalarPressureAction{T}) where {T} = at.α
-momentum(at::LinearVectorPressureAction{T}) where {T} = at.α
-momentum(at::DirectScalarPressureAction{T}) where {T} = at.α
-momentum(at::DirectVectorPressureAction{T}) where {T} = at.α
+momentum(at::AbstractActionType) = getfield(at, :momentum)
 
 function action_dim(at::ScalarPressureAction)
     return 1
@@ -128,23 +133,16 @@ function momentum_target(control_target::T, previous_target::T, momentum::T) whe
 end
 
 # translate action ∈ [-1,1] to a target injection pressure, using a piecewise linear function, where 0 maps to the current control, -1 to 0 and 1 to the max allowed control
-@inline function action_to_control(a::T, c_prev::T, c_max::T, α::T) where {T <: AbstractFloat}
+@inline function action_to_control(a::T, c_prev::T, c_max::T, momentum::T) where {T <: AbstractFloat}
     target::T = control_target(a, c_prev, c_max)
-    return α * c_prev + (one(T) - α) * target
+    return momentum * c_prev + (one(T) - momentum) * target
 end
 
-function linear_action_to_control(a::T, c_prev::T, c_max::T, α::T) where {T <: AbstractFloat}
+function linear_action_to_control(a::T, c_prev::T, c_max::T, momentum::T) where {T <: AbstractFloat}
     control_target = linear_control_target(a, c_max)
-    return momentum_target(control_target, c_prev, α)
+    return momentum_target(control_target, c_prev, momentum)
 end
 
-# Reset hook: default no-op and PID-specific state reset
-_reset_action!(::AbstractActionType, ::RDEEnv) = nothing
-function _reset_action!(action_type::PIDAction{T}, ::RDEEnv{T}) where {T}
-    action_type.integral = zero(T)
-    action_type.previous_error = zero(T)
-    return nothing
-end
 function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::AbstractVector{T}) where {T <: AbstractFloat, A <: VectorPressureAction, O, RW, V, OBS, M, RS, C}
     action_type = env.action_type
     N = env.prob.params.N
@@ -179,7 +177,6 @@ function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::Abstr
         start_idx = (i - 1) * points_per_section + 1
         end_idx = i * points_per_section
         method_cache.u_p_current[start_idx:end_idx] .= section_controls[i]
-        # env_cache.action[start_idx:end_idx, 2] .= action[i] # TODO: deprecated, remove
     end
     return nothing
 end
@@ -191,8 +188,6 @@ function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::T) wh
     if abs(action) > one(T)
         @warn "action (u_p) out of bounds [-1,1]"
     end
-    # env_cache.action[:, 1] .= zero(T)
-    # env_cache.action[:, 2] .= action # TODO: deprecated, remove
 
     copyto!(method_cache.u_p_previous, method_cache.u_p_current)
     method_cache.u_p_current .= action_to_control(action, method_cache.u_p_current[1], env.u_pmax, momentum(env.action_type))
@@ -217,9 +212,6 @@ function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::Abstr
         @warn "action (s/u_p) out of bounds [-1,1]"
     end
 
-    # env_cache.action[:, 1] .= a_s
-    # env_cache.action[:, 2] .= a_up # TODO: deprecated, remove
-
     copyto!(method_cache.s_previous, method_cache.s_current)
     method_cache.s_current .= action_to_control(a_s, method_cache.s_current[1], env.smax, momentum(env.action_type))
 
@@ -241,15 +233,17 @@ function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, gains::Abstra
     env_cache = env.cache
     u_p_mean::T = mean(method_cache.u_p_current)
 
-    # PID terms (keep in T)
-    err::T = env.action_type.target - u_p_mean
-    env.action_type.integral += err * env.dt
-    deriv::T = (err - env.action_type.previous_error) / env.dt
-    u_p_action::T = clamp(Kp * err + Ki * env.action_type.integral + Kd * deriv, -one(T), one(T))
-    env.action_type.previous_error = err
+    # Get cache and target from goal
+    @assert env_cache.action_cache isa PIDActionCache{T}
+    cache = env_cache.action_cache::PIDActionCache{T}
+    target::T = RDE.SHOCK_PRESSURES[get_target_shock_count(env)]
 
-    # env_cache.action[:, 1] .= zero(T)
-    # env_cache.action[:, 2] .= u_p_action # TODO: deprecated, remove
+    # PID terms (keep in T)
+    err::T = target - u_p_mean
+    cache.integral += err * env.dt
+    deriv::T = (err - cache.previous_error) / env.dt
+    u_p_action::T = clamp(Kp * err + Ki * cache.integral + Kd * deriv, -one(T), one(T))
+    cache.previous_error = err
 
     # Apply control (only u_p)
     copyto!(method_cache.u_p_previous, method_cache.u_p_current)
@@ -272,8 +266,6 @@ function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::T) wh
     if abs(action) > one(T)
         @warn "action (u_p) out of bounds [-1,1]"
     end
-    # env_cache.action[:, 1] .= zero(T)
-    # env_cache.action[:, 2] .= action # TODO: deprecated, remove
 
     copyto!(method_cache.u_p_previous, method_cache.u_p_current)
     method_cache.u_p_current .= linear_action_to_control(action, method_cache.u_p_current[1], env.u_pmax, momentum(env.action_type))
@@ -289,10 +281,6 @@ function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::Abstr
     @assert length(action) == action_type.n_sections "Action length ($(length(action))) must match n_sections ($(action_type.n_sections))"
     @assert N % action_type.n_sections == 0 "N ($(N)) must be divisible by n_sections ($(action_type.n_sections))"
 
-    # full_domain_action_vector = fill_standardized_vector_actions!(env.cache.actions[:, 2], env, action)
-    # env.cache.action[:, 1] = a[1]
-    # env.cache.action[:, 2] = full_action_vector #done in place above
-
     method_cache = env.prob.method.cache
     env_cache = env.cache
 
@@ -307,15 +295,14 @@ function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::Abstr
     points_per_section = N ÷ action_type.n_sections
 
     current_section_controls = @view method_cache.u_p_current[1:points_per_section:end]
-    @assert env.cache.action_cache isa VectorActionCache{T}
-    section_controls = (env.cache.action_cache::VectorActionCache{T}).section_controls
+    @assert env_cache.action_cache isa VectorActionCache{T}
+    section_controls = (env_cache.action_cache::VectorActionCache{T}).section_controls
     section_controls .= linear_action_to_control.(action, current_section_controls, env.u_pmax, momentum(env.action_type))
     # Fill each section with its corresponding action value, directly writing into method_cache.u_p_current (no new allocation)
     for i in 1:action_type.n_sections
         start_idx = (i - 1) * points_per_section + 1
         end_idx = i * points_per_section
         method_cache.u_p_current[start_idx:end_idx] .= section_controls[i]
-        # env_cache.action[start_idx:end_idx, 2] .= action[i] # TODO: deprecated, remove
     end
     return nothing
 end
@@ -327,10 +314,7 @@ function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::Vecto
 end
 
 function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::T) where {T <: AbstractFloat, A <: DirectScalarPressureAction, O, RW, V, OBS, M, RS, C}
-    env_cache = env.cache
     method_cache = env.prob.method.cache
-    # env_cache.action[:, 1] .= zero(T)
-    # env_cache.action[:, 2] .= action # TODO: deprecated, remove
 
     copyto!(method_cache.u_p_previous, method_cache.u_p_current)
 
@@ -346,10 +330,6 @@ function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::Abstr
     @assert length(action) == action_type.n_sections "Action length ($(length(action))) must match n_sections ($(action_type.n_sections))"
     @assert N % action_type.n_sections == 0 "N ($(N)) must be divisible by n_sections ($(action_type.n_sections))"
 
-    # full_domain_action_vector = fill_standardized_vector_actions!(env.cache.actions[:, 2], env, action)
-    # env.cache.action[:, 1] = a[1]
-    # env.cache.action[:, 2] = full_action_vector #done in place above
-
     method_cache = env.prob.method.cache
     env_cache = env.cache
 
@@ -360,15 +340,14 @@ function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::Abstr
     points_per_section = N ÷ action_type.n_sections
 
     current_section_controls = @view method_cache.u_p_current[1:points_per_section:end]
-    @assert env.cache.action_cache isa VectorActionCache{T}
-    section_controls = env.cache.action_cache.section_controls
+    @assert env_cache.action_cache isa VectorActionCache{T}
+    section_controls = env_cache.action_cache.section_controls
     section_controls .= momentum_target.(action, current_section_controls, momentum(env.action_type))
     # Fill each section with its corresponding action value, directly writing into method_cache.u_p_current (no new allocation)
     for i in 1:action_type.n_sections
         start_idx = (i - 1) * points_per_section + 1
         end_idx = i * points_per_section
         method_cache.u_p_current[start_idx:end_idx] .= section_controls[i]
-        # env_cache.action[start_idx:end_idx, 2] .= action[i] # TODO: deprecated, remove
     end
     return nothing
 end
@@ -382,3 +361,6 @@ initialize_cache(at::LinearVectorPressureAction{T}, N::Int, ::Type{T}) where {T 
 
 initialize_cache(at::DirectVectorPressureAction{T}, N::Int, ::Type{T}) where {T <: AbstractFloat} =
     VectorActionCache{T}(Vector{T}(undef, at.n_sections))
+
+initialize_cache(::PIDAction{T}, N::Int, ::Type{T}) where {T <: AbstractFloat} =
+    PIDActionCache{T}(zero(T), zero(T))

@@ -439,30 +439,6 @@ function Base.show(io::IO, ::MIME"text/plain", π::StepwiseRDEPolicy)
 end
 
 """
-    get_scaled_control(current, max_val, target)
-
-Scale control value to [-1, 1] range based on current value and target.
-
-# Arguments
-- `current`: Current control value
-- `max_val`: Maximum allowed value
-- `target`: Target control value
-
-# Returns
-Scaled control value in [-1, 1]
-
-# Notes
-Assumes zero momentum (action momentum = 0)
-"""
-function get_scaled_control(current::T, max_val::T, target::T) where {T <: AbstractFloat}
-    if target < current
-        return target / current - one(T)
-    else
-        return (target - current) / (max_val - current)
-    end
-end
-
-"""
     RandomRDEPolicy{T<:AbstractFloat} <: AbstractRDEPolicy
 
 Policy that applies random control values.
@@ -699,56 +675,47 @@ function Base.show(io::IO, ::MIME"text/plain", π::SawtoothPolicy)
     return println(io, "  env: $(typeof(π.env))")
 end
 
-@kwdef mutable struct PIDCache{T <: AbstractFloat}
-    integral::T = 0.0f0
-    previous_error::T = 0.0f0
-end
+"""
+    PIDControllerPolicy{T<:AbstractFloat} <: AbstractRDEPolicy
 
+A policy that outputs constant PID gains for use with PIDAction environments.
+The environment handles all PID computation (error, integral, derivative).
+
+# Requirements
+- Must be used with an environment that has PIDAction action type
+- Environment derives target from RDE.SHOCK_PRESSURES[target_shock_count]
+
+# Fields
+- `Kp::T`: Proportional gain
+- `Ki::T`: Integral gain
+- `Kd::T`: Derivative gain
+
+# Notes
+- Policy is stateless - all PID state managed by environment's PIDActionCache
+- To change target, use set_target_shock_count!(env, n)
+"""
 struct PIDControllerPolicy{T <: AbstractFloat} <: AbstractRDEPolicy
-    dt::T
-    target::T
     Kp::T
     Ki::T
     Kd::T
-    cache::PIDCache{T}
-    function PIDControllerPolicy(; dt::T, target::T, Kp::T, Ki::T, Kd::T) where {T <: AbstractFloat}
-        return new{T}(dt, target, Kp, Ki, Kd, PIDCache{T}())
-    end
 end
 
-function _predict_action(π::PIDControllerPolicy, o)
-    u_p = o[1]
-    cache = π.cache
-    error = π.target - u_p
-    cache.integral += error * π.dt
-    derivative = (error - cache.previous_error) / π.dt
-    action = [π.Kp * error + π.Ki * cache.integral + π.Kd * derivative]
-    cache.previous_error = error
+# Convenience constructor with default Float32
+PIDControllerPolicy(; Kp::Real, Ki::Real, Kd::Real) =
+    PIDControllerPolicy{Float32}(Float32(Kp), Float32(Ki), Float32(Kd))
 
-    if action[1] > 1.0f0 || action[1] < -1.0f0
-        @debug "Action out of bounds: $action"
-    end
-    clamp!(action, -1.0f0, 1.0f0)
-    return action
+function _predict_action(π::PIDControllerPolicy, o)
+    # Simply return the PID gains - environment does the computation
+    return [π.Kp, π.Ki, π.Kd]
 end
 
 function Base.show(io::IO, π::PIDControllerPolicy)
-    return print(io, "PIDControllerPolicy(Kp=$(π.Kp), Ki=$(π.Ki), Kd=$(π.Kd), target=$(π.target))")
+    return print(io, "PIDControllerPolicy(Kp=$(π.Kp), Ki=$(π.Ki), Kd=$(π.Kd))")
 end
 
 function Base.show(io::IO, ::MIME"text/plain", π::PIDControllerPolicy)
     println(io, "PIDControllerPolicy:")
     println(io, "  Kp: $(π.Kp)")
     println(io, "  Ki: $(π.Ki)")
-    println(io, "  Kd: $(π.Kd)")
-    return println(io, "  target: $(π.target)")
-end
-
-function reset_pid_cache!(cache::PIDCache{T}) where {T <: AbstractFloat}
-    cache.integral = 0.0
-    return cache.previous_error = 0.0
-end
-
-function reset_pid_cache!(pid_controller::PIDControllerPolicy)
-    return reset_pid_cache!(pid_controller.cache)
+    return println(io, "  Kd: $(π.Kd)")
 end

@@ -82,8 +82,7 @@ function RDEEnv(;
 
     # Use helper functions to determine type parameters
     V = reward_value_type(T, reward_type)
-    OBS = observation_array_type(T, observation_strategy)
-    @assert OBS == typeof(init_observation) "Observation array type mismatch"
+    OBS = typeof(init_observation)
 
     # Initialize reward with correct type
     initial_reward = if V <: Vector
@@ -295,7 +294,6 @@ function _reset!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}) where {T, A, O, RW,
     env.done = false
     env.truncated = false
     env.terminated = false
-    reset_reward!(env.reward_type)  # Reset reward state (e.g., exponential averages)
     set_reward!(env, env.reward_type)
     compute_observation!(env.observation, env, env.observation_strategy)
     env.info = Dict{String, Any}()
@@ -304,7 +302,6 @@ function _reset!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}) where {T, A, O, RW,
     reset_cache!(env.cache.reward_cache)
     reset_cache!(env.cache.action_cache)
     reset_cache!(env.cache.observation_cache)
-    _reset_action!(env.action_type, env)
     env.prob.sol = nothing
     # Initialize previous state
     N = env.prob.params.N
