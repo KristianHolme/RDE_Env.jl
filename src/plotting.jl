@@ -345,7 +345,7 @@ function plot_shifted_history(
         rewards_maximum = maximum(maximum.(rewards))
         ax4 = Axis(
             fig[end + 1, 1], xlabel = "t", ylabel = "Reward",
-            limits = (rewards_minimum - 0.05, rewards_maximum + 0.05),
+            limits = (nothing, (rewards_minimum - 0.05, rewards_maximum + 0.05)),
             xautolimitmargin = (0.0, 0.0)
         )
         if eltype(rewards) <: AbstractVector
