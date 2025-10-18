@@ -1,3 +1,16 @@
+function set_reward!(env::AbstractRDEEnv, rt::AbstractRDEReward)
+    #not doing in place because reward can change size
+    #TODO: initialize env.reward to correct size so we can do .= here
+    env.reward = compute_reward(env, rt)
+    return nothing
+end
+
+# External API - delegates to internal implementation with cache
+compute_reward(env::AbstractRDEEnv, rt::AbstractRDEReward) = _compute_reward(env, rt, env.cache.reward_cache)
+
+# Internal implementation - takes cache as explicit parameter
+# Each reward type implements _compute_reward instead of compute_reward
+
 # ============================================================================
 # Cache Types
 # ============================================================================
@@ -51,197 +64,15 @@ function reset_cache!(cache::TransitionBasedCache)
 end
 
 # ============================================================================
-# Reward Types and Implementations
+# Helper Functions
 # ============================================================================
-
-# ----------------------------------------------------------------------------
-# ShockSpanReward
-# ----------------------------------------------------------------------------
-
-@kwdef struct ShockSpanReward <: AbstractRDEReward
-    span_scale::Float32 = 4.0f0
-    shock_weight::Float32 = 0.8f0
-end
-
-reward_value_type(::Type{T}, ::ShockSpanReward) where {T} = T
-initialize_cache(::ShockSpanReward, N::Int, ::Type{T}) where {T} = NoCache()
-function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::ShockSpanReward, cache) where {T, A, O, R, V, OBS}
-    target_shock_count = get_target_shock_count(env)
-    max_span = rt.span_scale
-    λ = rt.shock_weight
-
-    u, = RDE.split_sol_view(env.state)
-    dx = env.prob.params.L / env.prob.params.N
-    shocks = T(RDE.count_shocks(u, dx))
-    u_min, u_max = RDE.turbo_extrema(u)
-    span = u_max - u_min
-    span_reward = span / max_span
-    if shocks >= target_shock_count
-        shock_reward = one(T)
-    elseif shocks > 0
-        shock_reward = shocks / (2 * target_shock_count)
-    else
-        shock_reward = T(-1)
-    end
-
-    return λ * shock_reward + (1 - λ) * span_reward
-end
-# ----------------------------------------------------------------------------
-# ShockPreservingReward
-# ----------------------------------------------------------------------------
-
-@kwdef mutable struct ShockPreservingReward <: AbstractRDEReward
-    target_shock_count::Int = 3
-    span_scale::Float32 = 4.0f0
-    shock_weight::Float32 = 0.8f0
-    abscence_limit::Float32 = 5.0f0
-    abscence_start::Union{Float32, Nothing} = nothing
-end
-
-reward_value_type(::Type{T}, ::ShockPreservingReward) where {T} = T
-initialize_cache(::ShockPreservingReward, N::Int, ::Type{T}) where {T} = NoCache()
-
-# ----------------------------------------------------------------------------
-# ShockPreservingSymmetryReward
-# ----------------------------------------------------------------------------
-
-mutable struct ShockPreservingSymmetryReward <: AbstractRDEReward
-    target_shock_count::Int
-    function ShockPreservingSymmetryReward(;
-            target_shock_count::Int = 4
-        )
-        return new(target_shock_count)
-    end
-end
-
-reward_value_type(::Type{T}, ::ShockPreservingSymmetryReward) where {T} = T
-initialize_cache(::ShockPreservingSymmetryReward, N::Int, ::Type{T}) where {T} = RewardShiftBufferCache{T}(zeros(T, N))
-
-# ----------------------------------------------------------------------------
-# PeriodicityReward
-# ----------------------------------------------------------------------------
-
-struct PeriodicityReward <: AbstractRDEReward end
-
-reward_value_type(::Type{T}, ::PeriodicityReward) where {T} = T
-initialize_cache(::PeriodicityReward, N::Int, ::Type{T}) where {T} = RewardShiftBufferCache{T}(zeros(T, N))
-
-function set_reward!(env::AbstractRDEEnv, rt::AbstractRDEReward)
-    #not doing in place because reward can change size
-    #TODO: initialize env.reward to correct size so we can do .= here
-    env.reward = compute_reward(env, rt)
-    return nothing
-end
-
-# External API - delegates to internal implementation with cache
-compute_reward(env::AbstractRDEEnv, rt::AbstractRDEReward) = _compute_reward(env, rt, env.cache.reward_cache)
-
-# Internal implementation - takes cache as explicit parameter
-# Each reward type implements _compute_reward instead of compute_reward
-
-
-function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::ShockPreservingReward, cache) where {T, A, O, R, V, OBS}
-    target_shock_count = rt.target_shock_count  # Note: This reward uses its own target, not env.cache.goal
-    max_span = rt.span_scale
-    λ = rt.shock_weight
-
-    u, = RDE.split_sol_view(env.state)
-    dx = env.prob.x[2] - env.prob.x[1]
-    N = env.prob.params.N
-    L = env.prob.params.L
-    shock_inds = RDE.shock_indices(u, dx)
-
-    u_min, u_max = RDE.turbo_extrema(u)
-    span = u_max - u_min
-    span_reward = span / max_span
-
-    if length(shock_inds) != target_shock_count
-        if isnothing(rt.abscence_start)
-            rt.abscence_start = env.t
-        elseif env.t - rt.abscence_start > rt.abscence_limit
-            env.terminated = true
-            return T(-2.0)
-        end
-        shock_reward = T(-1.0)
-    else
-        optimal_spacing = L / target_shock_count
-        shock_spacing = mod.(RDE.periodic_diff(shock_inds), N) .* dx
-        shock_reward = T(1.0) - mean(abs.((shock_spacing .- optimal_spacing) ./ optimal_spacing))
-    end
-    return λ * shock_reward + (1 - λ) * span_reward
-end
-
-reward_value_type(::Type{T}, ::ShockPreservingReward) where {T} = T
-
-function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::ShockPreservingSymmetryReward, cache::RewardShiftBufferCache{T}) where {T, A, O, R, V, OBS}
-    target_shock_count = get_target_shock_count(env)
-    N = env.prob.params.N
-    u = env.state[1:N]
-
-    errs = zeros(T, target_shock_count - 1)
-    shift_buffer = cache.shift_buffer
-    shift_steps = N ÷ target_shock_count
-    for i in 1:(target_shock_count - 1)
-        shift_buffer .= u
-        circshift!(shift_buffer, u, -shift_steps * i)
-        errs[i] = RDE.turbo_diff_norm(u, shift_buffer) / sqrt(T(N))
-    end
-    maxerr = RDE.turbo_maximum(errs)
-    return T(1) - (maxerr - T(0.1)) / T(0.5)
-end
-
-reward_value_type(::Type{T}, ::ShockPreservingSymmetryReward) where {T} = T
-
-function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::PeriodicityReward, cache::RewardShiftBufferCache{T}) where {T <: AbstractFloat, A, O, R, V, OBS}
-    u, = RDE.split_sol_view(env.state)
-    N::Int = env.prob.params.N
-    dx::T = env.prob.x[2] - env.prob.x[1]
-    L::T = env.prob.params.L
-    shock_inds = RDE.shock_indices(u, dx)
-    shocks::Int = length(shock_inds)
-
-    shift_buffer = cache.shift_buffer
-    if shocks > 1
-        shift_steps::Int = N ÷ shocks
-        errs::Vector{T} = zeros(T, shocks - 1)
-        for i in 1:(shocks - 1)
-            shift_buffer .= u
-            circshift!(shift_buffer, u, -shift_steps * i)
-            errs[i]::T = RDE.turbo_diff_norm(u, shift_buffer) / sqrt(N)
-        end
-        maxerr::T = RDE.turbo_maximum(errs)
-        periodicity_reward = T(1) - (max(maxerr - T(0.08), zero(T)) / sqrt(T(3)))
-    else
-        periodicity_reward = T(1)
-    end
-
-    if shocks > 1
-        optimal_spacing::T = L / shocks
-        shock_spacing::Vector{T} = mod.(RDE.periodic_diff(shock_inds), N) .* dx
-        shock_spacing_reward = T(1) - RDE.turbo_maximum_abs((shock_spacing .- optimal_spacing) ./ optimal_spacing)
-    else
-        shock_spacing_reward = T(1)
-    end
-
-    return (periodicity_reward::T + shock_spacing_reward::T) / T(2)
-end
-
-reward_value_type(::Type{T}, ::PeriodicityReward) where {T} = T
-
-function Base.show(io::IO, rt::PeriodicityReward)
-    return print(io, "PeriodicityReward()")
-end
-
-function Base.show(io::IO, ::MIME"text/plain", rt::PeriodicityReward)
-    println(io, "PeriodicityReward")
-    return nothing
-end
 
 function action_magnitude_factor(lowest_action_magnitude_reward::AbstractFloat, action_magnitudes)
     α = lowest_action_magnitude_reward
     action_magnitude_inv = 1 .- action_magnitudes
     return α .+ (1 - α) .* action_magnitude_inv
 end
+
 
 """
     compute_section_control_efforts(env::RDEEnv{T}, n_sections::Int) where {T}
@@ -261,59 +92,6 @@ function compute_section_control_efforts(env::RDEEnv{T}, n_sections::Int) where 
         efforts[i] = RDE.turbo_maximum_abs_diff(@view(method_cache.u_p_current[s:e]), @view(method_cache.u_p_previous[s:e])) / env.u_pmax
     end
     return efforts
-end
-
-mutable struct MultiSectionReward{T <: AbstractFloat} <: MultiAgentCachedCompositeReward
-    n_sections::Int
-    lowest_action_magnitude_reward::T #reward will be \in [lowest_action_magnitude_reward, 1]
-    weights::Vector{T}
-end
-
-# Ensure T is known when building defaults
-function MultiSectionReward{T}(;
-        n_sections::Int = 4,
-        lowest_action_magnitude_reward::T = zero(T),
-        weights::Vector{T} = [one(T), one(T), T(5), one(T)]
-    ) where {T <: AbstractFloat}
-    return MultiSectionReward{T}(
-        n_sections,
-        lowest_action_magnitude_reward,
-        weights
-    )
-end
-
-function MultiSectionReward(;
-        n_sections::Int = 4,
-        lowest_action_magnitude_reward::Float32 = 0.0f0,
-        weights::Vector{Float32} = [1.0f0, 1.0f0, 5.0f0, 1.0f0]
-    )
-    return MultiSectionReward{Float32}(
-        n_sections,
-        lowest_action_magnitude_reward,
-        weights
-    )
-end
-
-initialize_cache(::MultiSectionReward, N::Int, ::Type{T}) where {T} = RewardShiftBufferCache{T}(zeros(T, N))
-
-reward_value_type(::Type{T}, ::MultiSectionReward{T}) where {T} = Vector{T}
-
-function Base.show(io::IO, rt::MultiSectionReward)
-    return print(io, "MultiSectionReward(n_sections=$(rt.n_sections))")
-end
-
-function Base.show(io::IO, ::MIME"text/plain", rt::MultiSectionReward)
-    println(io, "MultiSectionReward:")
-    println(io, "  n_sections: $(rt.n_sections)")
-    println(io, "  lowest_action_magnitude_reward: $(rt.lowest_action_magnitude_reward)")
-    return println(io, "  weights: $(rt.weights)")
-end
-
-function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::MultiSectionReward, cache::RewardShiftBufferCache{T}) where {T, A, O, R, V, OBS}
-    common_reward = global_reward(env, rt, cache)
-    efforts = compute_section_control_efforts(env, rt.n_sections)
-    individual_modifiers = action_magnitude_factor(rt.lowest_action_magnitude_reward, efforts)
-    return common_reward .* individual_modifiers
 end
 
 function calculate_periodicity_reward(u::AbstractVector{T}, N::Int, target_shock_count::Int, cache::AbstractVector{T}) where {T}
@@ -407,6 +185,239 @@ function global_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::CachedCompositeRewar
     return global_reward(u, L, dx, rt, shift_buffer, target_shock_count)
 end
 
+# ============================================================================
+# Reward Types and Implementations
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# ShockSpanReward
+# ----------------------------------------------------------------------------
+
+@kwdef struct ShockSpanReward <: AbstractRDEReward
+    span_scale::Float32 = 4.0f0
+    shock_weight::Float32 = 0.8f0
+end
+
+reward_value_type(::Type{T}, ::ShockSpanReward) where {T} = T
+initialize_cache(::ShockSpanReward, N::Int, ::Type{T}) where {T} = NoCache()
+function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::ShockSpanReward, cache) where {T, A, O, R, V, OBS}
+    target_shock_count = get_target_shock_count(env)
+    max_span = rt.span_scale
+    λ = rt.shock_weight
+
+    u, = RDE.split_sol_view(env.state)
+    dx = env.prob.params.L / env.prob.params.N
+    shocks = T(RDE.count_shocks(u, dx))
+    u_min, u_max = RDE.turbo_extrema(u)
+    span = u_max - u_min
+    span_reward = span / max_span
+    if shocks >= target_shock_count
+        shock_reward = one(T)
+    elseif shocks > 0
+        shock_reward = shocks / (2 * target_shock_count)
+    else
+        shock_reward = T(-1)
+    end
+
+    return λ * shock_reward + (1 - λ) * span_reward
+end
+# ----------------------------------------------------------------------------
+# ShockPreservingReward
+# ----------------------------------------------------------------------------
+
+@kwdef mutable struct ShockPreservingReward <: AbstractRDEReward
+    target_shock_count::Int = 3
+    span_scale::Float32 = 4.0f0
+    shock_weight::Float32 = 0.8f0
+    abscence_limit::Float32 = 5.0f0
+    abscence_start::Union{Float32, Nothing} = nothing
+end
+
+reward_value_type(::Type{T}, ::ShockPreservingReward) where {T} = T
+initialize_cache(::ShockPreservingReward, N::Int, ::Type{T}) where {T} = NoCache()
+
+function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::ShockPreservingReward, cache) where {T, A, O, R, V, OBS}
+    target_shock_count = rt.target_shock_count  # Note: This reward uses its own target, not env.cache.goal
+    max_span = rt.span_scale
+    λ = rt.shock_weight
+
+    u, = RDE.split_sol_view(env.state)
+    dx = env.prob.x[2] - env.prob.x[1]
+    N = env.prob.params.N
+    L = env.prob.params.L
+    shock_inds = RDE.shock_indices(u, dx)
+
+    u_min, u_max = RDE.turbo_extrema(u)
+    span = u_max - u_min
+    span_reward = span / max_span
+
+    if length(shock_inds) != target_shock_count
+        if isnothing(rt.abscence_start)
+            rt.abscence_start = env.t
+        elseif env.t - rt.abscence_start > rt.abscence_limit
+            env.terminated = true
+            return T(-2.0)
+        end
+        shock_reward = T(-1.0)
+    else
+        optimal_spacing = L / target_shock_count
+        shock_spacing = mod.(RDE.periodic_diff(shock_inds), N) .* dx
+        shock_reward = T(1.0) - mean(abs.((shock_spacing .- optimal_spacing) ./ optimal_spacing))
+    end
+    return λ * shock_reward + (1 - λ) * span_reward
+end
+
+reward_value_type(::Type{T}, ::ShockPreservingReward) where {T} = T
+# ----------------------------------------------------------------------------
+# ShockPreservingSymmetryReward
+# ----------------------------------------------------------------------------
+
+mutable struct ShockPreservingSymmetryReward <: AbstractRDEReward
+    target_shock_count::Int
+    function ShockPreservingSymmetryReward(;
+            target_shock_count::Int = 4
+        )
+        return new(target_shock_count)
+    end
+end
+
+reward_value_type(::Type{T}, ::ShockPreservingSymmetryReward) where {T} = T
+initialize_cache(::ShockPreservingSymmetryReward, N::Int, ::Type{T}) where {T} = RewardShiftBufferCache{T}(zeros(T, N))
+
+function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::ShockPreservingSymmetryReward, cache::RewardShiftBufferCache{T}) where {T, A, O, R, V, OBS}
+    target_shock_count = get_target_shock_count(env)
+    N = env.prob.params.N
+    u = env.state[1:N]
+
+    errs = zeros(T, target_shock_count - 1)
+    shift_buffer = cache.shift_buffer
+    shift_steps = N ÷ target_shock_count
+    for i in 1:(target_shock_count - 1)
+        shift_buffer .= u
+        circshift!(shift_buffer, u, -shift_steps * i)
+        errs[i] = RDE.turbo_diff_norm(u, shift_buffer) / sqrt(T(N))
+    end
+    maxerr = RDE.turbo_maximum(errs)
+    return T(1) - (maxerr - T(0.1)) / T(0.5)
+end
+
+reward_value_type(::Type{T}, ::ShockPreservingSymmetryReward) where {T} = T
+# ----------------------------------------------------------------------------
+# PeriodicityReward
+# ----------------------------------------------------------------------------
+
+struct PeriodicityReward <: AbstractRDEReward end
+
+reward_value_type(::Type{T}, ::PeriodicityReward) where {T} = T
+initialize_cache(::PeriodicityReward, N::Int, ::Type{T}) where {T} = RewardShiftBufferCache{T}(zeros(T, N))
+
+function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::PeriodicityReward, cache::RewardShiftBufferCache{T}) where {T <: AbstractFloat, A, O, R, V, OBS}
+    u, = RDE.split_sol_view(env.state)
+    N::Int = env.prob.params.N
+    dx::T = env.prob.x[2] - env.prob.x[1]
+    L::T = env.prob.params.L
+    shock_inds = RDE.shock_indices(u, dx)
+    shocks::Int = length(shock_inds)
+
+    shift_buffer = cache.shift_buffer
+    if shocks > 1
+        shift_steps::Int = N ÷ shocks
+        errs::Vector{T} = zeros(T, shocks - 1)
+        for i in 1:(shocks - 1)
+            shift_buffer .= u
+            circshift!(shift_buffer, u, -shift_steps * i)
+            errs[i]::T = RDE.turbo_diff_norm(u, shift_buffer) / sqrt(N)
+        end
+        maxerr::T = RDE.turbo_maximum(errs)
+        periodicity_reward = T(1) - (max(maxerr - T(0.08), zero(T)) / sqrt(T(3)))
+    else
+        periodicity_reward = T(1)
+    end
+
+    if shocks > 1
+        optimal_spacing::T = L / shocks
+        shock_spacing::Vector{T} = mod.(RDE.periodic_diff(shock_inds), N) .* dx
+        shock_spacing_reward = T(1) - RDE.turbo_maximum_abs((shock_spacing .- optimal_spacing) ./ optimal_spacing)
+    else
+        shock_spacing_reward = T(1)
+    end
+
+    return (periodicity_reward::T + shock_spacing_reward::T) / T(2)
+end
+
+reward_value_type(::Type{T}, ::PeriodicityReward) where {T} = T
+
+function Base.show(io::IO, rt::PeriodicityReward)
+    return print(io, "PeriodicityReward()")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", rt::PeriodicityReward)
+    println(io, "PeriodicityReward")
+    return nothing
+end
+
+# ----------------------------------------------------------------------------
+# MultiSectionReward
+# ----------------------------------------------------------------------------
+
+mutable struct MultiSectionReward{T <: AbstractFloat} <: MultiAgentCachedCompositeReward
+    n_sections::Int
+    lowest_action_magnitude_reward::T #reward will be \in [lowest_action_magnitude_reward, 1]
+    weights::Vector{T}
+end
+
+# Ensure T is known when building defaults
+function MultiSectionReward{T}(;
+        n_sections::Int = 4,
+        lowest_action_magnitude_reward::T = zero(T),
+        weights::Vector{T} = [one(T), one(T), T(5), one(T)]
+    ) where {T <: AbstractFloat}
+    return MultiSectionReward{T}(
+        n_sections,
+        lowest_action_magnitude_reward,
+        weights
+    )
+end
+
+function MultiSectionReward(;
+        n_sections::Int = 4,
+        lowest_action_magnitude_reward::Float32 = 0.0f0,
+        weights::Vector{Float32} = [1.0f0, 1.0f0, 5.0f0, 1.0f0]
+    )
+    return MultiSectionReward{Float32}(
+        n_sections,
+        lowest_action_magnitude_reward,
+        weights
+    )
+end
+
+initialize_cache(::MultiSectionReward, N::Int, ::Type{T}) where {T} = RewardShiftBufferCache{T}(zeros(T, N))
+
+reward_value_type(::Type{T}, ::MultiSectionReward{T}) where {T} = Vector{T}
+
+function Base.show(io::IO, rt::MultiSectionReward)
+    return print(io, "MultiSectionReward(n_sections=$(rt.n_sections))")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", rt::MultiSectionReward)
+    println(io, "MultiSectionReward:")
+    println(io, "  n_sections: $(rt.n_sections)")
+    println(io, "  lowest_action_magnitude_reward: $(rt.lowest_action_magnitude_reward)")
+    return println(io, "  weights: $(rt.weights)")
+end
+
+function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::MultiSectionReward, cache::RewardShiftBufferCache{T}) where {T, A, O, R, V, OBS}
+    common_reward = global_reward(env, rt, cache)
+    efforts = compute_section_control_efforts(env, rt.n_sections)
+    individual_modifiers = action_magnitude_factor(rt.lowest_action_magnitude_reward, efforts)
+    return common_reward .* individual_modifiers
+end
+
+
+# ----------------------------------------------------------------------------
+# CompositeReward
+# ----------------------------------------------------------------------------
+
 reward_value_type(::Type{T}, ::CachedCompositeReward) where {T} = T
 
 mutable struct CompositeReward{T <: AbstractFloat} <: CachedCompositeReward
@@ -458,6 +469,10 @@ function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::CompositeReward, c
     @logmsg LogLevel(-10000) "set_reward!: $reward"
     return reward
 end
+
+# ----------------------------------------------------------------------------
+# TimeAggCompositeReward
+# ----------------------------------------------------------------------------
 
 abstract type TimeAggregation end
 struct TimeAvg <: TimeAggregation end
@@ -555,6 +570,9 @@ function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::TimeAggCompositeRe
     return agg_reward * action_effort_modifier
 end
 
+# ----------------------------------------------------------------------------
+# ConstantTargetReward
+# ----------------------------------------------------------------------------
 
 struct ConstantTargetReward{T <: AbstractFloat} <: AbstractRDEReward
     target::T
@@ -577,6 +595,10 @@ end
 
 _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::ConstantTargetReward{T}, cache) where {T, A, O, R, V, OBS} =
     -abs(rt.target - mean(env.prob.method.cache.u_p_current)) + one(T)
+
+# ----------------------------------------------------------------------------
+# TimeAggMultiSectionReward
+# ----------------------------------------------------------------------------
 
 mutable struct TimeAggMultiSectionReward{T <: AbstractFloat} <: MultiAgentCachedCompositeReward
     aggregation::TimeAggregation
@@ -660,6 +682,10 @@ end
 
 initialize_cache(::TimeAggMultiSectionReward, N::Int, ::Type{T}) where {T} = RewardShiftBufferCache{T}(zeros(T, N))
 
+# ----------------------------------------------------------------------------
+# TimeDiffNormReward
+# ----------------------------------------------------------------------------
+
 struct TimeDiffNormReward{T <: AbstractFloat} <: AbstractRDEReward
     threshold::T
     threshold_reward::T
@@ -703,6 +729,10 @@ function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::TimeDiffNormReward
 end
 
 reward_value_type(::Type{T}, ::TimeDiffNormReward) where {T} = T
+
+# ----------------------------------------------------------------------------
+# PeriodMinimumReward
+# ----------------------------------------------------------------------------
 
 struct PeriodMinimumReward{T <: AbstractFloat} <: CachedCompositeReward
     lowest_action_magnitude_reward::T #reward will be \in [lowest_action_magnitude_reward, 1]
@@ -780,7 +810,6 @@ function time_minimum_global_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::CachedC
             min_rewards[3] * rt.weights[3] +
             min_rewards[4] * rt.weights[4]
     ) / weight_sum
-
     return min_rewards[5] * weighted_rewards  # low_span_punishment * weighted_sum
 end
 
@@ -894,24 +923,25 @@ function time_minimum_global_reward_with_variation(env::RDEEnv{T, A, O, R, V, OB
     shock_var_punishment = calculate_variation_punishment(all_shock_rewards, T(rt.variation_penalties[3]))
     shock_spacing_var_punishment = calculate_variation_punishment(all_shock_spacing_rewards, T(rt.variation_penalties[4]))
 
+    variation_punishment = minimum([span_var_punishment, periodicity_var_punishment, shock_var_punishment, shock_spacing_var_punishment])
     # Apply variation punishment to each component before taking minimum
-    punished_span = minimum(all_span_rewards) * span_var_punishment
-    punished_periodicity = minimum(all_periodicity_rewards) * periodicity_var_punishment
-    punished_shock = minimum(all_shock_rewards) * shock_var_punishment
-    punished_shock_spacing = minimum(all_shock_spacing_rewards) * shock_spacing_var_punishment
+    min_span_rew = minimum(all_span_rewards)
+    min_periodicity_rew = minimum(all_periodicity_rewards)
+    min_shock_rew = minimum(all_shock_rewards)
+    min_shock_spacing_rew = minimum(all_shock_spacing_rewards)
 
     # Low span punishment: only minimum, no variation punishment
     min_low_span_punishment = minimum(all_low_span_punishments)
 
     # Efficient weighted sum
     weighted_rewards = (
-        punished_span * rt.weights[1] +
-            punished_periodicity * rt.weights[2] +
-            punished_shock * rt.weights[3] +
-            punished_shock_spacing * rt.weights[4]
+        min_span_rew * rt.weights[1] +
+            min_periodicity_rew * rt.weights[2] +
+            min_shock_rew * rt.weights[3] +
+            min_shock_spacing_rew * rt.weights[4]
     ) / weight_sum
 
-    return min_low_span_punishment * weighted_rewards
+    return min_low_span_punishment * variation_punishment * weighted_rewards
 end
 
 function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::PeriodMinimumVariationReward, cache::RewardShiftBufferCache{T}) where {T, A, O, R, V, OBS}
