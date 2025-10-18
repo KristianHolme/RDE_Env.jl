@@ -259,6 +259,7 @@ function get_init_rewards(env::RDEEnv{T}, reward_type::MultiplicativeReward, max
     end
 end
 
+#TODO: remove need for these
 function get_init_control_data(env::RDEEnv{T}, action_type::AbstractActionType, max_steps::Int) where {T}
     return Vector{T}(undef, max_steps), Vector{T}(undef, max_steps)
 end
@@ -266,6 +267,15 @@ end
 function get_init_control_data(env::RDEEnv{T}, action_type::VectorPressureAction, max_steps::Int) where {T}
     return Vector{T}(undef, max_steps), Vector{Vector{T}}(undef, max_steps)
 end
+
+function get_init_control_data(env::RDEEnv{T}, action_type::DirectVectorPressureAction, max_steps::Int) where {T}
+    return Vector{T}(undef, max_steps), Vector{Vector{T}}(undef, max_steps)
+end
+
+function get_init_control_data(env::RDEEnv{T}, action_type::LinearVectorPressureAction, max_steps::Int) where {T}
+    return Vector{T}(undef, max_steps), Vector{Vector{T}}(undef, max_steps)
+end
+
 
 function section_reduction(v::Vector{T}, sections::Int) where {T}
     N = length(v)
@@ -344,16 +354,16 @@ struct SinusoidalRDEPolicy{T <: AbstractFloat} <: AbstractRDEPolicy
     w_1::T
     w_2::T
     scale::T
-    function SinusoidalRDEPolicy(env::RDEEnv{T}; w_1::T = 1.0, w_2::T = 2.0) where {T <: AbstractFloat}
-        return new{T}(env, w_1, w_2)
+    function SinusoidalRDEPolicy(env::RDEEnv{T}; w_1::T = 1.0f0, w_2::T = 2.0f, scale = 0.2f0) where {T <: AbstractFloat}
+        return new{T}(env, w_1, w_2, scale)
     end
 end
 
 function _predict_action(π::SinusoidalRDEPolicy, s::AbstractVector{T}) where {T <: AbstractFloat}
     @assert !(π.env.action_type isa DirectScalarPressureAction) && !(π.env.action_type isa DirectVectorPressureAction) "SinusoidalRDEPolicy not supported with direct actions"
     t = π.env.t
-    action1 = T(sin(π.w_1 * t))
-    action2 = T(sin(π.w_2 * t))
+    action1 = T(sin(π.w_1 * t)) * π.scale
+    action2 = T(sin(π.w_2 * t)) * π.scale
     if π.env.action_type isa ScalarAreaScalarPressureAction
         return [action1, action2]
     elseif π.env.action_type isa ScalarPressureAction
@@ -368,9 +378,15 @@ function Base.show(io::IO, π::SinusoidalRDEPolicy)
 end
 
 function Base.show(io::IO, ::MIME"text/plain", π::SinusoidalRDEPolicy)
-    println(io, "SinusoidalRDEPolicy:")
+    PeriodMinimumVariationReward(
+            weights = [1.0f0, 1.0f0, 5.0f0, 1.0f0],
+            lowest_action_magnitude_reward = 0.0f0,
+            variation_penalties = Float32[1, 1, 1, 1]
+        ),
+        println(io, "SinusoidalRDEPolicy:")
     println(io, "  w₁: $(π.w_1)")
     println(io, "  w₂: $(π.w_2)")
+    println(io, "  scale: $(π.scale)")
     return println(io, "  env: $(typeof(π.env))")
 end
 
@@ -413,9 +429,20 @@ function _predict_action(π::StepwiseRDEPolicy, s::AbstractVector{T}) where {T <
     cache = π.env.prob.method.cache
     past = π.ts .≤ t
     idx = findlast(past)
+
+    # If before first time step, return current pressure (maintain status quo)
     if isnothing(idx)
-        return zeros(T, length(π.c[1]))
+        if π.env.action_type isa DirectVectorPressureAction
+            # Sample current pressure at section control points
+            N = π.env.prob.params.N
+            points_per_section = N ÷ π.env.action_type.n_sections
+            return cache.u_p_current[1:points_per_section:end]
+        elseif π.env.action_type isa DirectScalarPressureAction
+            # Return first value of current pressure
+            return cache.u_p_current[1]
+        end
     end
+
     if π.env.action_type isa DirectVectorPressureAction
         u_pmax = π.env.u_pmax
         return clamp.(π.c[idx], zero(T), u_pmax)
