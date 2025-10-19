@@ -226,7 +226,6 @@ end
 # ----------------------------------------------------------------------------
 
 @kwdef mutable struct ShockPreservingReward <: AbstractRDEReward
-    target_shock_count::Int = 3
     span_scale::Float32 = 4.0f0
     shock_weight::Float32 = 0.8f0
     abscence_limit::Float32 = 5.0f0
@@ -237,7 +236,7 @@ reward_value_type(::Type{T}, ::ShockPreservingReward) where {T} = T
 initialize_cache(::ShockPreservingReward, N::Int, ::Type{T}) where {T} = NoCache()
 
 function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::ShockPreservingReward, cache) where {T, A, O, R, V, OBS}
-    target_shock_count = rt.target_shock_count  # Note: This reward uses its own target, not env.cache.goal
+    target_shock_count = get_target_shock_count(env)
     max_span = rt.span_scale
     λ = rt.shock_weight
 
@@ -271,14 +270,7 @@ end
 # ShockPreservingSymmetryReward
 # ----------------------------------------------------------------------------
 
-mutable struct ShockPreservingSymmetryReward <: AbstractRDEReward
-    target_shock_count::Int
-    function ShockPreservingSymmetryReward(;
-            target_shock_count::Int = 4
-        )
-        return new(target_shock_count)
-    end
-end
+mutable struct ShockPreservingSymmetryReward <: AbstractRDEReward end
 
 reward_value_type(::Type{T}, ::ShockPreservingSymmetryReward) where {T} = T
 initialize_cache(::ShockPreservingSymmetryReward, N::Int, ::Type{T}) where {T} = RewardShiftBufferCache{T}(zeros(T, N))
@@ -1092,7 +1084,6 @@ then terminates the environment. Uses transition detection logic similar to dete
 
 # Fields
 - `wrapped_reward::T`: The underlying reward to wrap and monitor
-- `target_shocks::Int`: Target number of shocks for transition
 - `reward_stability_length::Float32`: Time duration (in env time units) to maintain stable rewards
 - `reward_threshold::Float32`: Minimum reward threshold for stability check
 
@@ -1109,12 +1100,11 @@ struct TransitionBasedReward{R <: AbstractRDEReward, T <: AbstractFloat} <: Abst
 
     function TransitionBasedReward{R, T}(
             wrapped_reward::R;
-            target_shocks::Int = 3,
             reward_stability_length::T = T(20),
             reward_threshold::T = T(0.99)
         ) where {R <: AbstractRDEReward, T <: AbstractFloat}
-        return new{R, U}(
-            wrapped_reward, target_shocks, reward_stability_length, reward_threshold
+        return new{R, T}(
+            wrapped_reward, reward_stability_length, reward_threshold
         )
     end
     function TransitionBasedReward(
@@ -1123,18 +1113,17 @@ struct TransitionBasedReward{R <: AbstractRDEReward, T <: AbstractFloat} <: Abst
             reward_threshold::Float32 = 0.99f0
         ) where {R <: AbstractRDEReward}
         return TransitionBasedReward{R, Float32}(
-            wrapped_reward, target_shocks = target_shocks, reward_stability_length = reward_stability_length, reward_threshold = reward_threshold
+            wrapped_reward, reward_stability_length = reward_stability_length, reward_threshold = reward_threshold
         )
     end
 end
 
 function Base.show(io::IO, rt::TransitionBasedReward)
-    return print(io, "TransitionBasedReward(target_shocks=$(rt.target_shocks), wrapped=$(typeof(rt.wrapped_reward)))")
+    return print(io, "TransitionBasedReward(wrapped=$(typeof(rt.wrapped_reward)))")
 end
 
 function Base.show(io::IO, ::MIME"text/plain", rt::TransitionBasedReward)
     println(io, "TransitionBasedReward:")
-    println(io, "  target_shocks: $(rt.target_shocks)")
     println(io, "  reward_stability_length: $(rt.reward_stability_length)")
     println(io, "  reward_threshold: $(rt.reward_threshold)")
     return println(io, "  wrapped_reward: $(typeof(rt.wrapped_reward))")
@@ -1163,6 +1152,7 @@ function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::TransitionBasedRew
     u = @view env.state[1:N]
     dx = env.prob.x[2] - env.prob.x[1]
     current_shock_count = RDE.count_shocks(u, dx)
+    target_shock_count = get_target_shock_count(env)
 
     # Update history in outer cache
     push!(cache.outer_cache.past_rewards, T(reward_scalar))
@@ -1170,7 +1160,7 @@ function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::TransitionBasedRew
 
     # Check for transition (only if we have enough history)
     if length(cache.outer_cache.past_shock_counts) >= 2
-        cache.outer_cache.transition_found = detect_transition_realtime(rt, cache.outer_cache, env.dt)
+        cache.outer_cache.transition_found = detect_transition_realtime(rt, cache.outer_cache, env.dt, target_shock_count)
 
         if cache.outer_cache.transition_found
             env.terminated = true
@@ -1185,7 +1175,7 @@ function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::TransitionBasedRew
     return T(-env.dt)
 end
 
-function detect_transition_realtime(rt::TransitionBasedReward{T, U}, cache::TransitionBasedCache{U}, dt::U) where {T, U <: AbstractFloat}
+function detect_transition_realtime(rt::TransitionBasedReward{T, U}, cache::TransitionBasedCache{U}, dt::U, target_shock_count::Int) where {T, U <: AbstractFloat}
     stability_steps = round(Int, rt.reward_stability_length / dt)
     if length(cache.past_shock_counts) < stability_steps
         @debug "Not enough shock counts to detect transition"
@@ -1196,7 +1186,7 @@ function detect_transition_realtime(rt::TransitionBasedReward{T, U}, cache::Tran
     # Check if we've had stable rewards for long enough since then
     stability_rewards = cache.past_rewards[(end - stability_steps + 1):end]
     stability_shock_counts = cache.past_shock_counts[(end - stability_steps + 1):end]
-    if all(stability_shock_counts .== rt.target_shocks) && minimum(stability_rewards) > rt.reward_threshold
+    if all(stability_shock_counts .== target_shock_count) && minimum(stability_rewards) > rt.reward_threshold
         return true
     end
     return false

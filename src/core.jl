@@ -140,3 +140,6 @@ mutable struct RDEEnv{T, A, O, RW, V, OBS, M, RS, C} <: AbstractRDEEnv where {
     steps_taken::Int
     ode_problem::SciMLBase.ODEProblem
 end
+
+# Currently nothing to randomize. Maybe random sampling of target requires having internal rng in RDEEnv?
+Random.seed!(env::RDEEnv, seed::Int) = nothing

@@ -31,6 +31,10 @@ _action_space(::RDEEnv, ::ScalarAreaScalarPressureAction) = DRiL.Box([-1.0f0, -1
 _action_space(::RDEEnv, action_type::VectorPressureAction) = DRiL.Box([-1.0f0 for _ in 1:action_type.n_sections], [1.0f0 for _ in 1:action_type.n_sections])
 _action_space(::RDEEnv, ::PIDAction) = DRiL.Box([-1.0f0, -1.0f0, -1.0f0], [1.0f0, 1.0f0, 1.0f0])
 
+RDE_Env.set_target_shock_count!(env::DRiLRDEEnv, target_shock_count::Int) = set_target_shock_count!(env.core_env, target_shock_count)
+RDE_Env.get_target_shock_count(env::DRiLRDEEnv) = get_target_shock_count(env.core_env)
+Random.seed!(env::DRiLRDEEnv, seed::Int) = Random.seed!(env.core_env, seed)
+
 function _observation_space(core_env::RDEEnv, strategy::FourierObservation)
     N = core_env.prob.params.N
     n_fft_terms = min(strategy.fft_terms, N ÷ 2 + 1)
@@ -83,14 +87,6 @@ function _observation_space(::RDEEnv, strategy::MultiCenteredObservation)
     return DRiL.Box(low, high)
 end
 
-function _observation_space(::RDEEnv, strategy::MultiSectionObservation)
-    observable_minisections = get_observable_minisections(strategy)
-    obs_length = observable_minisections * 2 + 3  # +3 for shocks, target_shock_count, span
-    low = [0.0f0 for _ in 1:obs_length]
-    high = [1.0f0 for _ in 1:obs_length]
-    return DRiL.Box(low, high)
-end
-
 function _multi_agent_action_space(::RDEEnv, action_type::VectorPressureAction)
     return DRiL.Box([-1.0f0], [1.0f0])
 end
@@ -114,6 +110,9 @@ struct DRiLMultiAgentRDEEnv{T, A, O, RW, V, OBS, M, RS, C} <: DRiL.AbstractParal
         return new{T, A, O, RW, V, OBS, M, RS, C}(core_env, observation_space, action_space, n_envs)
     end
 end
+
+RDE_Env.set_target_shock_count!(env::DRiLMultiAgentRDEEnv, target_shock_count::Int) = set_target_shock_count!(env.core_env, target_shock_count)
+RDE_Env.get_target_shock_count(env::DRiLMultiAgentRDEEnv) = get_target_shock_count(env.core_env)
 
 function DRiL.reset!(env::DRiLMultiAgentRDEEnv)
     return _reset!(env.core_env)
