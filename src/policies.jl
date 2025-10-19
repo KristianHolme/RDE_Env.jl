@@ -12,25 +12,23 @@ Container for data collected during policy execution.
 
 # Fields
 - `action_ts::Vector{T}`: Time points for actions
-- `ss::Vector{T}`: Control parameter s at each action
-- `u_ps::Vector{T}`: Control parameter u_p at each action
-- `rewards::Vector{T}`: Rewards at each action
-- `energy_bal::Vector{T}`: Energy balance at each state
-- `chamber_p::Vector{T}`: Chamber pressure at each state
+- `ss::Union{Vector{T}, Vector{Vector{T}}}`: Control parameter s at each action
+- `u_ps::Union{Vector{T}, Vector{Vector{T}}}`: Control parameter u_p at each action
+- `rewards::Union{Vector{T}, Vector{Vector{T}}}`: Rewards at each action
+- `actions::Union{Vector{T}, Vector{Vector{T}}}`: Raw actions at each step
 - `state_ts::Vector{T}`: Time points for states
 - `states::Vector{Vector{T}}`: States at each time point
+- `observations::Union{Vector{Vector{T}}, Vector{Matrix{T}}}`: Observations at each action step
 """
 struct PolicyRunData{T <: AbstractFloat}
-    action_ts::Vector{T} #time points for actions
-    ss::Union{Vector{T}, Vector{Vector{T}}} #control parameter s at each action
-    u_ps::Union{Vector{T}, Vector{Vector{T}}} #control parameter u_p at each action
-    rewards::Union{Vector{T}, Vector{Vector{T}}} #rewards at each action
-    energy_bal::Vector{T} #energy balance at each state
-    chamber_p::Vector{T} #chamber pressure at each state
-    state_ts::Vector{T} #time points for states
-    states::Vector{Vector{T}} #states at each time point
-    observations::Union{Union{Vector{Vector{T}}, Vector{Matrix{T}}}, Vector{Union{Vector{T}, Matrix{T}}}} #observations at each time point
-    # TODO:  change last type to just Union{Union{Vector{Vector{T}}, Vector{Matrix{T}}}??
+    action_ts::Vector{T}
+    ss::Union{Vector{T}, Vector{Vector{T}}}
+    u_ps::Union{Vector{T}, Vector{Vector{T}}}
+    rewards::Union{Vector{T}, Vector{Vector{T}}}
+    actions::Union{Vector{T}, Vector{Vector{T}}}
+    state_ts::Vector{T}
+    states::Vector{Vector{T}}
+    observations::Union{Vector{Vector{T}}, Vector{Matrix{T}}}
 end
 
 function Base.show(io::IO, data::PolicyRunData)
@@ -49,33 +47,32 @@ function Base.show(io::IO, ::MIME"text/plain", data::PolicyRunData)
     println(io, "  ss: $(typeof(data.ss))($(length(data.ss)))")
     println(io, "  u_ps: $(typeof(data.u_ps))($(length(data.u_ps)))")
     println(io, "  rewards: $(typeof(data.rewards))($(length(data.rewards)))")
-    println(io, "  energy_bal: $(typeof(data.energy_bal))($(length(data.energy_bal)))")
-    println(io, "  chamber_p: $(typeof(data.chamber_p))($(length(data.chamber_p)))")
+    println(io, "  actions: $(typeof(data.actions))($(length(data.actions)))")
     println(io, "  state_ts: $(typeof(data.state_ts))($(length(data.state_ts)))")
     println(io, "  states: $(typeof(data.states))($(length(data.states)))")
     return println(io, "  observations: $(typeof(data.observations))($(length(data.observations)))")
 end
 
 """
-    run_policy(π::AbstractRDEPolicy, env::RDEEnv{T}; saves_per_action=1) where {T}
+    run_policy(π::AbstractRDEPolicy, env::RDEEnv{T}; saves_per_action=10) where {T}
 
 Run a policy `π` on the RDE environment and collect trajectory data.
 
 # Arguments
 - `π::AbstractRDEPolicy`: Policy to execute
 - `env::RDEEnv{T}`: RDE environment to run the policy in
-- `saves_per_action=1`: Save full state every `saves_per_action` steps
+- `saves_per_action=10`: Number of intermediate states to save per action
 
 # Returns
 `PolicyRunData` containing:
-- `ts`: Time points for each action
-- `ss`: Control parameter s values
-- `u_ps`: Control parameter u_p values  
-- `rewards`: Rewards received
-- `energy_bal`: Energy balance at each step
-- `chamber_p`: Chamber pressure at each step
-- `state_ts`: Time points for each state
-- `states`: Full system state at each time point
+- `action_ts`: Time points for each action (length N)
+- `ss`: Control parameter s values (length N)
+- `u_ps`: Control parameter u_p values (length N)
+- `rewards`: Rewards received (length N)
+- `actions`: Raw actions taken (length N)
+- `state_ts`: Time points for each state (length 1 + N*saves_per_action)
+- `states`: Full system state at each time point (length 1 + N*saves_per_action)
+- `observations`: Observations at each action step (length N)
 
 # Example
 ```julia
@@ -86,62 +83,84 @@ data = run_policy(policy, env, saves_per_action=10)
 """
 function run_policy(policy::AbstractRDEPolicy, env::RDEEnv{T}; saves_per_action = 10) where {T}
     _reset!(env)
-    @assert saves_per_action ≥ 1 "saves_per_action must be non-negative"
+    @assert saves_per_action ≥ 1 "saves_per_action must be at least 1"
     dt = env.dt
-    max_steps = ceil(env.prob.params.tmax / dt) + 2 |> Int # +1 for initial state, +1 for overshoot
+    max_actions = ceil(env.prob.params.tmax / dt) + 1 |> Int
     N = env.prob.params.N
 
-    # Initialize vectors for action data
-    ts = Vector{T}(undef, max_steps)
-    ss, u_ps = get_init_control_data(env, env.action_type, max_steps)
-    # ss = Vector{T}(undef, max_steps)
-    # u_ps = Vector{T}(undef, max_steps)
-    rewards = get_init_rewards(env, env.reward_type, max_steps)
-    # rewards = Vector{T}(undef, max_steps)
+    # Preallocate action-aligned arrays
+    action_ts = Vector{T}(undef, max_actions)
+    ss, u_ps = get_init_control_data(env, env.action_type, max_actions)
+    rewards = get_init_rewards(env, env.reward_type, max_actions)
 
-    # For saves_per_action > 0, we need more space for state data
-    max_state_points = max_steps * (saves_per_action + 1)
-
-    energy_bal = Vector{T}(undef, max_state_points)
-    chamber_p = Vector{T}(undef, max_state_points)
-    states = Vector{Vector{T}}(undef, max_state_points)
-    state_ts = Vector{T}(undef, max_state_points)
-    if env.observation_strategy isa AbstractMultiAgentObservationStrategy
-        observations = Vector{Matrix{T}}(undef, max_state_points)
+    # Preallocate actions using action_dim
+    actions = if action_dim(env.action_type) == 1
+        Vector{T}(undef, max_actions)
     else
-        observations = Vector{Vector{T}}(undef, max_state_points)
+        Vector{Vector{T}}(undef, max_actions)
     end
 
-    step = 0
-    total_state_steps = 0
+    # Preallocate observations
+    if env.observation_strategy isa AbstractMultiAgentObservationStrategy
+        observations = Vector{Matrix{T}}(undef, max_actions)
+    else
+        observations = Vector{Vector{T}}(undef, max_actions)
+    end
 
-    function log!(step)
-        ind = step + 1
-        ts[ind] = env.t
+    # Preallocate state arrays (initial + saves_per_action per action)
+    max_state_points = 1 + max_actions * saves_per_action
+    states = Vector{Vector{T}}(undef, max_state_points)
+    state_ts = Vector{T}(undef, max_state_points)
+
+    # Save initial state
+    states[1] = copy(env.state)
+    state_ts[1] = env.t
+    total_state_steps = 1
+
+    step = 0
+    while !env.done && step < max_actions
+        step += 1
+
+        # Pre-action logging
+        action_ts[step] = env.t
+        observations[step] = _observe(env)
+
+        # Record control summaries (pre-action values)
         if eltype(ss) <: AbstractVector
             sections = env.action_type.n_sections
-            ss[ind] = section_reduction(env.prob.method.cache.s_current, sections)
+            ss[step] = section_reduction(env.prob.method.cache.s_current, sections)
         elseif eltype(ss) <: Number
-            ss[ind] = mean(env.prob.method.cache.s_current)
+            ss[step] = mean(env.prob.method.cache.s_current)
         end
         if eltype(u_ps) <: AbstractVector
             sections = env.action_type.n_sections
-            u_ps[ind] = section_reduction(env.prob.method.cache.u_p_current, sections)
+            u_ps[step] = section_reduction(env.prob.method.cache.u_p_current, sections)
         elseif eltype(u_ps) <: Number
-            u_ps[ind] = mean(env.prob.method.cache.u_p_current)
+            u_ps[step] = mean(env.prob.method.cache.u_p_current)
         end
-        if eltype(rewards) <: AbstractVector
-            rewards[ind] = env.reward
-        else
-            rewards[ind] = env.reward
-        end
-        observations[ind] = _observe(env)
 
-        if step > 0
-            if typeof(env.prob.sol) == Nothing
-                @info "sol is nothing at step $step"
-                @info env.info
-            end
+        # Compute action
+        action = _predict_action(policy, observations[step])
+        if env.observation_strategy isa AbstractMultiAgentObservationStrategy && action isa Vector{Vector{T}}
+            action = vcat(action...)
+            @assert action isa Vector{T}
+        end
+
+        # Save raw action
+        actions[step] = action
+
+        @debug "action: $action"
+
+        # Step environment
+        _act!(env, action; saves_per_action)
+
+        # Collect solver states (drop first which is pre-action state)
+        if typeof(env.prob.sol) == Nothing
+            @info "sol is nothing at step $step"
+            @info env.info
+            step_states = Vector{Vector{T}}()
+            step_ts = Vector{T}()
+        else
             if length(env.prob.sol.t) != saves_per_action + 1
                 @debug "length(env.prob.sol.t) ($(length(env.prob.sol.t))) != saves_per_action + 1 ($(saves_per_action + 1))"
                 if env.prob.sol.t[end] - env.prob.sol.t[end - 1] < env.dt / 10
@@ -159,77 +178,60 @@ function run_policy(policy::AbstractRDEPolicy, env::RDEEnv{T}; saves_per_action 
             if length(step_states) != saves_per_action
                 @warn "length(step_states) ($(length(step_states))) != saves_per_action ($(saves_per_action))"
             end
-            n_states = length(step_states)
-        else
-            step_states = [env.state]
-            step_ts = [env.t]
-            n_states = 1
         end
 
-        # Calculate indices for this step's data
+        n_states = length(step_states)
         start_idx = total_state_steps + 1
         end_idx = total_state_steps + n_states
 
         # Ensure we have enough space
         if end_idx > max_state_points
-            # Extend arrays if needed
-            new_size = end_idx + max_steps * (saves_per_action + 1)
-            resize!(energy_bal, new_size)
-            resize!(chamber_p, new_size)
+            new_size = end_idx + max_actions * saves_per_action
             resize!(states, new_size)
             resize!(state_ts, new_size)
             max_state_points = new_size
         end
 
-        # Save states and timestamps
-        state_ts[start_idx:end_idx] = step_ts
-        states[start_idx:end_idx] = step_states
-
-        # Save energy balance and chamber pressure
-        energy_bal[start_idx:end_idx] = energy_balance.(step_states, Ref(env.prob.params))
-        chamber_p[start_idx:end_idx] = chamber_pressure.(step_states, Ref(env.prob.params))
-
-        return total_state_steps += n_states
-    end
-
-    log!(step)
-    while !env.done && step < max_steps
-        action = _predict_action(policy, _observe(env))
-        if env.observation_strategy isa AbstractMultiAgentObservationStrategy && action isa Vector{Vector{T}}
-            action = vcat(action...)
-            @assert action isa Vector{T}
+        # Append copies of states
+        for i in 1:n_states
+            states[start_idx + i - 1] = copy(step_states[i])
         end
-        @debug "action: $action"
-        _act!(env, action; saves_per_action)
+        state_ts[start_idx:end_idx] = step_ts
+        total_state_steps += n_states
+
+        # Post-action reward
+        if eltype(rewards) <: AbstractVector
+            rewards[step] = env.reward
+        else
+            rewards[step] = env.reward
+        end
+
         if env.terminated && env.verbose > 0
             @info "Env terminated at step $step"
             @info env.info
             if env.done
                 @info "Env done at step $step"
             end
-            # @assert env.done "Env terminated but done is false"
-            #     break
         end
         if env.truncated && env.verbose > 0
             @info "Env truncated at step $step"
             @info env.info
         end
-        step += 1
-        log!(step)
     end
 
+    n_actions = step
+
     # Trim arrays to actual size
-    ts = ts[1:(step + 1)]
-    ss = ss[1:(step + 1)]
-    u_ps = u_ps[1:(step + 1)]
-    rewards = rewards[1:(step + 1)]
-    energy_bal = energy_bal[1:total_state_steps]
-    chamber_p = chamber_p[1:total_state_steps]
+    action_ts = action_ts[1:n_actions]
+    ss = ss[1:n_actions]
+    u_ps = u_ps[1:n_actions]
+    rewards = rewards[1:n_actions]
+    actions = actions[1:n_actions]
+    observations = observations[1:n_actions]
     state_ts = state_ts[1:total_state_steps]
     states = states[1:total_state_steps]
-    observations = observations[1:(step + 1)]
 
-    return PolicyRunData{T}(ts, ss, u_ps, rewards, energy_bal, chamber_p, state_ts, states, observations)
+    return PolicyRunData{T}(action_ts, ss, u_ps, rewards, actions, state_ts, states, observations)
 end
 
 function get_init_rewards(env::RDEEnv{T}, reward_type::AbstractRDEReward, max_steps::Int) where {T}

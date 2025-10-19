@@ -65,8 +65,6 @@ function plot_policy_data(
     action_ts = data.action_ts
     ss = data.ss
     u_ps = data.u_ps
-    energy_bal = data.energy_bal
-    chamber_p = data.chamber_p
     rewards = data.rewards
 
     state_ts = data.state_ts
@@ -120,18 +118,20 @@ function plot_policy_data(
 
     metrics_action_Area_plots = 0
 
-    if energy_and_chamber_pressure
-        metrics_action_Area_plots += 1
-        ax_eb = Axis(metrics_action_area[1, metrics_action_Area_plots], title = "Energy balance", ylabel = "Ė")
-        hidexdecorations!(ax_eb, grid = false)
-        lines!(ax_eb, state_ts, energy_bal)
-        vlines!(ax_eb, fine_time, color = :green, alpha = 0.5)
-
-        # Add chamber pressure
-        ax_cp = Axis(metrics_action_area[2, metrics_action_Area_plots], title = "Chamber pressure", xlabel = "t", ylabel = "̄u²")
-        lines!(ax_cp, state_ts, chamber_p)
-        vlines!(ax_cp, fine_time, color = :green, alpha = 0.5)
-    end
+    # energy_and_chamber_pressure keyword kept for backwards compatibility but ignored
+    # energy_bal and chamber_p removed from PolicyRunData
+    #     if energy_and_chamber_pressure
+    #         metrics_action_Area_plots += 1
+    #         ax_eb = Axis(metrics_action_area[1, metrics_action_Area_plots], title = "Energy balance", ylabel = "Ė")
+    #         hidexdecorations!(ax_eb, grid = false)
+    #         lines!(ax_eb, state_ts, energy_bal)
+    #         vlines!(ax_eb, fine_time, color = :green, alpha = 0.5)
+    #
+    #         # Add chamber pressure
+    #         ax_cp = Axis(metrics_action_area[2, metrics_action_Area_plots], title = "Chamber pressure", xlabel = "t", ylabel = "̄u²")
+    #         lines!(ax_cp, state_ts, chamber_p)
+    #         vlines!(ax_cp, fine_time, color = :green, alpha = 0.5)
+    #     end
 
     if rewards_and_shocks
         metrics_action_Area_plots += 1
@@ -142,11 +142,11 @@ function plot_policy_data(
         if eltype(rewards) <: AbstractVector
             stairs!.(Ref(ax_rewards), Ref(action_ts), eachrow(stack(rewards)), color = reward_color)
             for i in 1:length(rewards[sparse_time_idx[]])
-                scatter!(ax_rewards, fine_time, @lift(rewards[min($sparse_time_idx + 1, length(rewards))][i]), color = reward_color)
+                scatter!(ax_rewards, fine_time, @lift(rewards[$sparse_time_idx][i]), color = reward_color)
             end
         else
             stairs!(ax_rewards, action_ts, rewards, color = reward_color)
-            scatter!(ax_rewards, fine_time, @lift(rewards[min($sparse_time_idx + 1, length(rewards))]), color = reward_color)
+            scatter!(ax_rewards, fine_time, @lift(rewards[$sparse_time_idx]), color = reward_color)
         end
         # vlines!(ax_rewards, fine_time, color=:green, alpha=0.5)
 
@@ -364,7 +364,7 @@ end
 
 function plot_shifted_history(data::PolicyRunData, x::AbstractArray, c = :auto; use_rewards = true, kwargs...)
     us, = RDE.split_sol(data.states)
-    saves_per_action = (length(data.state_ts) - 1) ÷ (length(data.action_ts) - 1)
+    saves_per_action = (length(data.state_ts) - 1) ÷ length(data.action_ts)
     if c == :auto
         c = get_plotting_speed_adjustments(data, x[2] - x[1])
     elseif c == :legacy
