@@ -57,15 +57,21 @@ abstract type MultiAgentCachedCompositeReward <: CachedCompositeReward end
 
 # Cache API
 abstract type AbstractCache end
+abstract type AbstractGoalCache <: AbstractCache end
 struct NoCache <: AbstractCache end
 
-mutable struct GoalCache <: AbstractCache
+mutable struct GoalCache <: AbstractGoalCache
     target_shock_count::Int
 end
 
 initialize_cache(::Any, ::Int, ::Type{T}) where {T} = NoCache()
 reset_cache!(::AbstractCache) = nothing
 
+
+"""
+    get_target_shock_count(env::AbstractRDEEnv)
+Get the target shock count from the goal cache.
+"""
 get_target_shock_count(env::AbstractRDEEnv) = env.cache.goal.target_shock_count
 set_target_shock_count!(env::AbstractRDEEnv, v::Int) = env.cache.goal.target_shock_count = v
 
@@ -81,7 +87,7 @@ Cache for RDE environment computations and state tracking.
 - `prev_u::Vector{T}`: Previous velocity field
 - `prev_λ::Vector{T}`: Previous reaction progress
 """
-mutable struct RDEEnvCache{T <: AbstractFloat, RC <: AbstractCache, AC <: AbstractCache, OC <: AbstractCache, GC <: GoalCache} <: AbstractCache
+struct RDEEnvCache{T <: AbstractFloat, RC <: AbstractCache, AC <: AbstractCache, OC <: AbstractCache, GC <: GoalCache} <: AbstractCache
     prev_u::Vector{T}  # Previous step's u values
     prev_λ::Vector{T}  # Previous step's λ values
     # New subcaches
@@ -120,25 +126,25 @@ mutable struct RDEEnv{T, A, O, RW, V, OBS, M, RS, C} <: AbstractRDEEnv where {
         C <: AbstractControlShift,
     }
     prob::RDEProblem{T, M, RS, C}                  # RDE problem
-    state::Vector{T}
-    observation::OBS
+    state::Vector{T} #TODO:move this to cache?
+    observation::OBS #TODO:move this to cache?
     dt::T                       # time step
     t::T                        # Current time
     done::Bool                        # Termination flag
     truncated::Bool
-    terminated::Bool
-    reward::V
+    terminated::Bool #TODO:move these to cache?
+    reward::V #TODO:move this to cache?
     smax::T
     u_pmax::T
-    τ_smooth::T #smoothing time constant
+    τ_smooth::T #smoothing time constant #TODO:move this to action_type?
     cache::RDEEnvCache{T}
     action_type::A
     observation_strategy::O
     reward_type::RW
     verbose::Bool               # Control solver output
-    info::Dict{String, Any}
-    steps_taken::Int
-    ode_problem::SciMLBase.ODEProblem
+    info::Dict{String, Any} #TODO:move this to cache?
+    steps_taken::Int #TODO:move this to cache?
+    ode_problem::SciMLBase.ODEProblem #TODO:move this to cache?
 end
 
 # Currently nothing to randomize. Maybe random sampling of target requires having internal rng in RDEEnv?

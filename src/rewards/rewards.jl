@@ -346,6 +346,98 @@ function Base.show(io::IO, ::MIME"text/plain", rt::PeriodicityReward)
 end
 
 # ----------------------------------------------------------------------------
+# StabilityReward
+# ----------------------------------------------------------------------------
+
+@kwdef struct StabilityReward{T <: AbstractFloat} <: AbstractRDEReward
+    α::T = 4.0f0
+end
+
+reward_value_type(::Type{T}, ::StabilityReward) where {T} = T
+initialize_cache(::StabilityReward, N::Int, ::Type{T}) where {T} = RewardShiftBufferCache{T}(zeros(T, N))
+
+function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::StabilityReward, cache::RewardShiftBufferCache{T}) where {T <: AbstractFloat, A, O, R, V, OBS}
+    if isnothing(env.prob.sol)
+        return zero(T)
+    end
+
+    # Extract all states from solution
+    sol_states = env.prob.sol.u
+    n_states = length(sol_states)
+
+    # Get constants
+    N = env.prob.params.N
+    dx = RDE.get_dx(env.prob)
+    L = env.prob.params.L
+    target_shock_count = get_target_shock_count(env)
+    shift_buffer = cache.shift_buffer
+
+    # Count current shocks
+    current_u = @view env.state[1:N]
+    current_shock_inds = RDE.shock_indices(current_u, dx)
+    current_shocks = length(current_shock_inds)
+
+    # Collect data across time
+    min_values = Vector{T}(undef, n_states)
+    max_values = Vector{T}(undef, n_states)
+    periodicity_rewards = Vector{T}(undef, n_states)
+    shock_spacing_rewards = Vector{T}(undef, n_states)
+
+    for (i, state) in enumerate(sol_states)
+        u = @view state[1:N]
+
+        # Collect span data
+        u_min, u_max = RDE.turbo_extrema(u)
+        min_values[i] = u_min
+        max_values[i] = u_max
+
+        # Calculate periodicity using target shock count
+        if target_shock_count > 1
+            shift_steps = N ÷ target_shock_count
+            errs = zeros(T, target_shock_count - 1)
+            for j in 1:(target_shock_count - 1)
+                shift_buffer .= u
+                circshift!(shift_buffer, u, -shift_steps * j)
+                errs[j] = RDE.turbo_diff_norm(u, shift_buffer) / sqrt(N)
+            end
+            maxerr = RDE.turbo_maximum(errs)
+            periodicity_rewards[i] = T(1) - (max(maxerr - T(0.08), zero(T)) / sqrt(T(3)))
+        else
+            periodicity_rewards[i] = T(1)
+        end
+
+        # Calculate shock spacing using target shock count
+        shock_inds = RDE.shock_indices(u, dx)
+        shocks = length(shock_inds)
+        if shocks > 1
+            optimal_spacing = L / target_shock_count
+            shock_spacing = mod.(RDE.periodic_diff(shock_inds), N) .* dx
+            shock_spacing_rewards[i] = T(1) - RDE.turbo_maximum_abs((shock_spacing .- optimal_spacing) ./ optimal_spacing)
+        else
+            shock_spacing_rewards[i] = T(1)
+        end
+    end
+
+    # Calculate span variation (worst of min and max variation)
+    min_variation = calculate_variation_punishment(min_values, rt.α)
+    max_variation = calculate_variation_punishment(max_values, rt.α)
+    span_variation = min(min_variation, max_variation)
+
+    # Calculate worst periodicity and shock spacing over time
+    worst_periodicity = minimum(periodicity_rewards)
+    worst_shock_spacing = minimum(shock_spacing_rewards)
+
+    # Average applicable rewards based on current shock count
+    if current_shocks <= 1
+        # Only span variation and periodicity
+        return (span_variation + worst_periodicity) / T(2)
+    else
+        # All three components
+        return (span_variation + worst_periodicity + worst_shock_spacing) / T(3)
+    end
+end
+
+# ----------------------------------------------------------------------------
 # MultiSectionReward
 # ----------------------------------------------------------------------------
 

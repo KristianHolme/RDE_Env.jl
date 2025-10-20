@@ -48,7 +48,7 @@ export ShockSpanReward, ShockPreservingReward, ShockPreservingSymmetryReward
 export CompositeReward, ConstantTargetReward, MultiSectionReward, PeriodicityReward
 export TimeAggCompositeReward, TimeMin, TimeAvg, TimeMax, TimeSum, TimeProd, TimeAggMultiSectionReward
 export TimeDiffNormReward, MultiplicativeReward, PeriodMinimumReward, MultiSectionPeriodMinimumReward,
-    PeriodMinimumVariationReward, ExponentialAverageReward, TransitionBasedReward
+    PeriodMinimumVariationReward, ExponentialAverageReward, TransitionBasedReward, StabilityReward
 export set_reward!, set_termination_reward!, compute_reward
 export ScalarToVectorReward
 
