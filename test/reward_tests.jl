@@ -441,3 +441,183 @@ end
         @test length(data.action_ts) == length(data.rewards)
     end
 end
+
+@testitem "StabilityTargetReward Constructor" begin
+    using RDE
+
+    # Test default constructor
+    reward = StabilityTargetReward()
+    @test reward isa StabilityTargetReward{Float32}
+    @test reward.stability_weight == 0.7f0
+    @test reward.target_weight == 0.3f0
+    @test reward.stability_reward isa StabilityReward{Float32}
+
+    # Test custom weights
+    reward2 = StabilityTargetReward(stability_weight = 0.8f0, target_weight = 0.2f0)
+    @test reward2.stability_weight == 0.8f0
+    @test reward2.target_weight == 0.2f0
+
+    # Test passing kwargs to StabilityReward
+    reward3 = StabilityTargetReward(variation_scaling = 5.0f0)
+    @test reward3.stability_reward.variation_scaling == 5.0f0
+
+    # Test type consistency - should error with inconsistent types
+    @test_throws MethodError StabilityTargetReward(stability_weight = 0.8f0, target_weight = 0.2)  # Float32 vs Float64
+    @test_throws MethodError StabilityTargetReward(stability_weight = 0.8, target_weight = 0.2f0)  # Float64 vs Float32
+
+    # Test type consistency with kwargs - should error with wrong type
+    @test_throws MethodError StabilityTargetReward(variation_scaling = 5.0)  # Float64 instead of Float32
+
+    # Test typed constructor with consistent types
+    reward4 = StabilityTargetReward{Float64}(stability_weight = 0.8, target_weight = 0.2, variation_scaling = 5.0)
+    @test reward4 isa StabilityTargetReward{Float64}
+    @test reward4.stability_weight isa Float64
+    @test reward4.target_weight isa Float64
+    @test reward4.stability_reward.variation_scaling isa Float64
+end
+
+@testitem "StabilityTargetReward Cache" begin
+    using RDE
+
+    reward = StabilityTargetReward()
+    N = 512
+    cache = RDE_Env.initialize_cache(reward, N, Float32)
+
+    @test cache isa RDE_Env.WrappedRewardCache
+    @test cache.inner_cache isa RDE_Env.RewardShiftBufferCache{Float32}
+    @test cache.outer_cache isa RDE_Env.NoCache
+    @test length(cache.inner_cache.shift_buffer) == N
+end
+
+@testitem "StabilityTargetReward Basic Computation" begin
+    using RDE
+
+    # Create environment with StabilityTargetReward
+    env = RDEEnv(;
+        dt = 1.0,
+        reward_type = StabilityTargetReward()
+    )
+
+    # Test initial reward
+    _reset!(env)
+    @test env.reward isa Float32
+    @test !isnan(env.reward)
+    @test !isinf(env.reward)
+    @test env.reward >= 0  # Should be non-negative initially
+
+    # Get target shock count
+    target_count = RDE_Env.get_target_shock_count(env)
+    @test target_count == 3  # Default target
+end
+
+@testitem "StabilityTargetReward Target Matching" begin
+    using RDE
+
+    # Create environment
+    env = RDEEnv(;
+        dt = 1.0,
+        reward_type = StabilityTargetReward(stability_weight = 0.5f0, target_weight = 0.5f0)
+    )
+    _reset!(env)
+
+    # Get initial reward with correct number of shocks
+    initial_reward = env.reward
+
+    # Create state with wrong number of shocks (0 shocks)
+    N = env.prob.params.N
+    env.state[1:N] .= 1.0  # Constant state = no shocks
+    set_reward!(env, env.reward_type)
+    no_shock_reward = env.reward
+
+    # Should get lower reward with wrong shock count
+    # (no target bonus, only stability component)
+    @test no_shock_reward < initial_reward
+end
+
+@testitem "StabilityTargetReward Weight Variation" begin
+    using RDE
+
+    # Test different weight combinations
+    weights = [
+        (0.9f0, 0.1f0),  # Heavily weighted toward stability
+        (0.5f0, 0.5f0),  # Equal weighting
+        (0.3f0, 0.7f0),  # Heavily weighted toward target
+    ]
+
+    for (stab_w, targ_w) in weights
+        env = RDEEnv(;
+            dt = 1.0,
+            reward_type = StabilityTargetReward(
+                stability_weight = stab_w,
+                target_weight = targ_w
+            )
+        )
+        _reset!(env)
+        @test env.reward isa Float32
+        @test !isnan(env.reward)
+        @test !isinf(env.reward)
+        @test env.reward_type.stability_weight == stab_w
+        @test env.reward_type.target_weight == targ_w
+    end
+end
+
+@testitem "StabilityTargetReward Policy Run" begin
+    using RDE
+
+    # Test parameters
+    tmax = 1.0
+    dt = 0.1
+    n_steps = Int(tmax / dt)
+
+    # Test with ConstantRDEPolicy
+    env = RDEEnv(;
+        dt = dt,
+        params = RDEParam(tmax = tmax),
+        reward_type = StabilityTargetReward()
+    )
+    policy = ConstantRDEPolicy(env)
+
+    # Run policy and collect rewards
+    _reset!(env)
+    rewards = Float32[]
+    for _ in 1:n_steps
+        action = _predict_action(policy, _observe(env))
+        push!(rewards, _act!(env, action))
+        @test !isnan(env.reward)
+        @test !isinf(env.reward)
+    end
+
+    @test length(rewards) == n_steps
+    @test !any(isnan.(rewards))
+    @test !any(isinf.(rewards))
+    @test all(rewards .>= 0)  # Should be non-negative
+
+    # Run full policy data collection
+    data = run_policy(policy, env)
+    @test !isempty(data.rewards)
+    @test !any(isnan.(data.rewards))
+    @test !any(isinf.(data.rewards))
+    @test length(data.action_ts) == length(data.rewards)
+end
+
+@testitem "StabilityTargetReward Comparison" begin
+    using RDE
+
+    # Create two environments: one with StabilityReward, one with StabilityTargetReward
+    env_stability = RDEEnv(;
+        dt = 1.0,
+        reward_type = StabilityReward()
+    )
+
+    env_target = RDEEnv(;
+        dt = 1.0,
+        reward_type = StabilityTargetReward(stability_weight = 1.0f0, target_weight = 0.0f0)
+    )
+
+    # Reset both with same seed
+    _reset!(env_stability)
+    _reset!(env_target)
+
+    # When target_weight=0, should behave like pure StabilityReward
+    @test env_stability.reward ≈ env_target.reward rtol = 1.0e-5
+end
