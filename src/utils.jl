@@ -81,6 +81,10 @@ function speed_tracking(data, dx::T) where {T <: AbstractFloat}
     # for blocks with no shocks or single point blocks, interpolate the speed from the neighboring blocks
     us, _ = RDE.split_sol(data.states)
     ts = data.state_ts
+    return speed_tracking(us, ts, dx)
+end
+
+function speed_tracking(us::Vector{<:AbstractArray{T}}, ts::AbstractVector{T}, dx::T) where {T <: AbstractFloat}
     shock_locations = RDE.shock_locations.(us, dx)
     shock_counts = sum.(shock_locations)
     blocks_ixs = [1, (findall(diff(shock_counts) .!= 0) .+ 1)..., length(shock_counts) + 1]
@@ -119,7 +123,7 @@ function speed_tracking(data, dx::T) where {T <: AbstractFloat}
             end
             if prev_block > 0
                 prev_block_speeds = shock_speeds[prev_block]
-                prev_block_mean_speed = mean([shock_speed[end] for shock_speed in prev_block_speeds])
+                prev_block_mean_speed = mean([last(shock_speed) for shock_speed in prev_block_speeds])
                 push!(neighbor_speeds, prev_block_mean_speed)
             end
         end
@@ -131,7 +135,7 @@ function speed_tracking(data, dx::T) where {T <: AbstractFloat}
             end
             if next_block <= n_blocks
                 next_block_speeds = shock_speeds[next_block]
-                next_block_mean_speed = mean([shock_speed[end] for shock_speed in next_block_speeds])
+                next_block_mean_speed = mean([first(shock_speed) for shock_speed in next_block_speeds])
                 push!(neighbor_speeds, next_block_mean_speed)
             end
         end
