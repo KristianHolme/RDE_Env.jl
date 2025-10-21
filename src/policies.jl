@@ -90,11 +90,11 @@ function run_policy(policy::AbstractRDEPolicy, env::RDEEnv{T}; saves_per_action 
 
     # Preallocate action-aligned arrays
     action_ts = Vector{T}(undef, max_actions)
-    ss, u_ps = get_init_control_data(env, env.action_type, max_actions)
+    ss, u_ps = get_init_control_data(env, env.action_strat, max_actions)
     rewards = get_init_rewards(env, env.reward_type, max_actions)
 
     # Preallocate actions using action_dim
-    actions = if action_dim(env.action_type) == 1
+    actions = if action_dim(env.action_strat) == 1
         Vector{T}(undef, max_actions)
     else
         Vector{Vector{T}}(undef, max_actions)
@@ -127,13 +127,13 @@ function run_policy(policy::AbstractRDEPolicy, env::RDEEnv{T}; saves_per_action 
 
         # Record control summaries (pre-action values)
         if eltype(ss) <: AbstractVector
-            sections = env.action_type.n_sections
+            sections = env.action_strat.n_sections
             ss[step] = section_reduction(env.prob.method.cache.s_current, sections)
         elseif eltype(ss) <: Number
             ss[step] = mean(env.prob.method.cache.s_current)
         end
         if eltype(u_ps) <: AbstractVector
-            sections = env.action_type.n_sections
+            sections = env.action_strat.n_sections
             u_ps[step] = section_reduction(env.prob.method.cache.u_p_current, sections)
         elseif eltype(u_ps) <: Number
             u_ps[step] = mean(env.prob.method.cache.u_p_current)
@@ -234,12 +234,12 @@ function run_policy(policy::AbstractRDEPolicy, env::RDEEnv{T}; saves_per_action 
     return PolicyRunData{T}(action_ts, ss, u_ps, rewards, actions, state_ts, states, observations)
 end
 
-function get_init_rewards(env::RDEEnv{T}, reward_type::AbstractRDEReward, max_steps::Int) where {T}
+function get_init_rewards(env::RDEEnv{T}, reward_type::AbstractRewardStrategy, max_steps::Int) where {T}
     reward_type = typeof(env.reward)
     return Vector{reward_type}(undef, max_steps)
 end
 
-# function get_init_rewards(env::RDEEnv{T}, reward_type::AbstractRDEReward, max_steps::Int) where {T}
+# function get_init_rewards(env::RDEEnv{T}, reward_type::AbstractRewardStrategy, max_steps::Int) where {T}
 #     return Vector{T}(undef, max_steps)
 # end
 
@@ -262,19 +262,19 @@ function get_init_rewards(env::RDEEnv{T}, reward_type::MultiplicativeReward, max
 end
 
 #TODO: remove need for these
-function get_init_control_data(env::RDEEnv{T}, action_type::AbstractActionType, max_steps::Int) where {T}
+function get_init_control_data(env::RDEEnv{T}, action_strat::AbstractActionStrategy, max_steps::Int) where {T}
     return Vector{T}(undef, max_steps), Vector{T}(undef, max_steps)
 end
 
-function get_init_control_data(env::RDEEnv{T}, action_type::VectorPressureAction, max_steps::Int) where {T}
+function get_init_control_data(env::RDEEnv{T}, action_strat::VectorPressureAction, max_steps::Int) where {T}
     return Vector{T}(undef, max_steps), Vector{Vector{T}}(undef, max_steps)
 end
 
-function get_init_control_data(env::RDEEnv{T}, action_type::DirectVectorPressureAction, max_steps::Int) where {T}
+function get_init_control_data(env::RDEEnv{T}, action_strat::DirectVectorPressureAction, max_steps::Int) where {T}
     return Vector{T}(undef, max_steps), Vector{Vector{T}}(undef, max_steps)
 end
 
-function get_init_control_data(env::RDEEnv{T}, action_type::LinearVectorPressureAction, max_steps::Int) where {T}
+function get_init_control_data(env::RDEEnv{T}, action_strat::LinearVectorPressureAction, max_steps::Int) where {T}
     return Vector{T}(undef, max_steps), Vector{Vector{T}}(undef, max_steps)
 end
 
@@ -315,15 +315,15 @@ struct ConstantRDEPolicy <: AbstractRDEPolicy
 end
 
 function _predict_action(π::ConstantRDEPolicy, s::AbstractVector{T}) where {T <: AbstractFloat}
-    @assert !(π.env.action_type isa DirectScalarPressureAction) && !(π.env.action_type isa DirectVectorPressureAction) "ConstantRDEPolicy not supported with direct actions"
-    if π.env.action_type isa ScalarAreaScalarPressureAction
+    @assert !(π.env.action_strat isa DirectScalarPressureAction) && !(π.env.action_strat isa DirectVectorPressureAction) "ConstantRDEPolicy not supported with direct actions"
+    if π.env.action_strat isa ScalarAreaScalarPressureAction
         return zeros(T, 2)
-    elseif π.env.action_type isa ScalarPressureAction
+    elseif π.env.action_strat isa ScalarPressureAction
         return zeros(T, 1)
-    elseif π.env.action_type isa VectorPressureAction
-        return zeros(T, π.env.action_type.n_sections)
+    elseif π.env.action_strat isa VectorPressureAction
+        return zeros(T, π.env.action_strat.n_sections)
     else
-        @error "Unknown action type $(typeof(π.env.action_type)) for ConstantRDEPolicy"
+        @error "Unknown action type $(typeof(π.env.action_strat)) for ConstantRDEPolicy"
     end
 end
 
@@ -362,16 +362,16 @@ struct SinusoidalRDEPolicy{T <: AbstractFloat} <: AbstractRDEPolicy
 end
 
 function _predict_action(π::SinusoidalRDEPolicy, s::AbstractVector{T}) where {T <: AbstractFloat}
-    @assert !(π.env.action_type isa DirectScalarPressureAction) && !(π.env.action_type isa DirectVectorPressureAction) "SinusoidalRDEPolicy not supported with direct actions"
+    @assert !(π.env.action_strat isa DirectScalarPressureAction) && !(π.env.action_strat isa DirectVectorPressureAction) "SinusoidalRDEPolicy not supported with direct actions"
     t = π.env.t
     action1 = T(sin(π.w_1 * t)) * π.scale
     action2 = T(sin(π.w_2 * t)) * π.scale
-    if π.env.action_type isa ScalarAreaScalarPressureAction
+    if π.env.action_strat isa ScalarAreaScalarPressureAction
         return [action1, action2]
-    elseif π.env.action_type isa ScalarPressureAction
+    elseif π.env.action_strat isa ScalarPressureAction
         return action2
     else
-        @error "Unknown action type $(typeof(π.env.action_type)) for SinusoidalRDEPolicy"
+        @error "Unknown action type $(typeof(π.env.action_strat)) for SinusoidalRDEPolicy"
     end
 end
 
@@ -413,12 +413,12 @@ struct StepwiseRDEPolicy{T <: AbstractFloat} <: AbstractRDEPolicy
     c::Union{Vector{Vector{T}}, Vector{T}}  # Vector of control actions
 
     function StepwiseRDEPolicy(env::RDEEnv{T}, ts::Vector{T}, c::Union{Vector{Vector{T}}, Vector{T}}) where {T <: AbstractFloat}
-        @assert env.action_type isa DirectScalarPressureAction || env.action_type isa DirectVectorPressureAction "StepwiseRDEPolicy requires direct action types"
+        @assert env.action_strat isa DirectScalarPressureAction || env.action_strat isa DirectVectorPressureAction "StepwiseRDEPolicy requires direct action types"
         @assert length(ts) == length(c) "Length of time steps and control actions must be equal"
         @assert issorted(ts) "Time steps must be in ascending order"
-        if env.action_type isa DirectVectorPressureAction
+        if env.action_strat isa DirectVectorPressureAction
             @assert eltype(c) <: Vector{T} "Control actions must be a vector of vectors for DirectVectorPressureAction"
-            @assert all(length(action) == env.action_type.n_sections for action in c) "Each control action must match n_sections"
+            @assert all(length(action) == env.action_strat.n_sections for action in c) "Each control action must match n_sections"
         else
             @assert eltype(c) <: T "Control actions must be a vector of scalars for DirectScalarPressureAction"
         end
@@ -434,25 +434,25 @@ function _predict_action(π::StepwiseRDEPolicy, s::AbstractVector{T}) where {T <
 
     # If before first time step, return current pressure (maintain status quo)
     if isnothing(idx)
-        if π.env.action_type isa DirectVectorPressureAction
+        if π.env.action_strat isa DirectVectorPressureAction
             # Sample current pressure at section control points
             N = π.env.prob.params.N
-            points_per_section = N ÷ π.env.action_type.n_sections
+            points_per_section = N ÷ π.env.action_strat.n_sections
             return cache.u_p_current[1:points_per_section:end]
-        elseif π.env.action_type isa DirectScalarPressureAction
+        elseif π.env.action_strat isa DirectScalarPressureAction
             # Return first value of current pressure
             return cache.u_p_current[1]
         end
     end
 
-    if π.env.action_type isa DirectVectorPressureAction
+    if π.env.action_strat isa DirectVectorPressureAction
         u_pmax = π.env.u_pmax
         return clamp.(π.c[idx], zero(T), u_pmax)
-    elseif π.env.action_type isa DirectScalarPressureAction
+    elseif π.env.action_strat isa DirectScalarPressureAction
         u_pmax = π.env.u_pmax
         return clamp(π.c[idx], zero(T), u_pmax)
     else
-        @error "Unknown action type $(typeof(π.env.action_type)) for StepwiseRDEPolicy"
+        @error "Unknown action type $(typeof(π.env.action_strat)) for StepwiseRDEPolicy"
     end
 end
 
@@ -488,12 +488,12 @@ end
 function _predict_action(π::RandomRDEPolicy, state::AbstractVector{T}) where {T <: AbstractFloat}
     action1 = 2 * rand(T) - 1
     action2 = 2 * rand(T) - 1
-    if π.env.action_type isa ScalarAreaScalarPressureAction
+    if π.env.action_strat isa ScalarAreaScalarPressureAction
         return [action1, action2]
-    elseif π.env.action_type isa ScalarPressureAction
+    elseif π.env.action_strat isa ScalarPressureAction
         return action2
     else
-        @error "Unknown action type $(typeof(π.env.action_type)) for RandomRDEPolicy"
+        @error "Unknown action type $(typeof(π.env.action_strat)) for RandomRDEPolicy"
     end
 end
 
@@ -532,14 +532,14 @@ end
 function _predict_action(π::DelayedPolicy, s::Union{AbstractVector{T}, Matrix{T}}) where {T <: AbstractFloat}
     t = π.env.t
     if t < π.start_time
-        if π.env.action_type isa ScalarAreaScalarPressureAction
+        if π.env.action_strat isa ScalarAreaScalarPressureAction
             return [zeros(T, 2)]
-        elseif π.env.action_type isa ScalarPressureAction
+        elseif π.env.action_strat isa ScalarPressureAction
             return zero(T)
-        elseif π.env.action_type isa VectorPressureAction
-            return zeros(T, π.env.action_type.n_sections)
+        elseif π.env.action_strat isa VectorPressureAction
+            return zeros(T, π.env.action_strat.n_sections)
         else
-            @error "Unknown action type $(typeof(π.env.action_type)) for DelayedPolicy"
+            @error "Unknown action type $(typeof(π.env.action_strat)) for DelayedPolicy"
         end
     else
         return _predict_action(π.policy, s)
@@ -586,13 +586,13 @@ struct LinearPolicy{T <: AbstractFloat} <: AbstractRDEPolicy
     c::Union{Vector{Vector{T}}, Vector{T}}  # Vector of control values at each time point
 
     function LinearPolicy(env::RDEEnv{T}, ts::Vector{T}, c::Union{Vector{Vector{T}}, Vector{T}}) where {T <: AbstractFloat}
-        @assert env.action_type isa DirectScalarPressureAction || env.action_type isa DirectVectorPressureAction "LinearPolicy requires direct action types"
+        @assert env.action_strat isa DirectScalarPressureAction || env.action_strat isa DirectVectorPressureAction "LinearPolicy requires direct action types"
         @assert length(ts) == length(c) "Length of time points and control values must be equal"
         @assert issorted(ts) "Time points must be in ascending order"
         @assert length(ts) >= 2 "At least two time points are required for linear interpolation"
-        if env.action_type isa DirectVectorPressureAction
+        if env.action_strat isa DirectVectorPressureAction
             @assert eltype(c) <: Vector{T} "Control values must be a vector of vectors for DirectVectorPressureAction"
-            @assert all(length(action) == env.action_type.n_sections for action in c) "Each control value must match n_sections"
+            @assert all(length(action) == env.action_strat.n_sections for action in c) "Each control value must match n_sections"
         else
             @assert eltype(c) <: T "Control values must be a vector of scalars for DirectScalarPressureAction"
         end
@@ -615,23 +615,23 @@ function _predict_action(π::LinearPolicy, s)
     else
         t1, t2 = π.ts[idx], π.ts[idx + 1]
         c1, c2 = π.c[idx], π.c[idx + 1]
-        if π.env.action_type isa DirectVectorPressureAction
+        if π.env.action_strat isa DirectVectorPressureAction
             target_value = c1 .+ (c2 .- c1) .* (t - t1) / (t2 - t1)
-        elseif π.env.action_type isa DirectScalarPressureAction
+        elseif π.env.action_strat isa DirectScalarPressureAction
             target_value = c1 + (c2 - c1) * (t - t1) / (t2 - t1)
         else
-            @error "Unknown action type $(typeof(π.env.action_type)) for LinearPolicy"
+            @error "Unknown action type $(typeof(π.env.action_strat)) for LinearPolicy"
         end
     end
 
-    if π.env.action_type isa DirectVectorPressureAction
+    if π.env.action_strat isa DirectVectorPressureAction
         u_pmax = π.env.u_pmax
         return clamp.(target_value, zero(eltype(target_value)), u_pmax)
-    elseif π.env.action_type isa DirectScalarPressureAction
+    elseif π.env.action_strat isa DirectScalarPressureAction
         u_pmax = π.env.u_pmax
         return clamp(target_value, zero(typeof(target_value)), u_pmax)
     else
-        @error "Unknown action type $(typeof(π.env.action_type)) for LinearPolicy"
+        @error "Unknown action type $(typeof(π.env.action_strat)) for LinearPolicy"
     end
 end
 
@@ -668,7 +668,7 @@ struct SawtoothPolicy{T <: AbstractFloat} <: AbstractRDEPolicy
     min_value::T
 
     function SawtoothPolicy(env::RDEEnv{T}, timescale::T, max_value::T, min_value::T) where {T <: AbstractFloat}
-        @assert env.action_type isa DirectScalarPressureAction "SawtoothPolicy requires direct scalar action"
+        @assert env.action_strat isa DirectScalarPressureAction "SawtoothPolicy requires direct scalar action"
         @assert timescale > 0 "Timescale must be positive"
         @assert max_value > min_value "Max value must be greater than min value"
         return new{T}(env, timescale, max_value, min_value)

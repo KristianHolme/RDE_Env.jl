@@ -2,18 +2,18 @@ abstract type _AbstractEnv end
 abstract type AbstractRDEEnv <: _AbstractEnv end
 
 # Actions
-abstract type AbstractActionType end
-abstract type AbstractVectorActionType <: AbstractActionType end
-abstract type AbstractScalarActionType <: AbstractActionType end
+abstract type AbstractActionStrategy end
+abstract type AbstractVectorActionStrategy <: AbstractActionStrategy end
+abstract type AbstractScalarActionStrategy <: AbstractActionStrategy end
 """
-    action_dim(action_type::AbstractActionType)
+    action_dim(action_strat::AbstractActionStrategy)
 
 Return the dimension of the action space for the given action type.
 """
 function action_dim end
 
 """
-    _reset_action!(action_type::AbstractActionType)
+    _reset_action!(action_strat::AbstractActionStrategy)
 
 Reset the action type to its initial state. Mainly used for resetting cache. Called when environment is reset.
 """
@@ -42,17 +42,44 @@ function get_init_observation end
 
 #Rewards
 
-abstract type AbstractRDEReward end
+abstract type AbstractRewardStrategy end
+abstract type AbstractVectorRewardStrategy <: AbstractRewardStrategy end
+abstract type AbstractScalarRewardStrategy <: AbstractRewardStrategy end
 
 """
-    set_reward!(env::AbstractRDEEnv, rt::AbstractRDEReward)
+    reward_value_type(T::Type{<:AbstractFloat}, rt::AbstractRewardStrategy)
+
+Return the type of the reward value for the given reward type.
+
+# Examples
+```julia
+reward_value_type(Float32, ShockSpanReward())  # Returns Float32
+reward_value_type(Float32, MultiSectionReward())  # Returns Vector{Float32}
+```
+"""
+function reward_value_type end
+
+reward_value_type(::Type{T}, ::AbstractScalarRewardStrategy) where {T} = T
+reward_value_type(::Type{T}, ::AbstractVectorRewardStrategy) where {T} = Vector{T}
+
+"""
+    set_reward!(env::AbstractRDEEnv, rt::AbstractRewardStrategy)
 
 Set the reward for the environment in env.reward.
 """
 function set_reward! end
 
-abstract type CachedCompositeReward <: AbstractRDEReward end
+"""
+    initialize_cache(rew_strat::AbstractRewardStrategy, N::Int, ::Type{T})
 
+Initialize the cache for the given reward type.
+"""
+function initialize_cache(::AbstractRewardStrategy, ::Int, ::Type{T}) where {T}
+    return NoCache()
+end
+
+#TODO: deprecate, remove
+abstract type CachedCompositeReward <: AbstractRewardStrategy end
 abstract type MultiAgentCachedCompositeReward <: CachedCompositeReward end
 
 # Cache API
@@ -113,12 +140,12 @@ function reset_cache!(cache::RDEEnvCache{T}) where {T}
     return nothing
 end
 
-#TODO_is it necessary to parametrize by A, O, R?
+#TODO:is it necessary to parametrize by A, O, R?
 mutable struct RDEEnv{T, A, O, RW, V, OBS, M, RS, C} <: AbstractRDEEnv where {
         T <: AbstractFloat,
-        A <: AbstractActionType,
+        A <: AbstractActionStrategy,
         O <: AbstractObservationStrategy,
-        RW <: AbstractRDEReward,
+        RW <: AbstractRewardStrategy,
         V <: Union{T, Vector{T}},
         OBS <: AbstractArray{T},
         M <: AbstractMethod,
@@ -138,7 +165,7 @@ mutable struct RDEEnv{T, A, O, RW, V, OBS, M, RS, C} <: AbstractRDEEnv where {
     u_pmax::T
     τ_smooth::T #smoothing time constant #TODO:move this to action_type?
     cache::RDEEnvCache{T}
-    action_type::A
+    action_strat::A
     observation_strategy::O
     reward_type::RW
     verbose::Bool               # Control solver output

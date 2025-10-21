@@ -206,7 +206,7 @@ function plot_policy_data(
             main_layout[1, 1][3, 1], ylabel = "uₚ", yaxisposition = :left,
             limits = ((nothing, (-0.1, max(max_u_p * 1.1, 1.0e-3))))
         )
-        sections = env.action_type.n_sections
+        sections = env.action_strat.n_sections
         section_size = N ÷ sections
         start = 1 + section_size ÷ 2
         u_p_pts = collect(start:section_size:N) / N * L

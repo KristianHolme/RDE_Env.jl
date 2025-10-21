@@ -56,7 +56,7 @@ env, fig = interactive_control(show_observations=true)
 env, fig = interactive_control(callback=(env)->println("t = \$(env.t)"))
 
 # With VectorPressureAction and MultiSectionObservation (matrix observations)
-env = RDEEnv(action_type=VectorPressureAction(4), observation_strategy=MultiSectionObservation(4))
+env = RDEEnv(action_strat=VectorPressureAction(4), observation_strategy=MultiSectionObservation(4))
 env, fig = interactive_control(env, show_observations=true)
 ```
 
@@ -160,7 +160,7 @@ function interactive_control(
     end
 
     # Detect action type and create appropriate controls (direct-only)
-    action_type = env.action_type
+    action_strat = env.action_strat
 
     # Always have timestep control
     time_step = Observable(env.dt)
@@ -170,13 +170,13 @@ function interactive_control(
     end
 
     # Enforce supported action types and zero momentum
-    if !(action_type isa DirectScalarPressureAction || action_type isa DirectVectorPressureAction)
+    if !(action_strat isa DirectScalarPressureAction || action_strat isa DirectVectorPressureAction)
         error("interactive_control supports only DirectScalarPressureAction or DirectVectorPressureAction")
     end
 
     # Action observables and sliders
-    is_vector_action = action_type isa DirectVectorPressureAction
-    n_sections = is_vector_action ? action_type.n_sections : 1
+    is_vector_action = action_strat isa DirectVectorPressureAction
+    n_sections = is_vector_action ? action_strat.n_sections : 1
 
     # action_obs holds current action(s) in [-1, 1]
     init_action_value = mean(env.prob.method.cache.u_p_current)
@@ -282,9 +282,9 @@ function interactive_control(
     RDE.main_plotting(
         plotting_area, env.prob.x, u_data, λ_data, env.prob.params;
         u_max = u_max,
-        s = action_type isa ScalarAreaScalarPressureAction ? control_s : Observable(params.s),
-        u_p = action_type isa ScalarPressureAction ? control_u_p :
-            action_type isa ScalarAreaScalarPressureAction ? control_u_p :
+        s = action_strat isa ScalarAreaScalarPressureAction ? control_s : Observable(params.s),
+        u_p = action_strat isa ScalarPressureAction ? control_u_p :
+            action_strat isa ScalarAreaScalarPressureAction ? control_u_p :
             Observable(params.u_p),
         kwargs...
     )

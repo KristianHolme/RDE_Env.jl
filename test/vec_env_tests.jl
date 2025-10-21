@@ -55,7 +55,7 @@ using Random
         _reset!(vec_env)
 
         # Create test actions
-        action_length = action_dim(envs[1].action_type)
+        action_length = action_dim(envs[1].action_strat)
         actions = zeros(Float32, action_length, 4)
         actions[:, 1] .= 0.5  # Different action for first env
 
@@ -81,7 +81,7 @@ using Random
         _reset!(vec_env)
 
         # Run until termination
-        action_length = action_dim(envs[1].action_type)
+        action_length = action_dim(envs[1].action_strat)
         actions = zeros(Float32, action_length, 4)
         is_terminated = false
         n_steps = 0
@@ -106,7 +106,7 @@ using Random
         vec_env = RDEVecEnv(envs)  # Use more envs to test threading
         _reset!(vec_env)
 
-        action_length = action_dim(envs[1].action_type)
+        action_length = action_dim(envs[1].action_strat)
         actions = zeros(Float32, action_length, 8)
 
         # Run multiple steps in parallel

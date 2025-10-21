@@ -11,7 +11,7 @@ struct DRiLRDEEnv{T, A, O, RW, V, OBS, M, RS, C} <: DRiL.AbstractEnv
     action_space::DRiL.Box
     function DRiLRDEEnv(core_env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}) where {T, A, O, RW, V, OBS, M, RS, C}
         observation_space = _observation_space(core_env, core_env.observation_strategy)
-        action_space = _action_space(core_env, core_env.action_type)
+        action_space = _action_space(core_env, core_env.action_strat)
         return new{T, A, O, RW, V, OBS, M, RS, C}(core_env, observation_space, action_space)
     end
 end
@@ -28,7 +28,7 @@ DRiL.get_info(env::DRiLRDEEnv) = env.core_env.info
 
 _action_space(::RDEEnv, ::ScalarPressureAction) = DRiL.Box([-1.0f0], [1.0f0])
 _action_space(::RDEEnv, ::ScalarAreaScalarPressureAction) = DRiL.Box([-1.0f0, -1.0f0], [1.0f0, 1.0f0])
-_action_space(::RDEEnv, action_type::VectorPressureAction) = DRiL.Box([-1.0f0 for _ in 1:action_type.n_sections], [1.0f0 for _ in 1:action_type.n_sections])
+_action_space(::RDEEnv, action_strat::VectorPressureAction) = DRiL.Box([-1.0f0 for _ in 1:action_strat.n_sections], [1.0f0 for _ in 1:action_strat.n_sections])
 _action_space(::RDEEnv, ::PIDAction) = DRiL.Box([-1.0f0, -1.0f0, -1.0f0], [1.0f0, 1.0f0, 1.0f0])
 
 RDE_Env.set_target_shock_count!(env::DRiLRDEEnv, target_shock_count::Int) = set_target_shock_count!(env.core_env, target_shock_count)
@@ -87,7 +87,7 @@ function _observation_space(::RDEEnv, strategy::MultiCenteredObservation)
     return DRiL.Box(low, high)
 end
 
-function _multi_agent_action_space(::RDEEnv, action_type::VectorPressureAction)
+function _multi_agent_action_space(::RDEEnv, action_strat::VectorPressureAction)
     return DRiL.Box([-1.0f0], [1.0f0])
 end
 
@@ -101,12 +101,12 @@ struct DRiLMultiAgentRDEEnv{T, A, O, RW, V, OBS, M, RS, C} <: DRiL.AbstractParal
     function DRiLMultiAgentRDEEnv(core_env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}) where {T, A, O, RW, V, OBS, M, RS, C}
         obs_strategy = core_env.observation_strategy
         @assert obs_strategy isa AbstractMultiAgentObservationStrategy
-        @assert core_env.action_type isa VectorPressureAction
-        action_type = core_env.action_type
+        @assert core_env.action_strat isa VectorPressureAction
+        action_strat = core_env.action_strat
         observation_space = _observation_space(core_env, obs_strategy)
-        action_space = _multi_agent_action_space(core_env, action_type)
+        action_space = _multi_agent_action_space(core_env, action_strat)
         n_envs = obs_strategy.n_sections
-        @assert n_envs == action_type.n_sections
+        @assert n_envs == action_strat.n_sections
         return new{T, A, O, RW, V, OBS, M, RS, C}(core_env, observation_space, action_space, n_envs)
     end
 end

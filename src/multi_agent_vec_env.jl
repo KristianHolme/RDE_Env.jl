@@ -10,7 +10,7 @@ The environment supports two threading modes:
 - POLYESTER: Uses Polyester.@batch for parallelization
 """
 mutable struct MultiAgentRDEVecEnv{T <: AbstractFloat} <: AbstractRDEEnv
-    envs::Vector{RDEEnv{T, A, O, R, V, OBS}} where {A <: AbstractActionType, O <: AbstractObservationStrategy, R <: AbstractRDEReward, V, OBS}
+    envs::Vector{RDEEnv{T, A, O, R, V, OBS}} where {A <: AbstractActionStrategy, O <: AbstractObservationStrategy, R <: AbstractRewardStrategy, V, OBS}
     n_envs::Int
     n_agents_per_env::Int
     observations::Matrix{T}

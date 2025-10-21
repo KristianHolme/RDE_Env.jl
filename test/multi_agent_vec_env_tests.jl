@@ -77,7 +77,7 @@ using Random
         _reset!(vec_env)
 
         # Create test actions (2 agents per env, 2 envs)
-        action_length = action_dim(envs[1].action_type)
+        action_length = action_dim(envs[1].action_strat)
         actions = zeros(Float32, action_length, 4)  # 4 total agents
         actions[:, 1] .= 0.5  # Different action for first agent
 
@@ -113,7 +113,7 @@ using Random
         _reset!(vec_env)
 
         # Run until termination
-        action_length = action_dim(envs[1].action_type)
+        action_length = action_dim(envs[1].action_strat)
         actions = zeros(Float32, action_length, 4)  # 4 total agents
         is_terminated = false
         n_steps = 0
@@ -143,7 +143,7 @@ using Random
         vec_env = MultiAgentRDEVecEnv(envs)
         _reset!(vec_env)
 
-        action_length = action_dim(envs[1].action_type)
+        action_length = action_dim(envs[1].action_strat)
         actions = zeros(Float32, action_length, 8)  # 4 envs * 2 agents
 
         # Run multiple steps in parallel

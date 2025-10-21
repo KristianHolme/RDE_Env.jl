@@ -17,8 +17,8 @@ using PrecompileTools
 using ProgressMeter
 
 include("core.jl")
-export AbstractRDEEnv, AbstractActionType, AbstractObservationStrategy, AbstractMultiAgentObservationStrategy,
-    AbstractRDEReward
+export AbstractRDEEnv, AbstractActionStrategy, AbstractObservationStrategy, AbstractMultiAgentObservationStrategy,
+    AbstractRewardStrategy
 export action_dim, _reset_action!, set_N!
 export compute_observation, get_init_observation
 export set_reward!
@@ -90,7 +90,7 @@ include("displaying.jl")
             params = RDEParam(; N = 512, tmax = 0.5f0),
             τ_smooth = 0.05f0,
             observation_strategy = FourierObservation(8),
-            action_type = ScalarPressureAction()
+            action_strat = ScalarPressureAction()
         )
         policy = RandomRDEPolicy(env)
         data = run_policy(policy, env)

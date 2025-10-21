@@ -1,14 +1,14 @@
-@kwdef mutable struct ScalarPressureAction{T <: AbstractFloat} <: AbstractActionType
+@kwdef mutable struct ScalarPressureAction{T <: AbstractFloat} <: AbstractScalarActionStrategy
     momentum::T = 0.0f0
 end
 
 
-@kwdef mutable struct ScalarAreaScalarPressureAction{T <: AbstractFloat} <: AbstractActionType
+@kwdef mutable struct ScalarAreaScalarPressureAction{T <: AbstractFloat} <: AbstractVectorActionStrategy
     momentum::T = 0.0f0
 end
 
 
-@kwdef mutable struct VectorPressureAction{T <: AbstractFloat} <: AbstractActionType
+@kwdef mutable struct VectorPressureAction{T <: AbstractFloat} <: AbstractVectorActionStrategy
     n_sections::Int = 1 #number of sections
     momentum::T = 0.0f0
 end
@@ -28,19 +28,19 @@ function reset_cache!(cache::PIDActionCache{T}) where {T}
 end
 
 """
-    LinearScalarPressureAction <: AbstractActionType
+    LinearScalarPressureAction <: AbstractActionStrategy
 
 Action type where a single scalar action in `[-1, 1]` directly maps linearly  
 to pressure control in `[0, u_pmax]` via: `control = 0.5 * u_pmax * (action + 1)`.
 Unlike `ScalarPressureAction`, the mapping is constant and independent of 
 the previous control state.
 """
-@kwdef struct LinearScalarPressureAction{T <: AbstractFloat} <: AbstractActionType
+@kwdef struct LinearScalarPressureAction{T <: AbstractFloat} <: AbstractScalarActionStrategy
     momentum::T = 0.0f0
 end
 
 """
-    LinearVectorPressureAction <: AbstractActionType
+    LinearVectorPressureAction <: AbstractActionStrategy
 
 Vector action type where each section's action in `[-1, 1]` directly maps linearly  
 to pressure control in `[0, u_pmax]` via: `control = 0.5 * u_pmax * (action + 1)`.
@@ -50,22 +50,22 @@ the previous control state.
 # Fields
 - `n_sections::Int`: Number of sections to control independently (default: 1)
 """
-@kwdef struct LinearVectorPressureAction{T <: AbstractFloat} <: AbstractActionType
+@kwdef struct LinearVectorPressureAction{T <: AbstractFloat} <: AbstractVectorActionStrategy
     n_sections::Int = 1
     momentum::T = 0.0f0
 end
 
-@kwdef struct DirectScalarPressureAction{T <: AbstractFloat} <: AbstractActionType
+@kwdef struct DirectScalarPressureAction{T <: AbstractFloat} <: AbstractScalarActionStrategy
     momentum::T = 0.0f0
 end
 
-@kwdef struct DirectVectorPressureAction{T <: AbstractFloat} <: AbstractActionType
+@kwdef struct DirectVectorPressureAction{T <: AbstractFloat} <: AbstractVectorActionStrategy
     n_sections::Int = 1
     momentum::T = 0.0f0
 end
 
 """
-    PIDAction <: AbstractActionType
+    PIDAction <: AbstractScalarActionStrategy
 
 Action type where the agent supplies PID gains `[Kp, Ki, Kd]` and the
 environment produces a scalar pressure action in `[-1, 1]` using a
@@ -78,13 +78,13 @@ target_shock_count comes from env.cache.goal.
 # Fields
 - `momentum::T`: Optional momentum parameter (default: 0.0), can be used for smoothing
 """
-@kwdef struct PIDAction{T <: AbstractFloat} <: AbstractActionType
+@kwdef struct PIDAction{T <: AbstractFloat} <: AbstractVectorActionStrategy
     momentum::T = 0.0f0
 end
 # Momentum API
-momentum(at::AbstractActionType) = getfield(at, :momentum)
+momentum(at::AbstractActionStrategy) = getfield(at, :momentum)
 
-function action_dim(at::ScalarPressureAction)
+function action_dim(at::AbstractScalarActionStrategy)
     return 1
 end
 
@@ -144,11 +144,11 @@ function linear_action_to_control(a::T, c_prev::T, c_max::T, momentum::T) where 
 end
 
 function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::AbstractVector{T}) where {T <: AbstractFloat, A <: VectorPressureAction, O, RW, V, OBS, M, RS, C}
-    action_type = env.action_type
+    action_strat = env.action_strat
     N = env.prob.params.N
     @assert N > 0 "Action type N not set"
-    @assert length(action) == action_type.n_sections "Action length ($(length(action))) must match n_sections ($(action_type.n_sections))"
-    @assert N % action_type.n_sections == 0 "N ($(N)) must be divisible by n_sections ($(action_type.n_sections))"
+    @assert length(action) == action_strat.n_sections "Action length ($(length(action))) must match n_sections ($(action_strat.n_sections))"
+    @assert N % action_strat.n_sections == 0 "N ($(N)) must be divisible by n_sections ($(action_strat.n_sections))"
 
     # full_domain_action_vector = fill_standardized_vector_actions!(env.cache.actions[:, 2], env, action)
     # env.cache.action[:, 1] = a[1]
@@ -165,15 +165,15 @@ function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::Abstr
 
 
     # Calculate how many points per section
-    points_per_section = N ÷ action_type.n_sections
+    points_per_section = N ÷ action_strat.n_sections
 
     current_section_controls = @view method_cache.u_p_current[1:points_per_section:end]
     # Use action-cache buffer to avoid per-step allocation
     @assert env.cache.action_cache isa VectorActionCache{T}
     section_controls = env.cache.action_cache.section_controls
-    section_controls .= action_to_control.(action, current_section_controls, env.u_pmax, momentum(env.action_type))
+    section_controls .= action_to_control.(action, current_section_controls, env.u_pmax, momentum(env.action_strat))
     # Fill each section with its corresponding action value, directly writing into method_cache.u_p_current (no new allocation)
-    for i in 1:action_type.n_sections
+    for i in 1:action_strat.n_sections
         start_idx = (i - 1) * points_per_section + 1
         end_idx = i * points_per_section
         method_cache.u_p_current[start_idx:end_idx] .= section_controls[i]
@@ -190,7 +190,7 @@ function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::T) wh
     end
 
     copyto!(method_cache.u_p_previous, method_cache.u_p_current)
-    method_cache.u_p_current .= action_to_control(action, method_cache.u_p_current[1], env.u_pmax, momentum(env.action_type))
+    method_cache.u_p_current .= action_to_control(action, method_cache.u_p_current[1], env.u_pmax, momentum(env.action_strat))
 
     copyto!(method_cache.s_previous, method_cache.s_current)
     return nothing
@@ -213,10 +213,10 @@ function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::Abstr
     end
 
     copyto!(method_cache.s_previous, method_cache.s_current)
-    method_cache.s_current .= action_to_control(a_s, method_cache.s_current[1], env.smax, momentum(env.action_type))
+    method_cache.s_current .= action_to_control(a_s, method_cache.s_current[1], env.smax, momentum(env.action_strat))
 
     copyto!(method_cache.u_p_previous, method_cache.u_p_current)
-    method_cache.u_p_current .= action_to_control(a_up, method_cache.u_p_current[1], env.u_pmax, momentum(env.action_type))
+    method_cache.u_p_current .= action_to_control(a_up, method_cache.u_p_current[1], env.u_pmax, momentum(env.action_strat))
     return nothing
 end
 
@@ -247,7 +247,7 @@ function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, gains::Abstra
 
     # Apply control (only u_p)
     copyto!(method_cache.u_p_previous, method_cache.u_p_current)
-    method_cache.u_p_current .= action_to_control(u_p_action, method_cache.u_p_current[1], env.u_pmax, momentum(env.action_type))
+    method_cache.u_p_current .= action_to_control(u_p_action, method_cache.u_p_current[1], env.u_pmax, momentum(env.action_strat))
 
     # s channel unchanged, still keep previous in sync
     copyto!(method_cache.s_previous, method_cache.s_current)
@@ -268,18 +268,18 @@ function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::T) wh
     end
 
     copyto!(method_cache.u_p_previous, method_cache.u_p_current)
-    method_cache.u_p_current .= linear_action_to_control(action, method_cache.u_p_current[1], env.u_pmax, momentum(env.action_type))
+    method_cache.u_p_current .= linear_action_to_control(action, method_cache.u_p_current[1], env.u_pmax, momentum(env.action_strat))
 
     copyto!(method_cache.s_previous, method_cache.s_current)
     return nothing
 end
 
 function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::AbstractVector{T}) where {T <: AbstractFloat, A <: LinearVectorPressureAction, O, RW, V, OBS, M, RS, C}
-    action_type = env.action_type
+    action_strat = env.action_strat
     N = env.prob.params.N
     @assert N > 0 "Action type N not set"
-    @assert length(action) == action_type.n_sections "Action length ($(length(action))) must match n_sections ($(action_type.n_sections))"
-    @assert N % action_type.n_sections == 0 "N ($(N)) must be divisible by n_sections ($(action_type.n_sections))"
+    @assert length(action) == action_strat.n_sections "Action length ($(length(action))) must match n_sections ($(action_strat.n_sections))"
+    @assert N % action_strat.n_sections == 0 "N ($(N)) must be divisible by n_sections ($(action_strat.n_sections))"
 
     method_cache = env.prob.method.cache
     env_cache = env.cache
@@ -292,14 +292,14 @@ function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::Abstr
 
 
     # Calculate how many points per section
-    points_per_section = N ÷ action_type.n_sections
+    points_per_section = N ÷ action_strat.n_sections
 
     current_section_controls = @view method_cache.u_p_current[1:points_per_section:end]
     @assert env_cache.action_cache isa VectorActionCache{T}
     section_controls = (env_cache.action_cache::VectorActionCache{T}).section_controls
-    section_controls .= linear_action_to_control.(action, current_section_controls, env.u_pmax, momentum(env.action_type))
+    section_controls .= linear_action_to_control.(action, current_section_controls, env.u_pmax, momentum(env.action_strat))
     # Fill each section with its corresponding action value, directly writing into method_cache.u_p_current (no new allocation)
-    for i in 1:action_type.n_sections
+    for i in 1:action_strat.n_sections
         start_idx = (i - 1) * points_per_section + 1
         end_idx = i * points_per_section
         method_cache.u_p_current[start_idx:end_idx] .= section_controls[i]
@@ -318,17 +318,17 @@ function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::T) wh
 
     copyto!(method_cache.u_p_previous, method_cache.u_p_current)
 
-    method_cache.u_p_current .= momentum_target(action, method_cache.u_p_current[1], momentum(env.action_type))
+    method_cache.u_p_current .= momentum_target(action, method_cache.u_p_current[1], momentum(env.action_strat))
     copyto!(method_cache.s_previous, method_cache.s_current)
     return nothing
 end
 
 function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::AbstractVector{T}) where {T <: AbstractFloat, A <: DirectVectorPressureAction, O, RW, V, OBS, M, RS, C}
-    action_type = env.action_type
+    action_strat = env.action_strat
     N = env.prob.params.N
     @assert N > 0 "Action type N not set"
-    @assert length(action) == action_type.n_sections "Action length ($(length(action))) must match n_sections ($(action_type.n_sections))"
-    @assert N % action_type.n_sections == 0 "N ($(N)) must be divisible by n_sections ($(action_type.n_sections))"
+    @assert length(action) == action_strat.n_sections "Action length ($(length(action))) must match n_sections ($(action_strat.n_sections))"
+    @assert N % action_strat.n_sections == 0 "N ($(N)) must be divisible by n_sections ($(action_strat.n_sections))"
 
     method_cache = env.prob.method.cache
     env_cache = env.cache
@@ -337,14 +337,14 @@ function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::Abstr
 
 
     # Calculate how many points per section
-    points_per_section = N ÷ action_type.n_sections
+    points_per_section = N ÷ action_strat.n_sections
 
     current_section_controls = @view method_cache.u_p_current[1:points_per_section:end]
     @assert env_cache.action_cache isa VectorActionCache{T}
     section_controls = env_cache.action_cache.section_controls
-    section_controls .= momentum_target.(action, current_section_controls, momentum(env.action_type))
+    section_controls .= momentum_target.(action, current_section_controls, momentum(env.action_strat))
     # Fill each section with its corresponding action value, directly writing into method_cache.u_p_current (no new allocation)
-    for i in 1:action_type.n_sections
+    for i in 1:action_strat.n_sections
         start_idx = (i - 1) * points_per_section + 1
         end_idx = i * points_per_section
         method_cache.u_p_current[start_idx:end_idx] .= section_controls[i]

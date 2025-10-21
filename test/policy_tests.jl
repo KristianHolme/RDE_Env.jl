@@ -10,7 +10,7 @@
             params = RDEParam(; N = 32, tmax = 0.05),
             τ_smooth = 0.5,  # Small smoothing time to avoid discontinuities
             observation_strategy = FourierObservation(8),
-            action_type = ScalarPressureAction(),
+            action_strat = ScalarPressureAction(),
             reward_type = CompositeReward()
         )
         policy = RandomRDEPolicy(env)

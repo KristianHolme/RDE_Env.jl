@@ -18,7 +18,7 @@ function CommonRLInterface.observe(env::CommonRDEEnv)
 end
 
 function CommonRLInterface.actions(env::CommonRDEEnv)
-    n = action_dim(env.core_env.action_type)
+    n = action_dim(env.core_env.action_strat)
     return [(-1 .. 1) for _ in 1:n]
 end
 

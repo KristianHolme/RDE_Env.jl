@@ -18,8 +18,8 @@ Reinforcement learning environment for the RDE system.
 - `u_pmax::T`: Maximum value for u_p parameter
 - `τ_smooth::T`: Control smoothing time constant
 - `cache::RDEEnvCache{T}`: Environment cache
-- `action_type::AbstractActionType`: Type of control actions
-- `reward_type::AbstractRDEReward`: Type of reward function
+- `action_strat::AbstractActionStrategy`: Type of control actions
+- `reward_type::AbstractRewardStrategy`: Type of reward function
 - `verbose::Bool`: Control solver output
 # Constructor
 ```julia
@@ -32,8 +32,8 @@ RDEEnv{T}(;
     τ_smooth=1.25,
     fft_terms::Int=32,
     observation_strategy::AbstractObservationStrategy=FourierObservation(fft_terms),
-    action_type::AbstractActionType=ScalarPressureAction(),
-    reward_type::AbstractRDEReward=ShockSpanReward(target_shock_count=3),
+    action_strat::AbstractActionStrategy=ScalarPressureAction(),
+    reward_type::AbstractRewardStrategy=ShockSpanReward(target_shock_count=3),
     verbose::Bool=true,
     kwargs...
 ) where {T<:AbstractFloat}
@@ -50,12 +50,12 @@ function RDEEnv(;
         u_pmax = 1.2f0,
         params::RDEParam{T} = RDEParam(),
         τ_smooth = 0.1f0,
-        action_type::A = ScalarPressureAction(),
+        action_strat::A = ScalarPressureAction(),
         observation_strategy::O = SectionedStateObservation(),
         reward_type::RW = PeriodMinimumReward(),
         verbose::Bool = false,
         kwargs...
-    ) where {T <: AbstractFloat, A <: AbstractActionType, O <: AbstractObservationStrategy, RW <: AbstractRDEReward}
+    ) where {T <: AbstractFloat, A <: AbstractActionStrategy, O <: AbstractObservationStrategy, RW <: AbstractRewardStrategy}
 
     if τ_smooth > dt
         @warn "τ_smooth > dt, this will cause discontinuities in the control signal"
@@ -71,7 +71,7 @@ function RDEEnv(;
     init_observation = get_init_observation(observation_strategy, params.N, T)
     # Initialize typed subcaches (no env dependency)
     reward_cache = initialize_cache(reward_type, params.N, T)
-    action_cache = initialize_cache(action_type, params.N, T)
+    action_cache = initialize_cache(action_strat, params.N, T)
     observation_cache = initialize_cache(observation_strategy, params.N, T)
     # Initialize goal cache with current target shocks if present on types, else default 3
     goal = GoalCache(2)
@@ -106,7 +106,7 @@ function RDEEnv(;
         prob, initial_state, init_observation,
         dt, T(0.0), false, false, false, initial_reward, smax, u_pmax,
         τ_smooth, cache,
-        action_type, observation_strategy,
+        action_strat, observation_strategy,
         reward_type, verbose, Dict{String, Any}(), 0, ode_problem
     )
     RDE.RDE_RHS!(zeros(T, 2 * params.N), initial_state, prob, T(0.0)) #to update caches

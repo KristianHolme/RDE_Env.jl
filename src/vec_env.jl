@@ -20,7 +20,7 @@ The environment supports two threading modes:
 - POLYESTER: Uses Polyester.@batch for parallelization
 """
 mutable struct RDEVecEnv{T <: AbstractFloat} <: AbstractRDEEnv
-    envs::Vector{RDEEnv{T, A, O, RW, V, OBS, M, RS, C}} where {A <: AbstractActionType, O <: AbstractObservationStrategy, RW <: AbstractRDEReward, V, OBS, M, RS, C}
+    envs::Vector{RDEEnv{T, A, O, RW, V, OBS, M, RS, C}} where {A <: AbstractActionStrategy, O <: AbstractObservationStrategy, RW <: AbstractRewardStrategy, V, OBS, M, RS, C}
     n_envs::Int64
     observations::Matrix{T}  # Pre-allocated for efficiency
     rewards::Vector{T}
@@ -35,7 +35,7 @@ end
 
 Create a vectorized environment from a vector of environments.
 """
-function RDEVecEnv(envs::Vector{RDEEnv{T, A, O, RW, V, OBS, M, RS, C}}; threading_mode::ThreadingMode = THREADS) where {T <: AbstractFloat, A <: AbstractActionType, O <: AbstractObservationStrategy, RW <: AbstractRDEReward, V, OBS, M, RS, C}
+function RDEVecEnv(envs::Vector{RDEEnv{T, A, O, RW, V, OBS, M, RS, C}}; threading_mode::ThreadingMode = THREADS) where {T <: AbstractFloat, A <: AbstractActionStrategy, O <: AbstractObservationStrategy, RW <: AbstractRewardStrategy, V, OBS, M, RS, C}
     n_envs = length(envs)
     obs_dim = length(_observe(envs[1]))
     observations = Matrix{T}(undef, obs_dim, n_envs)
@@ -107,7 +107,7 @@ _observe(env::RDEVecEnv) = copy(env.observations)
 
 function _act!(env::RDEVecEnv, actions::AbstractArray)
     @logmsg LogLevel(-10000) "VecEnv act! starting threaded loop, actions size: $(size(actions))"
-    @assert size(actions, 2) == env.n_envs && size(actions, 1) == action_dim(env.envs[1].action_type) "Action size mismatch"
+    @assert size(actions, 2) == env.n_envs && size(actions, 1) == action_dim(env.envs[1].action_strat) "Action size mismatch"
 
     # Choose threading macro based on mode
     if env.threading_mode == THREADS
