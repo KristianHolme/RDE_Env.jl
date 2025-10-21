@@ -313,7 +313,8 @@ function interactive_control(
     reward_start_xmax = 0.5
     ax_reward = Axis(energy_area[1, 1], title = "Reward", xlabel = "t", limits = (0, reward_start_xmax, nothing, nothing))
     if reward_is_vector
-        colors = distinguishable_colors(reward_length)
+        bg_color = Makie.Colors.RGB(ax_reward.scene.backgroundcolor[])
+        colors = distinguishable_colors(reward_length, [bg_color]; dropseed = true)
         labels = reward_value isa NamedTuple ? collect(keys(reward_value)) : ["r$(i)" for i in 1:reward_length]
         for i in 1:reward_length
             lines!(ax_reward, reward_pts[i], color = colors[i], label = labels[i])
@@ -402,16 +403,6 @@ function interactive_control(
                         _reset!(env)
                         update_observables!()
 
-                        # Reset actions to zero and sync sliders
-                        if is_vector_action
-                            action_obs[] = fill(init_action_value, n_sections)
-                            for i in 1:n_sections
-                                set_close_to!(action_sliders[i], init_action_value)
-                            end
-                        else
-                            action_obs[] = init_action_value
-                            set_close_to!(action_slider, init_action_value)
-                        end
 
                         # energy_bal_pts[] = Point2f[(env.t, energy_balance(env.state, params))]
                         # chamber_p_pts[] = Point2f[(env.t, chamber_pressure(env.state, params))]
