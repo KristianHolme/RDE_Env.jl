@@ -4,7 +4,7 @@
     # Create environment with ShockSpanReward
     env = RDEEnv(;
         dt = 1.0,
-        reward_type = ShockSpanReward(
+        reward_strat = ShockSpanReward(
             span_scale = 4.0f0,
             shock_weight = 5.0f0
         )
@@ -18,7 +18,7 @@
 
     # Test reward with no shocks
     env.state .= 1.0  # Constant state = no shocks
-    set_reward!(env, env.reward_type)
+    set_reward!(env, env.reward_strat)
     @test env.reward < 0  # Should be negative with no shocks
 
     # Test reward with target number of shocks
@@ -28,22 +28,23 @@
     env.state[N ÷ 4] = 2.0  # First shock
     env.state[N ÷ 2] = 2.0  # Second shock
     env.state[3N ÷ 4] = 2.0  # Third shock
-    set_reward!(env, env.reward_type)
+    set_reward!(env, env.reward_strat)
     @test env.reward > 0  # Should be positive with target shocks
 end
 
 @testitem "ShockPreservingReward" begin
     using RDE
-
+    target_shock_count = 3
     # Create environment with ShockPreservingReward
     params = RDEParam(tmax = 1.0)
     env = RDEEnv(
         params;
         dt = 0.1,
-        reward_type = ShockPreservingReward(
+        reward_strat = ShockPreservingReward(
             abscence_limit = 0.01f0
         )
     )
+    set_target_shock_count!(env, target_shock_count)
 
     # Test initial reward
     _reset!(env)
@@ -53,7 +54,7 @@ end
 
     # Test truncation with wrong number of shocks
     env.state .= 1.0  # Constant state = no shocks
-    set_reward!(env, env.reward_type)
+    set_reward!(env, env.reward_strat)
     _act!(env, 0.0f0)
     _act!(env, 0.0f0) #act twice to outrun abscence limit
 
@@ -68,7 +69,7 @@ end
     env.state[N ÷ 3] = 2.0
     env.state[2N ÷ 3] = 2.0
     env.state[N] = 2.0
-    set_reward!(env, env.reward_type)
+    set_reward!(env, env.reward_strat)
     @test !env.terminated  # Should not be terminated
     @test env.reward > 0  # Should get positive reward for evenly spaced shocks
     @test env.reward ≤ 1.0  # Reward should be normalized
@@ -86,7 +87,7 @@ end
         env = RDEEnv(;
             dt = dt,
             params = RDEParam(tmax = tmax),
-            reward_type = ShockSpanReward(
+            reward_strat = ShockSpanReward(
                 span_scale = 4.0f0,
                 shock_weight = 5.0f0
             )
@@ -111,7 +112,7 @@ end
         env = RDEEnv(;
             dt = dt,
             params = RDEParam(tmax = tmax),
-            reward_type = ShockPreservingReward()
+            reward_strat = ShockPreservingReward()
         )
         policy = RandomRDEPolicy(env)
 
@@ -147,7 +148,7 @@ end
         env = RDEEnv(;
             dt = dt,
             params = RDEParam(tmax = tmax),
-            reward_type = ShockSpanReward(
+            reward_strat = ShockSpanReward(
                 span_scale = 4.0f0,
                 shock_weight = 5.0f0
             )
@@ -172,7 +173,7 @@ end
     # Create environment with TimeAggCompositeReward
     env = RDEEnv(;
         dt = 1.0,
-        reward_type = TimeAggCompositeReward(
+        reward_strat = TimeAggCompositeReward(
             aggregation = TimeMin(),
             lowest_action_magnitude_reward = 0.5f0,
             weights = [0.25f0, 0.25f0, 0.25f0, 0.25f0]
@@ -187,7 +188,7 @@ end
 
     # Test reward with no shocks
     env.state .= 1.0  # Constant state = no shocks
-    set_reward!(env, env.reward_type)
+    set_reward!(env, env.reward_strat)
     @test env.reward ≈ 0  # Should be zero with no shocks
 
     # Test reward with target number of shocks
@@ -196,17 +197,17 @@ end
     env.state[N ÷ 4] = 2.0  # First shock
     env.state[N ÷ 2] = 2.0  # Second shock
     env.state[3N ÷ 4] = 2.0  # Third shock
-    set_reward!(env, env.reward_type)
+    set_reward!(env, env.reward_strat)
     @test env.reward > 0  # Should be positive with target shocks
 
     # Test different aggregation methods
     for agg in [TimeMin(), TimeMax(), TimeAvg(), TimeSum(), TimeProd()]
-        env.reward_type = TimeAggCompositeReward(
+        env.reward_strat = TimeAggCompositeReward(
             aggregation = agg,
             lowest_action_magnitude_reward = 0.5f0,
             weights = [0.25f0, 0.25f0, 0.25f0, 0.25f0]
         )
-        set_reward!(env, env.reward_type)
+        set_reward!(env, env.reward_strat)
         @test !isnan(env.reward)
         @test !isinf(env.reward)
     end
@@ -218,7 +219,7 @@ end
     # Create environment with TimeAggMultiSectionReward
     env = RDEEnv(;
         dt = 1.0,
-        reward_type = TimeAggMultiSectionReward(
+        reward_strat = TimeAggMultiSectionReward(
             aggregation = TimeMin(),
             n_sections = 4,
             lowest_action_magnitude_reward = 0.5f0,
@@ -235,7 +236,7 @@ end
 
     # Test reward with no shocks
     env.state .= 1.0  # Constant state = no shocks
-    set_reward!(env, env.reward_type)
+    set_reward!(env, env.reward_strat)
     @test all(env.reward .≤ 0)  # All sections should have negative reward with no shocks
 
     # Test reward with target number of shocks
@@ -244,18 +245,18 @@ end
     env.state[N ÷ 4] = 2.0  # First shock
     env.state[N ÷ 2] = 2.0  # Second shock
     env.state[3N ÷ 4] = 2.0  # Third shock
-    set_reward!(env, env.reward_type)
+    set_reward!(env, env.reward_strat)
     @test all(env.reward .≥ 0)  # All sections should have positive reward with target shocks
 
     # Test different aggregation methods
     for agg in [TimeMin(), TimeMax(), TimeAvg(), TimeSum(), TimeProd()]
-        env.reward_type = TimeAggMultiSectionReward(
+        env.reward_strat = TimeAggMultiSectionReward(
             aggregation = agg,
             n_sections = 4,
             lowest_action_magnitude_reward = 0.5f0,
             weights = [1.0f0, 1.0f0, 5.0f0, 1.0f0]
         )
-        set_reward!(env, env.reward_type)
+        set_reward!(env, env.reward_strat)
         @test !any(isnan.(env.reward))
         @test !any(isinf.(env.reward))
         @test length(env.reward) == 4  # Should maintain section count
@@ -280,7 +281,7 @@ end
         # Create environment with MultiplicativeReward
         env = RDEEnv(;
             dt = 1.0,
-            reward_type = MultiplicativeReward(reward1, reward2)
+            reward_strat = MultiplicativeReward(reward1, reward2)
         )
 
         # Test initial reward
@@ -301,7 +302,7 @@ end
         env.state[N ÷ 2] = 2.0  # Second shock
         env.state[3N ÷ 4] = 2.0  # Third shock
 
-        set_reward!(env, env.reward_type)
+        set_reward!(env, env.reward_strat)
         r1 = RDE_Env._compute_reward(env, reward1, env.cache.reward_cache.caches[1])
         r2 = RDE_Env._compute_reward(env, reward2, env.cache.reward_cache.caches[2])
         @test env.reward ≈ r1 * r2
@@ -324,7 +325,7 @@ end
         # Create environment with MultiplicativeReward
         env = RDEEnv(;
             dt = 1.0,
-            reward_type = MultiplicativeReward(reward1, reward2)
+            reward_strat = MultiplicativeReward(reward1, reward2)
         )
 
         # Test initial reward
@@ -346,7 +347,7 @@ end
         env.state[N ÷ 2] = 2.0  # Second shock
         env.state[3N ÷ 4] = 2.0  # Third shock
 
-        set_reward!(env, env.reward_type)
+        set_reward!(env, env.reward_strat)
         r1 = RDE_Env._compute_reward(env, reward1, env.cache.reward_cache.caches[1])
         r2 = RDE_Env._compute_reward(env, reward2, env.cache.reward_cache.caches[2])
         @test all(env.reward .≈ r1 .* r2)
@@ -368,7 +369,7 @@ end
         # Create environment with MultiplicativeReward
         env = RDEEnv(;
             dt = 1.0,
-            reward_type = MultiplicativeReward(scalar_reward, vector_reward)
+            reward_strat = MultiplicativeReward(scalar_reward, vector_reward)
         )
 
         # Test initial reward
@@ -386,20 +387,20 @@ end
         # Test scalar reward first vs. vector reward first
         env2 = RDEEnv(;
             dt = 1.0,
-            reward_type = MultiplicativeReward(vector_reward, scalar_reward)
+            reward_strat = MultiplicativeReward(vector_reward, scalar_reward)
         )
         _reset!(env2)
-        set_reward!(env2, env2.reward_type)
+        set_reward!(env2, env2.reward_strat)
         @test all(env2.reward .≈ env.reward)  # Order shouldn't matter
 
         # Test with multiple scalar rewards
         scalar_reward2 = TimeDiffNormReward(threshold = 10.0f0)
         env3 = RDEEnv(;
             dt = 1.0,
-            reward_type = MultiplicativeReward(scalar_reward, vector_reward, scalar_reward2)
+            reward_strat = MultiplicativeReward(scalar_reward, vector_reward, scalar_reward2)
         )
         _reset!(env3)
-        set_reward!(env3, env3.reward_type)
+        set_reward!(env3, env3.reward_strat)
         r3 = RDE_Env._compute_reward(env3, scalar_reward2, env3.cache.reward_cache.caches[3])
         @test all(env3.reward .≈ r1 .* r2 .* r3)
     end
@@ -417,7 +418,7 @@ end
         env = RDEEnv(;
             dt = dt,
             params = RDEParam(tmax = tmax),
-            reward_type = MultiplicativeReward(scalar_reward, vector_reward)
+            reward_strat = MultiplicativeReward(scalar_reward, vector_reward)
         )
         policy = ConstantRDEPolicy(env)
 
@@ -465,11 +466,11 @@ end
     @test_throws MethodError StabilityTargetReward(stability_weight = 0.8f0, target_weight = 0.2)  # Float32 vs Float64
     @test_throws MethodError StabilityTargetReward(stability_weight = 0.8, target_weight = 0.2f0)  # Float64 vs Float32
 
-    # Test type consistency with kwargs - should error with wrong type
-    @test_throws MethodError StabilityTargetReward(variation_scaling = 5.0)  # Float64 instead of Float32
+    # Test type consistency with kwargs gets converted
+    @test StabilityTargetReward(variation_scaling = 5.0) isa StabilityTargetReward{Float32}
 
     # Test typed constructor with consistent types
-    reward4 = StabilityTargetReward{Float64}(stability_weight = 0.8, target_weight = 0.2, variation_scaling = 5.0)
+    reward4 = StabilityTargetReward(stability_weight = 0.8, target_weight = 0.2, variation_scaling = 5.0)
     @test reward4 isa StabilityTargetReward{Float64}
     @test reward4.stability_weight isa Float64
     @test reward4.target_weight isa Float64
@@ -495,7 +496,7 @@ end
     # Create environment with StabilityTargetReward
     env = RDEEnv(;
         dt = 1.0,
-        reward_type = StabilityTargetReward()
+        reward_strat = StabilityTargetReward()
     )
 
     # Test initial reward
@@ -507,26 +508,31 @@ end
 
     # Get target shock count
     target_count = RDE_Env.get_target_shock_count(env)
-    @test target_count == 3  # Default target
+    @test target_count == 2  # Default target
 end
 
 @testitem "StabilityTargetReward Target Matching" begin
     using RDE
-
+    target_shock_count = 1
     # Create environment
     env = RDEEnv(;
         dt = 1.0,
-        reward_type = StabilityTargetReward(stability_weight = 0.5f0, target_weight = 0.5f0)
+        reward_strat = StabilityTargetReward(stability_weight = 0.5f0, target_weight = 0.5f0)
     )
+    set_target_shock_count!(env, target_shock_count)
     _reset!(env)
 
     # Get initial reward with correct number of shocks
-    initial_reward = env.reward
+    for _ in 1:50
+        _act!(env, 0.0f0)
+    end
+
+    initial_reward = _act!(env, 0.0f0)
 
     # Create state with wrong number of shocks (0 shocks)
     N = env.prob.params.N
     env.state[1:N] .= 1.0  # Constant state = no shocks
-    set_reward!(env, env.reward_type)
+    set_reward!(env, env.reward_strat)
     no_shock_reward = env.reward
 
     # Should get lower reward with wrong shock count
@@ -547,7 +553,7 @@ end
     for (stab_w, targ_w) in weights
         env = RDEEnv(;
             dt = 1.0,
-            reward_type = StabilityTargetReward(
+            reward_strat = StabilityTargetReward(
                 stability_weight = stab_w,
                 target_weight = targ_w
             )
@@ -556,8 +562,8 @@ end
         @test env.reward isa Float32
         @test !isnan(env.reward)
         @test !isinf(env.reward)
-        @test env.reward_type.stability_weight == stab_w
-        @test env.reward_type.target_weight == targ_w
+        @test env.reward_strat.stability_weight == stab_w
+        @test env.reward_strat.target_weight == targ_w
     end
 end
 
@@ -573,7 +579,7 @@ end
     env = RDEEnv(;
         dt = dt,
         params = RDEParam(tmax = tmax),
-        reward_type = StabilityTargetReward()
+        reward_strat = StabilityTargetReward()
     )
     policy = ConstantRDEPolicy(env)
 
@@ -606,12 +612,12 @@ end
     # Create two environments: one with StabilityReward, one with StabilityTargetReward
     env_stability = RDEEnv(;
         dt = 1.0,
-        reward_type = StabilityReward()
+        reward_strat = StabilityReward()
     )
 
     env_target = RDEEnv(;
         dt = 1.0,
-        reward_type = StabilityTargetReward(stability_weight = 1.0f0, target_weight = 0.0f0)
+        reward_strat = StabilityTargetReward(stability_weight = 1.0f0, target_weight = 0.0f0)
     )
 
     # Reset both with same seed

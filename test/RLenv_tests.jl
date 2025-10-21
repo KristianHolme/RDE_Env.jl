@@ -17,8 +17,9 @@ end
     using RDE
 
     @test begin
-        ConstPolicy = ConstantRDEPolicy()
-        data = run_policy(ConstPolicy, RDEEnv(RDEParam(; N = 512, tmax = 0.1), reset_strategy = NShock(1)))
+        env = RDEEnv(RDEParam(; N = 512, tmax = 0.1), reset_strategy = NShock(1))
+        ConstPolicy = ConstantRDEPolicy(env)
+        data = run_policy(ConstPolicy, env)
         data isa PolicyRunData
     end
 end

@@ -10,7 +10,7 @@ function make_RDE_Env(tmax::Float32 = 50.0f0, target_shock_count::Int = 3)
         reset_strategy = RandomShock(),
         action_strat = ScalarPressureAction(),
         observation_strategy = SectionedStateObservation(target_shock_count = target_shock_count),
-        reward_type = MultiplicativeReward(
+        reward_strat = MultiplicativeReward(
             PeriodMinimumReward(target_shock_count = target_shock_count, lowest_action_magnitude_reward = 0.5f0),
             TimeDiffNormReward()
         )

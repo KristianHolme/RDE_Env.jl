@@ -11,7 +11,7 @@
             τ_smooth = 0.5,  # Small smoothing time to avoid discontinuities
             observation_strategy = FourierObservation(8),
             action_strat = ScalarPressureAction(),
-            reward_type = CompositeReward()
+            reward_strat = CompositeReward()
         )
         policy = RandomRDEPolicy(env)
 
@@ -40,8 +40,6 @@
                 @test data.state_ts[end] ≤ env.prob.params.tmax + env.dt
 
                 # Test data consistency
-                @test length(data.energy_bal) == length(data.states)
-                @test length(data.chamber_p) == length(data.states)
                 @test length(data.state_ts) == length(data.states)
 
                 # Test state vector dimensions
@@ -52,8 +50,6 @@
                 @test all(0.0 ≤ s ≤ env.smax for s in data.ss)
                 @test all(0.0 ≤ u_p ≤ env.u_pmax for u_p in data.u_ps)
                 @test all(isfinite, data.rewards)
-                @test all(isfinite, data.energy_bal)
-                @test all(isfinite, data.chamber_p)
             end
         end
     end

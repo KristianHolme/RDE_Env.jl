@@ -31,7 +31,7 @@ env = RDEEnv(
     τ_smooth=0.01f0,                             # Control smoothing time constant
     observation_strategy=FourierObservation(16),  # Use 16 Fourier modes as observation
     action_strat=ScalarPressureAction(),          # Single pressure control
-    reward_type=PeriodicityReward()              # Reward based on wave stability
+    reward_strat=PeriodicityReward()              # Reward based on wave stability
 )
 
 # Run a random policy
@@ -139,7 +139,7 @@ using DRiL
 base_env = RDEEnv(
     observation_strategy = MultiCenteredObservation(n_sections = 4),
     action_strat = VectorPressureAction(n_sections = 4),
-    reward_type = MultiSectionPeriodMinimumReward(n_sections = 4),
+    reward_strat = MultiSectionPeriodMinimumReward(n_sections = 4),
     params = RDEParam(N = 512, tmax = 100.0f0)
 )
 

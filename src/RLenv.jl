@@ -19,7 +19,7 @@ Reinforcement learning environment for the RDE system.
 - `τ_smooth::T`: Control smoothing time constant
 - `cache::RDEEnvCache{T}`: Environment cache
 - `action_strat::AbstractActionStrategy`: Type of control actions
-- `reward_type::AbstractRewardStrategy`: Type of reward function
+- `reward_strat::AbstractRewardStrategy`: Type of reward function
 - `verbose::Bool`: Control solver output
 # Constructor
 ```julia
@@ -33,7 +33,7 @@ RDEEnv{T}(;
     fft_terms::Int=32,
     observation_strategy::AbstractObservationStrategy=FourierObservation(fft_terms),
     action_strat::AbstractActionStrategy=ScalarPressureAction(),
-    reward_type::AbstractRewardStrategy=ShockSpanReward(target_shock_count=3),
+    reward_strat::AbstractRewardStrategy=ShockSpanReward(target_shock_count=3),
     verbose::Bool=true,
     kwargs...
 ) where {T<:AbstractFloat}
@@ -52,7 +52,7 @@ function RDEEnv(;
         τ_smooth = 0.1f0,
         action_strat::A = ScalarPressureAction(),
         observation_strategy::O = SectionedStateObservation(),
-        reward_type::RW = PeriodMinimumReward(),
+        reward_strat::RW = PeriodMinimumReward(),
         verbose::Bool = false,
         kwargs...
     ) where {T <: AbstractFloat, A <: AbstractActionStrategy, O <: AbstractObservationStrategy, RW <: AbstractRewardStrategy}
@@ -70,7 +70,7 @@ function RDEEnv(;
     initial_state = vcat(prob.u0, prob.λ0)
     init_observation = get_init_observation(observation_strategy, params.N, T)
     # Initialize typed subcaches (no env dependency)
-    reward_cache = initialize_cache(reward_type, params.N, T)
+    reward_cache = initialize_cache(reward_strat, params.N, T)
     action_cache = initialize_cache(action_strat, params.N, T)
     observation_cache = initialize_cache(observation_strategy, params.N, T)
     # Initialize goal cache with current target shocks if present on types, else default 3
@@ -81,14 +81,14 @@ function RDEEnv(;
     ode_problem = ODEProblem{true, SciMLBase.FullSpecialize}(RDE_RHS!, initial_state, (zero(T), dt), prob)
 
     # Use helper functions to determine type parameters
-    V = reward_value_type(T, reward_type)
+    V = reward_value_type(T, reward_strat)
     OBS = typeof(init_observation)
 
     # Initialize reward with correct type
     initial_reward = if V <: Vector
         # For multi-section rewards, determine the number of sections
-        n_sections = if hasfield(typeof(reward_type), :n_sections)
-            reward_type.n_sections
+        n_sections = if hasfield(typeof(reward_strat), :n_sections)
+            reward_strat.n_sections
         else
             1  # fallback
         end
@@ -107,7 +107,7 @@ function RDEEnv(;
         dt, T(0.0), false, false, false, initial_reward, smax, u_pmax,
         τ_smooth, cache,
         action_strat, observation_strategy,
-        reward_type, verbose, Dict{String, Any}(), 0, ode_problem
+        reward_strat, verbose, Dict{String, Any}(), 0, ode_problem
     )
     RDE.RDE_RHS!(zeros(T, 2 * params.N), initial_state, prob, T(0.0)) #to update caches
     return env
@@ -245,7 +245,7 @@ function _act!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action; saves_per_act
 
         env.steps_taken += 1
 
-        set_reward!(env, env.reward_type)
+        set_reward!(env, env.reward_strat)
         compute_observation!(env.observation, env, env.observation_strategy)
         if env.terminated #maybe reward caused termination
             # set_termination_reward!(env, -2.0)
@@ -294,7 +294,7 @@ function _reset!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}) where {T, A, O, RW,
     env.done = false
     env.truncated = false
     env.terminated = false
-    set_reward!(env, env.reward_type)
+    set_reward!(env, env.reward_strat)
     compute_observation!(env.observation, env, env.observation_strategy)
     env.info = Dict{String, Any}()
 

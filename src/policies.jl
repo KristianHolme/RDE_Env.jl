@@ -91,7 +91,7 @@ function run_policy(policy::AbstractRDEPolicy, env::RDEEnv{T}; saves_per_action 
     # Preallocate action-aligned arrays
     action_ts = Vector{T}(undef, max_actions)
     ss, u_ps = get_init_control_data(env, env.action_strat, max_actions)
-    rewards = get_init_rewards(env, env.reward_type, max_actions)
+    rewards = get_init_rewards(env, env.reward_strat, max_actions)
 
     # Preallocate actions using action_dim
     actions = if action_dim(env.action_strat) == 1
@@ -234,27 +234,27 @@ function run_policy(policy::AbstractRDEPolicy, env::RDEEnv{T}; saves_per_action 
     return PolicyRunData{T}(action_ts, ss, u_ps, rewards, actions, state_ts, states, observations)
 end
 
-function get_init_rewards(env::RDEEnv{T}, reward_type::AbstractRewardStrategy, max_steps::Int) where {T}
-    reward_type = typeof(env.reward)
-    return Vector{reward_type}(undef, max_steps)
+function get_init_rewards(env::RDEEnv{T}, reward_strat::AbstractRewardStrategy, max_steps::Int) where {T}
+    reward_strat = typeof(env.reward)
+    return Vector{reward_strat}(undef, max_steps)
 end
 
-# function get_init_rewards(env::RDEEnv{T}, reward_type::AbstractRewardStrategy, max_steps::Int) where {T}
+# function get_init_rewards(env::RDEEnv{T}, reward_strat::AbstractRewardStrategy, max_steps::Int) where {T}
 #     return Vector{T}(undef, max_steps)
 # end
 
-# function get_init_rewards(env::RDEEnv{T}, reward_type::MultiAgentCachedCompositeReward, max_steps::Int) where {T}
-#     # n_section = reward_type.n_sections
+# function get_init_rewards(env::RDEEnv{T}, reward_strat::MultiAgentCachedCompositeReward, max_steps::Int) where {T}
+#     # n_section = reward_strat.n_sections
 #     return Vector{Vector{T}}(undef, max_steps)
 # end
 
-# function get_init_rewards(env::RDEEnv{T}, reward_type::ScalarToVectorReward, max_steps::Int) where {T}
+# function get_init_rewards(env::RDEEnv{T}, reward_strat::ScalarToVectorReward, max_steps::Int) where {T}
 #     return Vector{Vector{T}}(undef, max_steps)
 # end
 
-function get_init_rewards(env::RDEEnv{T}, reward_type::MultiplicativeReward, max_steps::Int) where {T}
+function get_init_rewards(env::RDEEnv{T}, reward_strat::MultiplicativeReward, max_steps::Int) where {T}
     # Check if any of the component rewards is a multi-agent reward
-    if any(r isa MultiAgentCachedCompositeReward for r in reward_type.rewards)
+    if any(r isa MultiAgentCachedCompositeReward for r in reward_strat.rewards)
         return Vector{Vector{T}}(undef, max_steps)
     else
         return Vector{T}(undef, max_steps)
@@ -311,7 +311,6 @@ Returns 0.0 for ScalarPressureAction
 """
 struct ConstantRDEPolicy <: AbstractRDEPolicy
     env::RDEEnv
-    ConstantRDEPolicy(env::RDEEnv = RDEEnv()) = new(env)
 end
 
 function _predict_action(π::ConstantRDEPolicy, s::AbstractVector{T}) where {T <: AbstractFloat}
@@ -319,23 +318,15 @@ function _predict_action(π::ConstantRDEPolicy, s::AbstractVector{T}) where {T <
     if π.env.action_strat isa ScalarAreaScalarPressureAction
         return zeros(T, 2)
     elseif π.env.action_strat isa ScalarPressureAction
-        return zeros(T, 1)
+        return zero(T)
     elseif π.env.action_strat isa VectorPressureAction
         return zeros(T, π.env.action_strat.n_sections)
     else
         @error "Unknown action type $(typeof(π.env.action_strat)) for ConstantRDEPolicy"
     end
 end
-
-function Base.show(io::IO, π::ConstantRDEPolicy)
-    return print(io, "ConstantRDEPolicy()")
-end
-
-function Base.show(io::IO, ::MIME"text/plain", π::ConstantRDEPolicy)
-    println(io, "ConstantRDEPolicy:")
-    return println(io, "  env: $(typeof(π.env))")
-end
-
+Base.show(io::IO, π::ConstantRDEPolicy) = print(io, "ConstantRDEPolicy()")
+Base.show(io::IO, ::MIME"text/plain", π::ConstantRDEPolicy) = println(io, "ConstantRDEPolicy()")
 """
     SinusoidalRDEPolicy{T<:AbstractFloat} <: AbstractRDEPolicy
 

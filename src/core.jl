@@ -167,7 +167,7 @@ mutable struct RDEEnv{T, A, O, RW, V, OBS, M, RS, C} <: AbstractRDEEnv where {
     cache::RDEEnvCache{T}
     action_strat::A
     observation_strategy::O
-    reward_type::RW
+    reward_strat::RW
     verbose::Bool               # Control solver output
     info::Dict{String, Any} #TODO:move this to cache?
     steps_taken::Int #TODO:move this to cache?

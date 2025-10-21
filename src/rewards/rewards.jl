@@ -200,14 +200,12 @@ end
 # ShockSpanReward
 # ----------------------------------------------------------------------------
 
-@kwdef struct ShockSpanReward <: AbstractRDEReward
+@kwdef struct ShockSpanReward <: AbstractScalarRewardStrategy
     span_scale::Float32 = 4.0f0
     shock_weight::Float32 = 0.8f0
 end
 
-reward_value_type(::Type{T}, ::ShockSpanReward) where {T} = T
-initialize_cache(::ShockSpanReward, N::Int, ::Type{T}) where {T} = NoCache()
-function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rew_strat::ShockSpanReward, cache) where {T, A, O, R, V, OBS}
+function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rew_strat::ShockSpanReward, ::NoCache) where {T, A, O, R, V, OBS}
     target_shock_count = get_target_shock_count(env)
     max_span = rew_strat.span_scale
     λ = rew_strat.shock_weight
@@ -239,7 +237,7 @@ end
     abscence_start::Union{Float32, Nothing} = nothing
 end
 
-function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rew_strat::ShockPreservingReward, cache) where {T, A, O, R, V, OBS}
+function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rew_strat::ShockPreservingReward, ::NoCache) where {T, A, O, R, V, OBS}
     target_shock_count = get_target_shock_count(env)
     max_span = rew_strat.span_scale
     λ = rew_strat.shock_weight
@@ -455,34 +453,22 @@ end
 # ----------------------------------------------------------------------------
 # StabilityTargetReward
 # ----------------------------------------------------------------------------
-
+#TODO: constructor and types etc...
 struct StabilityTargetReward{T <: AbstractFloat} <: AbstractScalarRewardStrategy
     stability_weight::T
     target_weight::T
     stability_reward::StabilityReward{T}
 end
 
-function StabilityTargetReward{T}(;
-        stability_weight::T = T(0.7),
-        target_weight::T = T(0.3),
+function StabilityTargetReward(;
+        stability_weight::T = 0.7f0,
+        target_weight::T = 0.3f0,
         kwargs...
     ) where {T <: AbstractFloat}
     return StabilityTargetReward{T}(
         stability_weight,
         target_weight,
         StabilityReward{T}(; kwargs...)
-    )
-end
-
-function StabilityTargetReward(;
-        stability_weight::Float32 = 0.7f0,
-        target_weight::Float32 = 0.3f0,
-        kwargs...
-    )
-    return StabilityTargetReward{Float32}(
-        stability_weight = stability_weight,
-        target_weight = target_weight;
-        kwargs...
     )
 end
 
@@ -1110,7 +1096,7 @@ function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rew_strat::MultiSectio
 end
 
 """
-    MultiplicativeReward <: AbstractRDEReward
+    MultiplicativeReward <: AbstractRewardStrategy
 
 A reward that multiplies the rewards from multiple reward types.
 
@@ -1195,11 +1181,11 @@ struct ExponentialAverageReward{R <: AbstractRewardStrategy, T <: AbstractFloat}
     wrapped_reward::R
     α::T  # averaging parameter
 
-    function ExponentialAverageReward{R, T}(wrapped_reward::R; α::T = T(0.2)) where {R <: AbstractRDEReward, T <: AbstractFloat}
+    function ExponentialAverageReward{R, T}(wrapped_reward::R; α::T = T(0.2)) where {R <: AbstractRewardStrategy, T <: AbstractFloat}
         return new{R, T}(wrapped_reward, α)
     end
-    function ExponentialAverageReward(wrapped_reward::R; α::Float32 = 0.2f0) where {R <: AbstractRDEReward}
-        return ExponentialAverageReward{T, Float32}(wrapped_reward, α = α)
+    function ExponentialAverageReward(wrapped_reward::R; α::Float32 = 0.2f0) where {R <: AbstractRewardStrategy}
+        return ExponentialAverageReward{R, Float32}(wrapped_reward, α = α)
     end
 end
 

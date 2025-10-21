@@ -177,7 +177,7 @@ end
 initialize_cache(::SampledStateObservation, N::Int, ::Type{T}) where {T} = NoCache()
 
 function get_init_observation(strategy::SampledStateObservation, N::Int, ::Type{T}) where {T <: AbstractFloat}
-    return Vector{T}(undef, 3 * strategy.n_samples + 1)
+    return Vector{T}(undef, 2 * strategy.n_samples + 1)
 end
 
 function compute_observation!(obs, env::RDEEnv{T, A, O, R, V, OBS}, strategy::SampledStateObservation) where {T, A, O, R, V, OBS}

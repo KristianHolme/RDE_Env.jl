@@ -96,20 +96,12 @@ function action_dim(at::VectorPressureAction)
     return at.n_sections
 end
 
-function action_dim(at::PIDAction)
+function action_dim(::PIDAction)
     return 3
-end
-
-function action_dim(::LinearScalarPressureAction)
-    return 1
 end
 
 function action_dim(at::LinearVectorPressureAction)
     return at.n_sections
-end
-
-function action_dim(at::DirectScalarPressureAction)
-    return 1
 end
 
 function action_dim(at::DirectVectorPressureAction)
