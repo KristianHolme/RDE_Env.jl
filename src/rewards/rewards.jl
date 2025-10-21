@@ -73,6 +73,13 @@ function action_magnitude_factor(lowest_action_magnitude_reward::AbstractFloat, 
     return α .+ (1 - α) .* action_magnitude_inv
 end
 
+function span_variation_reward(values::Vector{T}, α::T; threshold::T = T(4.0f-3)) where {T <: AbstractFloat}
+    v_min, v_max = RDE.turbo_extrema(values)
+    span = v_max - v_min
+    span = max(span - threshold, zero(T))
+    variation = span / mean(abs.(values))
+    return exp.(-α * variation)
+end
 
 """
     compute_section_control_efforts(env::RDEEnv{T}, n_sections::Int) where {T}
@@ -348,9 +355,19 @@ end
 # ----------------------------------------------------------------------------
 # StabilityReward
 # ----------------------------------------------------------------------------
+"""
+A reward that measures the stability of the solution over time. 
+It consists of three parts:
+An amplitude stability reward, a shock profile similarity and a shock spacing reward. 
+The latter two are combined into a spatial stability reward by multiplication. 
+The final reward is the average of the amplitude stability and spatial stability.
 
+When the target shock count is not achieved, the reward could be as high as ~0.5, 
+because of the amplitude stability reward. With the correct number of shocks,
+the reward can approach 1.
+"""
 @kwdef struct StabilityReward{T <: AbstractFloat} <: AbstractRDEReward
-    α::T = 4.0f0
+    variation_scaling::T = 4.0f0
 end
 
 reward_value_type(::Type{T}, ::StabilityReward) where {T} = T
@@ -358,6 +375,7 @@ initialize_cache(::StabilityReward, N::Int, ::Type{T}) where {T} = RewardShiftBu
 
 function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::StabilityReward, cache::RewardShiftBufferCache{T}) where {T <: AbstractFloat, A, O, R, V, OBS}
     if isnothing(env.prob.sol)
+        # return [zero(T), zero(T), zero(T)] #temp
         return zero(T)
     end
 
@@ -391,6 +409,7 @@ function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::StabilityReward, c
         min_values[i] = u_min
         max_values[i] = u_max
 
+
         # Calculate periodicity using target shock count
         if target_shock_count > 1
             shift_steps = N ÷ target_shock_count
@@ -398,12 +417,14 @@ function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::StabilityReward, c
             for j in 1:(target_shock_count - 1)
                 shift_buffer .= u
                 circshift!(shift_buffer, u, -shift_steps * j)
-                errs[j] = RDE.turbo_diff_norm(u, shift_buffer) / sqrt(N)
+                err = RDE.turbo_diff_norm(u, shift_buffer) / sqrt(N)
+                err = max(err - T(0.037), zero(T)) #since N ÷ 3 is not a divisor of N, we set the baseline a bit lower
+                errs[j] = err
             end
             maxerr = RDE.turbo_maximum(errs)
-            periodicity_rewards[i] = T(1) - (max(maxerr - T(0.08), zero(T)) / sqrt(T(3)))
+            periodicity_rewards[i] = exp(-rt.variation_scaling * maxerr)
         else
-            periodicity_rewards[i] = T(1)
+            periodicity_rewards[i] = T(0)
         end
 
         # Calculate shock spacing using target shock count
@@ -412,29 +433,106 @@ function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::StabilityReward, c
         if shocks > 1
             optimal_spacing = L / target_shock_count
             shock_spacing = mod.(RDE.periodic_diff(shock_inds), N) .* dx
-            shock_spacing_rewards[i] = T(1) - RDE.turbo_maximum_abs((shock_spacing .- optimal_spacing) ./ optimal_spacing)
+            # Use exponential reward function for spacing
+            spacing_diffs = abs.(shock_spacing .- optimal_spacing)
+            spacing_diffs = max.(spacing_diffs .- T(7.8f-3), zero(T)) #since N ÷ 3 is not a divisor of N, we set the baseline a bit lower
+            spacing_errors = spacing_diffs ./ optimal_spacing
+            spacing_rewards = exp.(-rt.variation_scaling .* spacing_errors)
+            shock_spacing_rewards[i] = RDE.turbo_minimum(spacing_rewards)
         else
-            shock_spacing_rewards[i] = T(1)
+            shock_spacing_rewards[i] = T(0)
         end
     end
 
     # Calculate span variation (worst of min and max variation)
-    min_variation = calculate_variation_punishment(min_values, rt.α)
-    max_variation = calculate_variation_punishment(max_values, rt.α)
+    min_variation = span_variation_reward(min_values, rt.variation_scaling * 2)
+    max_variation = span_variation_reward(max_values, rt.variation_scaling * 2)
     span_variation = min(min_variation, max_variation)
 
     # Calculate worst periodicity and shock spacing over time
     worst_periodicity = minimum(periodicity_rewards)
     worst_shock_spacing = minimum(shock_spacing_rewards)
 
-    # Average applicable rewards based on current shock count
-    if current_shocks <= 1
-        # Only span variation and periodicity
-        return (span_variation + worst_periodicity) / T(2)
-    else
-        # All three components
-        return (span_variation + worst_periodicity + worst_shock_spacing) / T(3)
-    end
+    # temporaily return all rewards
+    # return [span_variation, worst_periodicity, worst_shock_spacing]
+
+    amplitude_stability = span_variation
+    spatial_stability = worst_periodicity * worst_shock_spacing
+    stability = (amplitude_stability + spatial_stability) / T(2)
+    return stability
+end
+
+# ----------------------------------------------------------------------------
+# StabilityTargetReward
+# ----------------------------------------------------------------------------
+
+struct StabilityTargetReward{T <: AbstractFloat} <: AbstractRDEReward
+    stability_weight::T
+    target_weight::T
+    stability_reward::StabilityReward{T}
+end
+
+function StabilityTargetReward{T}(;
+        stability_weight::T = T(0.7),
+        target_weight::T = T(0.3),
+        kwargs...
+    ) where {T <: AbstractFloat}
+    return StabilityTargetReward{T}(
+        stability_weight,
+        target_weight,
+        StabilityReward{T}(; kwargs...)
+    )
+end
+
+function StabilityTargetReward(;
+        stability_weight::Float32 = 0.7f0,
+        target_weight::Float32 = 0.3f0,
+        kwargs...
+    )
+    return StabilityTargetReward{Float32}(
+        stability_weight = stability_weight,
+        target_weight = target_weight;
+        kwargs...
+    )
+end
+
+reward_value_type(::Type{T}, ::StabilityTargetReward) where {T} = T
+
+initialize_cache(rt::StabilityTargetReward, N::Int, ::Type{T}) where {T} =
+    WrappedRewardCache(
+    initialize_cache(rt.stability_reward, N, T),
+    NoCache()
+)
+
+function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rt::StabilityTargetReward, cache::WrappedRewardCache) where {T <: AbstractFloat, A, O, R, V, OBS}
+    # Compute stability reward using inner cache
+    stability_value = _compute_reward(env, rt.stability_reward, cache.inner_cache)
+
+    # Count current shocks
+    N = env.prob.params.N
+    current_u = @view env.state[1:N]
+    dx = RDE.get_dx(env.prob)
+    current_shock_count = RDE.count_shocks(current_u, dx)
+
+    # Get target from environment's goal cache
+    target_shock_count = get_target_shock_count(env)
+
+    # Compute target reward (1.0 if match, 0.0 otherwise)
+    target_value = (current_shock_count == target_shock_count) ? one(T) : zero(T)
+
+    # Weighted combination
+    return rt.stability_weight * stability_value + rt.target_weight * target_value
+end
+
+function Base.show(io::IO, rt::StabilityTargetReward)
+    return print(io, "StabilityTargetReward(stability_weight=$(rt.stability_weight), target_weight=$(rt.target_weight))")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", rt::StabilityTargetReward)
+    println(io, "StabilityTargetReward:")
+    println(io, "  stability_weight: $(rt.stability_weight)")
+    println(io, "  target_weight: $(rt.target_weight)")
+    return println(io, "  stability_reward: $(rt.stability_reward)")
 end
 
 # ----------------------------------------------------------------------------
