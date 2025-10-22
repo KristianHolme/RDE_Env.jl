@@ -10,7 +10,7 @@ end
 # ----------------------------------------------------------------------------
 # Helper Functions
 # ----------------------------------------------------------------------------
-function compute_sectioned_observation!(minisection_observations_u, minisection_observations_λ, env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, obs_strategy::AbstractObservationStrategy) where {T, A, O, RW, V, OBS, M, RS, C}
+function compute_sectioned_observation!(minisection_observations_u, minisection_observations_λ, env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}, obs_strategy::AbstractObservationStrategy) where {T, A, O, RW, G, V, OBS, M, RS, C}
     prob = env.prob #::RDEProblem{T, M, RS, C}
     N = prob.params.N
     current_u = @view env.state[1:N]
@@ -63,7 +63,7 @@ function get_init_observation(strategy::FourierObservation, N::Int, ::Type{T}) w
     n_terms = min(strategy.fft_terms, N ÷ 2 + 1)
     return Vector{T}(undef, n_terms * 2 + 2)
 end
-function compute_observation!(obs, env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, strategy::FourierObservation) where {T, A, O, RW, V, OBS, M, RS, C}
+function compute_observation!(obs, env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}, strategy::FourierObservation) where {T, A, O, RW, G, V, OBS, M, RS, C}
     N = env.prob.params.N
 
     current_u = @view env.state[1:N]
@@ -111,7 +111,7 @@ end
 struct StateObservation <: AbstractObservationStrategy end
 
 initialize_cache(::StateObservation, N::Int, ::Type{T}) where {T} = NoCache()
-function compute_observation!(obs, env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, rt::StateObservation) where {T, A, O, RW, V, OBS, M, RS, C}
+function compute_observation!(obs, env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}, rt::StateObservation) where {T, A, O, RW, G, V, OBS, M, RS, C}
     N = length(env.state) ÷ 2
     u = @view env.state[1:N]
     λ = @view env.state[(N + 1):end]
@@ -148,7 +148,7 @@ initialize_cache(obs::SectionedStateObservation, N::Int, ::Type{T}) where {T} = 
     n_total_minisections = N ÷ minisection_size
     ObservationMinisectionCache{T}(zeros(T, n_total_minisections), zeros(T, n_total_minisections))
 end
-function compute_observation!(obs, env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, strategy::SectionedStateObservation) where {T, A, O, RW, V, OBS, M, RS, C}
+function compute_observation!(obs, env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}, strategy::SectionedStateObservation) where {T, A, O, RW, G, V, OBS, M, RS, C}
     minisections = strategy.minisections
 
     # Create views into obs for each component
@@ -180,7 +180,7 @@ function get_init_observation(strategy::SampledStateObservation, N::Int, ::Type{
     return Vector{T}(undef, 2 * strategy.n_samples + 1)
 end
 
-function compute_observation!(obs, env::RDEEnv{T, A, O, R, V, OBS}, strategy::SampledStateObservation) where {T, A, O, R, V, OBS}
+function compute_observation!(obs, env::RDEEnv{T, A, O, R, G, V, OBS}, strategy::SampledStateObservation) where {T, A, O, R, G, V, OBS}
     N = env.prob.params.N
     n = strategy.n_samples
 
@@ -241,7 +241,7 @@ function Base.show(io::IO, ::MIME"text/plain", obs::CompositeObservation)
     return println(io, "  fft_terms: $(obs.fft_terms)")
 end
 
-function compute_observation!(obs, env::RDEEnv{T, A, O, R, V, OBS}, strategy::CompositeObservation) where {T, A, O, R, V, OBS}
+function compute_observation!(obs, env::RDEEnv{T, A, O, R, G, V, OBS}, strategy::CompositeObservation) where {T, A, O, R, G, V, OBS}
     N = env.prob.params.N
 
     current_u = @view env.state[1:N]
@@ -312,7 +312,7 @@ function Base.show(io::IO, ::MIME"text/plain", obs_strategy::MultiCenteredObserv
     return println(io, "  minisections: $(obs_strategy.minisections)")
 end
 
-function compute_observation!(obs, env::RDEEnv{T, A, O, R, V, OBS}, obs_strategy::MultiCenteredObservation) where {T, A, O, R, V, OBS}
+function compute_observation!(obs, env::RDEEnv{T, A, O, R, G, V, OBS}, obs_strategy::MultiCenteredObservation) where {T, A, O, R, G, V, OBS}
     n_sections = obs_strategy.n_sections
     minisections = obs_strategy.minisections
     minisections_per_section = minisections ÷ n_sections

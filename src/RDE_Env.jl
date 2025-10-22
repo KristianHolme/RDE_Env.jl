@@ -23,10 +23,15 @@ export action_dim, _reset_action!, set_N!
 export compute_observation, get_init_observation
 export set_reward!
 export RDEEnv, RDEEnvCache
-export AbstractCache, NoCache, GoalCache, CompositeRewardCache, initialize_cache, reset_cache!
+export AbstractCache, NoCache, CompositeRewardCache, initialize_cache, reset_cache!
 export get_target_shock_count, set_target_shock_count!
+export AbstractGoalStrategy, AbstractGoalCache
 include("utils.jl")
 export sigmoid_to_linear, reward_sigmoid, sigmoid, linear_to_sigmoid, get_plotting_speed_adjustments
+
+# goals
+include("goals.jl")
+export FixedTargetGoal, RandomTargetGoal, EvalCycleTargetGoal
 
 # Actions
 include("actions/actions.jl")
@@ -89,7 +94,7 @@ include("displaying.jl")
             dt = 0.1f0,
             params = RDEParam(; N = 512, tmax = 0.5f0),
             τ_smooth = 0.05f0,
-            observation_strategy = FourierObservation(8),
+            observation_strat = FourierObservation(8),
             action_strat = ScalarPressureAction()
         )
         policy = RandomRDEPolicy(env)

@@ -1,6 +1,5 @@
 abstract type _AbstractEnv end
 abstract type AbstractRDEEnv <: _AbstractEnv end
-
 # Actions
 abstract type AbstractActionStrategy end
 abstract type AbstractVectorActionStrategy <: AbstractActionStrategy end
@@ -27,20 +26,20 @@ abstract type AbstractObservationStrategy end
 abstract type AbstractMultiAgentObservationStrategy <: AbstractObservationStrategy end
 
 """
-    compute_observation!(obs, env::RDEEnv, observation_strategy::AbstractObservationStrategy)
+    compute_observation!(obs, env::RDEEnv, observation_strat::AbstractObservationStrategy)
 
 Compute the observation from the environment and store it in obs.
 """
 function compute_observation! end
 
 """
-    get_init_observation(observation_strategy::AbstractObservationStrategy, N::Int, T::Type{<:AbstractFloat})
+    get_init_observation(observation_strat::AbstractObservationStrategy, N::Int, T::Type{<:AbstractFloat})
 
 Returns an array of the correct size and type for the observation. Called at env construction.
 """
 function get_init_observation end
 
-#Rewards
+# Rewards
 
 abstract type AbstractRewardStrategy end
 abstract type AbstractVectorRewardStrategy <: AbstractRewardStrategy end
@@ -84,23 +83,55 @@ abstract type MultiAgentCachedCompositeReward <: CachedCompositeReward end
 
 # Cache API
 abstract type AbstractCache end
-abstract type AbstractGoalCache <: AbstractCache end
 struct NoCache <: AbstractCache end
+"""
+    reset_cache!(cache::AbstractCache)
+
+Reset the cache for the given cache type. Called when environment is reset.
+"""
+reset_cache!(::AbstractCache) = nothing
+
+"""
+    initialize_cache(::Any, ::Int, ::Type{T})
+
+Initialize the cache for the given cache type.
+"""
+initialize_cache(::Any, ::Int, ::Type{T}) where {T} = NoCache()
+
+# goals
+abstract type AbstractGoalStrategy end
+abstract type AbstractGoalCache <: AbstractCache end
 
 mutable struct GoalCache <: AbstractGoalCache
     target_shock_count::Int
 end
 
-initialize_cache(::Any, ::Int, ::Type{T}) where {T} = NoCache()
-reset_cache!(::AbstractCache) = nothing
+"""
+    update_goal!(cache::AbstractGoalCache, goal::AbstractGoalStrategy, env::AbstractRDEEnv)
 
+Update the goal cache. Called when environment is reset.
+"""
+function update_goal! end
+
+"""
+    get_target_shock_count(goal_strat::AbstractGoalStrategy, env::AbstractRDEEnv)
+
+Get the target shock count from the goal strategy.
+"""
+function get_target_shock_count end
+
+"""
+    set_target_shock_count!(goal_strat::AbstractGoalStrategy, env::AbstractRDEEnv, v::Int)
+Set the target shock count from the goal strategy.
+"""
+function set_target_shock_count! end
 
 """
     get_target_shock_count(env::AbstractRDEEnv)
-Get the target shock count from the goal cache.
+Get the target shock count from the goal strategy.
 """
-get_target_shock_count(env::AbstractRDEEnv) = env.cache.goal.target_shock_count
-set_target_shock_count!(env::AbstractRDEEnv, v::Int) = env.cache.goal.target_shock_count = v
+get_target_shock_count(env::AbstractRDEEnv) = get_target_shock_count(env.goal_strat, env)
+set_target_shock_count!(env::AbstractRDEEnv, v::Int) = set_target_shock_count!(env.goal_strat, env, v)
 
 ## env
 """
@@ -114,20 +145,20 @@ Cache for RDE environment computations and state tracking.
 - `prev_u::Vector{T}`: Previous velocity field
 - `prev_λ::Vector{T}`: Previous reaction progress
 """
-struct RDEEnvCache{T <: AbstractFloat, RC <: AbstractCache, AC <: AbstractCache, OC <: AbstractCache, GC <: GoalCache} <: AbstractCache
+struct RDEEnvCache{T <: AbstractFloat, RC <: AbstractCache, AC <: AbstractCache, OC <: AbstractCache, GC <: AbstractCache} <: AbstractCache
     prev_u::Vector{T}  # Previous step's u values
     prev_λ::Vector{T}  # Previous step's λ values
     # New subcaches
     reward_cache::RC
     action_cache::AC
     observation_cache::OC
-    goal::GC
-    function RDEEnvCache{T, RC, AC, OC, GC}(N::Int; reward_cache, action_cache, observation_cache, goal) where {T <: AbstractFloat, RC <: AbstractCache, AC <: AbstractCache, OC <: AbstractCache, GC <: GoalCache}
+    goal_cache::GC
+    function RDEEnvCache{T, RC, AC, OC, GC}(N::Int; reward_cache, action_cache, observation_cache, goal_cache) where {T <: AbstractFloat, RC <: AbstractCache, AC <: AbstractCache, OC <: AbstractCache, GC <: AbstractCache}
         # Initialize all arrays with zeros instead of undefined values
         prev_u = zeros(T, N)
         prev_λ = zeros(T, N)
-        # Default subcaches are NoCache(), and GoalCache defaults to 3 shocks
-        return new{T, RC, AC, OC, GC}(prev_u, prev_λ, reward_cache, action_cache, observation_cache, goal)
+        # Default subcaches are NoCache()
+        return new{T, RC, AC, OC, GC}(prev_u, prev_λ, reward_cache, action_cache, observation_cache, goal_cache)
     end
 end
 
@@ -135,17 +166,19 @@ function reset_cache!(cache::RDEEnvCache{T}) where {T}
     reset_cache!(cache.reward_cache)
     reset_cache!(cache.action_cache)
     reset_cache!(cache.observation_cache)
+    reset_cache!(cache.goal_cache)
     cache.prev_u .= zero(T)
     cache.prev_λ .= zero(T)
     return nothing
 end
 
-#TODO:is it necessary to parametrize by A, O, R?
-mutable struct RDEEnv{T, A, O, RW, V, OBS, M, RS, C} <: AbstractRDEEnv where {
+#TODO:is it necessary to parametrize by all these?
+mutable struct RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C} <: AbstractRDEEnv where {
         T <: AbstractFloat,
         A <: AbstractActionStrategy,
         O <: AbstractObservationStrategy,
         RW <: AbstractRewardStrategy,
+        G <: AbstractGoalStrategy,
         V <: Union{T, Vector{T}},
         OBS <: AbstractArray{T},
         M <: AbstractMethod,
@@ -166,8 +199,9 @@ mutable struct RDEEnv{T, A, O, RW, V, OBS, M, RS, C} <: AbstractRDEEnv where {
     τ_smooth::T #smoothing time constant #TODO:move this to action_type?
     cache::RDEEnvCache{T}
     action_strat::A
-    observation_strategy::O
+    observation_strat::O
     reward_strat::RW
+    goal_strat::G
     verbose::Bool               # Control solver output
     info::Dict{String, Any} #TODO:move this to cache?
     steps_taken::Int #TODO:move this to cache?

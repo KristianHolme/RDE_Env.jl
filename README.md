@@ -29,7 +29,7 @@ using RDE_Env
 env = RDEEnv(
     dt=0.5f0,                                    # Time step
     τ_smooth=0.01f0,                             # Control smoothing time constant
-    observation_strategy=FourierObservation(16),  # Use 16 Fourier modes as observation
+    observation_strat=FourierObservation(16),  # Use 16 Fourier modes as observation
     action_strat=ScalarPressureAction(),          # Single pressure control
     reward_strat=PeriodicityReward()              # Reward based on wave stability
 )
@@ -101,7 +101,7 @@ using DRiL  # This automatically loads the extension
 
 # Create base environment
 base_env = RDEEnv(
-    observation_strategy = FourierObservation(16),
+    observation_strat = FourierObservation(16),
     action_strat = ScalarPressureAction(),
     params = RDEParam(N = 512, tmax = 100.0f0)
 )
@@ -137,7 +137,7 @@ using DRiL
 
 # Create multi-agent base environment
 base_env = RDEEnv(
-    observation_strategy = MultiCenteredObservation(n_sections = 4),
+    observation_strat = MultiCenteredObservation(n_sections = 4),
     action_strat = VectorPressureAction(n_sections = 4),
     reward_strat = MultiSectionPeriodMinimumReward(n_sections = 4),
     params = RDEParam(N = 512, tmax = 100.0f0)

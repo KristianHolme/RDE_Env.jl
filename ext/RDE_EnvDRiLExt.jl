@@ -5,20 +5,20 @@ using DRiL
 using Random
 export DRiLRDEEnv, DRiLMultiAgentRDEEnv
 
-struct DRiLRDEEnv{T, A, O, RW, V, OBS, M, RS, C} <: DRiL.AbstractEnv
-    core_env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}
+struct DRiLRDEEnv{T, A, O, RW, G, V, OBS, M, RS, C} <: DRiL.AbstractEnv
+    core_env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}
     observation_space::DRiL.Box
     action_space::DRiL.Box
-    function DRiLRDEEnv(core_env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}) where {T, A, O, RW, V, OBS, M, RS, C}
-        observation_space = _observation_space(core_env, core_env.observation_strategy)
+    function DRiLRDEEnv(core_env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}) where {T, A, O, RW, G, V, OBS, M, RS, C}
+        observation_space = _observation_space(core_env, core_env.observation_strat)
         action_space = _action_space(core_env, core_env.action_strat)
-        return new{T, A, O, RW, V, OBS, M, RS, C}(core_env, observation_space, action_space)
+        return new{T, A, O, RW, G, V, OBS, M, RS, C}(core_env, observation_space, action_space)
     end
 end
 
 DRiL.reset!(env::DRiLRDEEnv) = _reset!(env.core_env)
-DRiL.act!(env::DRiLRDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action) where {T, A, O, RW, V, OBS, M, RS, C} = _act!(env.core_env, action)::V
-DRiL.observe(env::DRiLRDEEnv{T, A, O, RW, V, OBS, M, RS, C}) where {T, A, O, RW, V, OBS, M, RS, C} = _observe(env.core_env)::OBS
+DRiL.act!(env::DRiLRDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}, action) where {T, A, O, RW, G, V, OBS, M, RS, C} = _act!(env.core_env, action)::V
+DRiL.observe(env::DRiLRDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}) where {T, A, O, RW, G, V, OBS, M, RS, C} = _observe(env.core_env)::OBS
 DRiL.terminated(env::DRiLRDEEnv) = env.core_env.terminated
 DRiL.truncated(env::DRiLRDEEnv) = env.core_env.truncated
 DRiL.observation_space(env::DRiLRDEEnv) = env.observation_space
@@ -93,13 +93,13 @@ end
 
 
 ## multi-agent parallel env
-struct DRiLMultiAgentRDEEnv{T, A, O, RW, V, OBS, M, RS, C} <: DRiL.AbstractParallelEnv
-    core_env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}
+struct DRiLMultiAgentRDEEnv{T, A, O, RW, G, V, OBS, M, RS, C} <: DRiL.AbstractParallelEnv
+    core_env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}
     observation_space::DRiL.Box
     action_space::DRiL.Box
     n_envs::Int
-    function DRiLMultiAgentRDEEnv(core_env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}) where {T, A, O, RW, V, OBS, M, RS, C}
-        obs_strategy = core_env.observation_strategy
+    function DRiLMultiAgentRDEEnv(core_env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}) where {T, A, O, RW, G, V, OBS, M, RS, C}
+        obs_strategy = core_env.observation_strat
         @assert obs_strategy isa AbstractMultiAgentObservationStrategy
         @assert core_env.action_strat isa VectorPressureAction
         action_strat = core_env.action_strat
@@ -107,7 +107,7 @@ struct DRiLMultiAgentRDEEnv{T, A, O, RW, V, OBS, M, RS, C} <: DRiL.AbstractParal
         action_space = _multi_agent_action_space(core_env, action_strat)
         n_envs = obs_strategy.n_sections
         @assert n_envs == action_strat.n_sections
-        return new{T, A, O, RW, V, OBS, M, RS, C}(core_env, observation_space, action_space, n_envs)
+        return new{T, A, O, RW, G, V, OBS, M, RS, C}(core_env, observation_space, action_space, n_envs)
     end
 end
 
@@ -123,7 +123,7 @@ function DRiL.observe(env::DRiLMultiAgentRDEEnv)
     return collect.(eachslice(observation_matrix, dims = ndims(observation_matrix)))
 end
 
-function DRiL.act!(env::DRiLMultiAgentRDEEnv{T, A, O, RW, V, OBS, M, RS, C}, actions::Vector{Vector{T}}) where {T, A, O, RW, V, OBS, M, RS, C}
+function DRiL.act!(env::DRiLMultiAgentRDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}, actions::Vector{Vector{T}}) where {T, A, O, RW, G, V, OBS, M, RS, C}
     combined_action = vcat(actions...)::Vector{T}
     rewards = _act!(env.core_env, combined_action)::V
 

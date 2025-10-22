@@ -14,7 +14,7 @@ CommonRLInterface.reset!(env::CommonRDEEnv) = _reset!(env.core_env)
 CommonRLInterface.state(env::CommonRDEEnv) = vcat(env.core_env.state, env.core_env.t)
 CommonRLInterface.terminated(env::CommonRDEEnv) = env.core_env.done
 function CommonRLInterface.observe(env::CommonRDEEnv)
-    return compute_observation(env, env.core_env.observation_strategy)
+    return compute_observation(env, env.core_env.observation_strat)
 end
 
 function CommonRLInterface.actions(env::CommonRDEEnv)

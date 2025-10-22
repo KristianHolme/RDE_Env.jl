@@ -9,7 +9,7 @@
             u_pmax = 1.2,
             params = RDEParam(; N = 32, tmax = 0.05),
             τ_smooth = 0.5,  # Small smoothing time to avoid discontinuities
-            observation_strategy = FourierObservation(8),
+            observation_strat = FourierObservation(8),
             action_strat = ScalarPressureAction(),
             reward_strat = CompositeReward()
         )

@@ -101,7 +101,7 @@ function run_policy(policy::AbstractRDEPolicy, env::RDEEnv{T}; saves_per_action 
     end
 
     # Preallocate observations
-    if env.observation_strategy isa AbstractMultiAgentObservationStrategy
+    if env.observation_strat isa AbstractMultiAgentObservationStrategy
         observations = Vector{Matrix{T}}(undef, max_actions)
     else
         observations = Vector{Vector{T}}(undef, max_actions)
@@ -141,7 +141,7 @@ function run_policy(policy::AbstractRDEPolicy, env::RDEEnv{T}; saves_per_action 
 
         # Compute action
         action = _predict_action(policy, observations[step])
-        if env.observation_strategy isa AbstractMultiAgentObservationStrategy && action isa Vector{Vector{T}}
+        if env.observation_strat isa AbstractMultiAgentObservationStrategy && action isa Vector{Vector{T}}
             action = vcat(action...)
             @assert action isa Vector{T}
         end

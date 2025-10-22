@@ -449,8 +449,8 @@ end
     # Test default constructor
     reward = StabilityTargetReward()
     @test reward isa StabilityTargetReward{Float32}
-    @test reward.stability_weight == 0.7f0
-    @test reward.target_weight == 0.3f0
+    @test reward.stability_weight == 0.5f0
+    @test reward.target_weight == 0.5f0
     @test reward.stability_reward isa StabilityReward{Float32}
 
     # Test custom weights

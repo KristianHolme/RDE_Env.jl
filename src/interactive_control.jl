@@ -56,7 +56,7 @@ env, fig = interactive_control(show_observations=true)
 env, fig = interactive_control(callback=(env)->println("t = \$(env.t)"))
 
 # With VectorPressureAction and MultiSectionObservation (matrix observations)
-env = RDEEnv(action_strat=VectorPressureAction(4), observation_strategy=MultiSectionObservation(4))
+env = RDEEnv(action_strat=VectorPressureAction(4), observation_strat=MultiSectionObservation(4))
 env, fig = interactive_control(env, show_observations=true)
 ```
 

@@ -9,7 +9,7 @@
 
     function get_env()
         env = RDEEnv(
-            observation_strategy = SectionedStateObservation(),
+            observation_strat = SectionedStateObservation(),
             action_strat = ScalarPressureAction(),
             params = RDEParam(N = 512, tmax = 100.0f0)
         )
@@ -53,7 +53,7 @@ end
 
     function get_env()
         env = RDEEnv(
-            observation_strategy = SectionedStateObservation(),
+            observation_strat = SectionedStateObservation(),
             action_strat = ScalarPressureAction(),
             params = RDEParam(N = 512, tmax = 100.0f0)
         )
@@ -105,7 +105,7 @@ end
 
     function get_multi_agent_env()
         env = RDEEnv(
-            observation_strategy = MultiCenteredObservation(n_sections = 4),
+            observation_strat = MultiCenteredObservation(n_sections = 4),
             action_strat = VectorPressureAction(n_sections = 4),
             reward_strat = MultiSectionPeriodMinimumReward(n_sections = 4, lowest_action_magnitude_reward = 0.0f0, weights = [1.0f0, 1.0f0, 5.0f0, 1.0f0]),
             params = RDEParam(N = 512, tmax = 100.0f0)
@@ -153,7 +153,7 @@ end
 
     function get_multi_agent_env()
         env = RDEEnv(
-            observation_strategy = MultiCenteredObservation(n_sections = 4),
+            observation_strat = MultiCenteredObservation(n_sections = 4),
             action_strat = VectorPressureAction(n_sections = 4),
             reward_strat = MultiSectionPeriodMinimumReward(n_sections = 4, lowest_action_magnitude_reward = 0.0f0, weights = [1.0f0, 1.0f0, 5.0f0, 1.0f0]),
             params = RDEParam(N = 512, tmax = 100.0f0)
@@ -197,7 +197,7 @@ end
 
     function get_SAVA_env()
         env = RDEEnv(
-            observation_strategy = SectionedStateObservation(),
+            observation_strat = SectionedStateObservation(),
             action_strat = VectorPressureAction(n_sections = 4),
             reward_strat = PeriodMinimumReward(),
             params = RDEParam(N = 512, tmax = 100.0f0)
@@ -229,7 +229,7 @@ end
 
     function get_SAVA_env()
         env = RDEEnv(
-            observation_strategy = SectionedStateObservation(),
+            observation_strat = SectionedStateObservation(),
             action_strat = VectorPressureAction(n_sections = 4),
             reward_strat = PeriodMinimumReward(),
             params = RDEParam(N = 512, tmax = 100.0f0)

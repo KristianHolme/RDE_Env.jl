@@ -135,7 +135,7 @@ function linear_action_to_control(a::T, c_prev::T, c_max::T, momentum::T) where 
     return momentum_target(control_target, c_prev, momentum)
 end
 
-function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::AbstractVector{T}) where {T <: AbstractFloat, A <: VectorPressureAction, O, RW, V, OBS, M, RS, C}
+function apply_action!(env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}, action::AbstractVector{T}) where {T <: AbstractFloat, A <: VectorPressureAction, O, RW, G, V, OBS, M, RS, C}
     action_strat = env.action_strat
     N = env.prob.params.N
     @assert N > 0 "Action type N not set"
@@ -174,7 +174,7 @@ function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::Abstr
 end
 
 # Specialization: ScalarPressureAction — scalar action updates only u_p channel
-function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::T) where {T <: AbstractFloat, A <: ScalarPressureAction, O, RW, V, OBS, M, RS, C}
+function apply_action!(env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}, action::T) where {T <: AbstractFloat, A <: ScalarPressureAction, O, RW, G, V, OBS, M, RS, C}
     env_cache = env.cache
     method_cache = env.prob.method.cache
     if abs(action) > one(T)
@@ -189,12 +189,12 @@ function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::T) wh
 end
 
 # Convenience: accept array-like scalar for ScalarPressureAction
-function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::AbstractArray{T}) where {T <: AbstractFloat, A <: ScalarPressureAction, O, RW, V, OBS, M, RS, C}
+function apply_action!(env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}, action::AbstractArray{T}) where {T <: AbstractFloat, A <: ScalarPressureAction, O, RW, G, V, OBS, M, RS, C}
     return apply_action!(env, action[1])
 end
 
 # Specialization: ScalarAreaScalarPressureAction — two scalar actions (s, u_p)
-function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::AbstractVector{T}) where {T <: AbstractFloat, A <: ScalarAreaScalarPressureAction, O, RW, V, OBS, M, RS, C}
+function apply_action!(env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}, action::AbstractVector{T}) where {T <: AbstractFloat, A <: ScalarAreaScalarPressureAction, O, RW, G, V, OBS, M, RS, C}
     @assert length(action) == 2
     a_s, a_up = action[1], action[2]
     method_cache = env.prob.method.cache
@@ -217,7 +217,7 @@ end
 # end
 
 # Specialization: PIDAction — gains => scalar u_p set via PID, s unchanged
-function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, gains::AbstractVector{T}) where {T <: AbstractFloat, A <: PIDAction, O, RW, V, OBS, M, RS, C}
+function apply_action!(env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}, gains::AbstractVector{T}) where {T <: AbstractFloat, A <: PIDAction, O, RW, G, V, OBS, M, RS, C}
     @assert length(gains) == 3 "PIDAction expects [Kp, Ki, Kd]"
     Kp, Ki, Kd = gains
 
@@ -246,13 +246,13 @@ function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, gains::Abstra
     return nothing
 end
 
-function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::Vector{T}) where {T <: AbstractFloat, A <: LinearScalarPressureAction, O, RW, V, OBS, M, RS, C}
+function apply_action!(env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}, action::Vector{T}) where {T <: AbstractFloat, A <: LinearScalarPressureAction, O, RW, G, V, OBS, M, RS, C}
     @assert length(action) == 1 "LinearScalarPressureAction expects a single action"
     apply_action!(env, action[1])
     return nothing
 end
 
-function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::T) where {T <: AbstractFloat, A <: LinearScalarPressureAction, O, RW, V, OBS, M, RS, C}
+function apply_action!(env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}, action::T) where {T <: AbstractFloat, A <: LinearScalarPressureAction, O, RW, G, V, OBS, M, RS, C}
     env_cache = env.cache
     method_cache = env.prob.method.cache
     if abs(action) > one(T)
@@ -266,7 +266,7 @@ function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::T) wh
     return nothing
 end
 
-function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::AbstractVector{T}) where {T <: AbstractFloat, A <: LinearVectorPressureAction, O, RW, V, OBS, M, RS, C}
+function apply_action!(env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}, action::AbstractVector{T}) where {T <: AbstractFloat, A <: LinearVectorPressureAction, O, RW, G, V, OBS, M, RS, C}
     action_strat = env.action_strat
     N = env.prob.params.N
     @assert N > 0 "Action type N not set"
@@ -299,13 +299,13 @@ function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::Abstr
     return nothing
 end
 
-function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::Vector{T}) where {T <: AbstractFloat, A <: DirectScalarPressureAction, O, RW, V, OBS, M, RS, C}
+function apply_action!(env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}, action::Vector{T}) where {T <: AbstractFloat, A <: DirectScalarPressureAction, O, RW, G, V, OBS, M, RS, C}
     @assert length(action) == 1 "DirectScalarPressureAction expects a single action"
     apply_action!(env, action[1])
     return nothing
 end
 
-function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::T) where {T <: AbstractFloat, A <: DirectScalarPressureAction, O, RW, V, OBS, M, RS, C}
+function apply_action!(env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}, action::T) where {T <: AbstractFloat, A <: DirectScalarPressureAction, O, RW, G, V, OBS, M, RS, C}
     method_cache = env.prob.method.cache
 
     copyto!(method_cache.u_p_previous, method_cache.u_p_current)
@@ -315,7 +315,7 @@ function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::T) wh
     return nothing
 end
 
-function apply_action!(env::RDEEnv{T, A, O, RW, V, OBS, M, RS, C}, action::AbstractVector{T}) where {T <: AbstractFloat, A <: DirectVectorPressureAction, O, RW, V, OBS, M, RS, C}
+function apply_action!(env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}, action::AbstractVector{T}) where {T <: AbstractFloat, A <: DirectVectorPressureAction, O, RW, G, V, OBS, M, RS, C}
     action_strat = env.action_strat
     N = env.prob.params.N
     @assert N > 0 "Action type N not set"

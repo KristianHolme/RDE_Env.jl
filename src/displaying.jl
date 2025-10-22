@@ -87,7 +87,7 @@ function Base.show(io::IO, ::MIME"text/plain", env::RDEEnv{T}) where {T <: Abstr
     println(io, "  truncated: $(env.truncated)")
     println(io, "  terminated: $(env.terminated)")
     println(io, "  action type: $(env.action_strat)")
-    println(io, "  observation strategy: $(env.observation_strategy)")
+    println(io, "  observation strategy: $(env.observation_strat)")
     println(io, "  reward type: $(env.reward_strat)")
     return println(io, "  steps taken: $(env.steps_taken)")
 end

@@ -32,7 +32,7 @@ end
 
     @testset "Fourier Observation" begin
         fft_terms = 4
-        env = RDEEnv(params = params, observation_strategy = FourierObservation(fft_terms))
+        env = RDEEnv(params = params, observation_strat = FourierObservation(fft_terms))
         _reset!(env)
         # Test initialization
         @test length(env.observation) == 2fft_terms + 2  # 2 * fft_terms + s_scaled + u_p_scaled
@@ -46,7 +46,7 @@ end
     end
 
     @testset "State Observation" begin
-        env = RDEEnv(params = params, observation_strategy = StateObservation())
+        env = RDEEnv(params = params, observation_strat = StateObservation())
         _reset!(env)
         # Test initialization
         @test length(env.observation) == 2N + 2  # u and λ states + s_scaled + u_p_scaled
@@ -66,7 +66,7 @@ end
 
     @testset "Sampled Observation" begin
         n_samples = 8
-        env = RDEEnv(params = params, observation_strategy = SampledStateObservation(n_samples))
+        env = RDEEnv(params = params, observation_strat = SampledStateObservation(n_samples))
         _reset!(env)
         # Test initialization
         @test length(env.observation) == 2n_samples + 1  # sampled u and λ + time
@@ -90,7 +90,7 @@ end
                 StateObservation(),
                 SampledStateObservation(8),
             ]
-            env = RDEEnv(params = params, observation_strategy = strategy)
+            env = RDEEnv(params = params, observation_strat = strategy)
             _reset!(env)
             obs1 = _observe(env)
             _reset!(env)
@@ -126,7 +126,7 @@ end
                     SampledStateObservation(8),
                 ]
                 @test begin
-                    env = RDEEnv(RDEParam{T}(), observation_strategy = strategy)
+                    env = RDEEnv(RDEParam{T}(), observation_strat = strategy)
                     _reset!(env)
                     obs = _observe(env)
                     eltype(obs) == T

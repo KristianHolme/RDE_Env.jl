@@ -181,7 +181,7 @@ function global_reward(u::AbstractVector{T}, L::T, dx::T, rew_strat::CachedCompo
     return global_reward
 end
 
-function global_reward(env::RDEEnv{T, A, O, R, V, OBS}, rew_strat::CachedCompositeReward, cache::RewardShiftBufferCache{T}) where {T, A, O, R, V, OBS}
+function global_reward(env::RDEEnv{T, A, O, R, G, V, OBS}, rew_strat::CachedCompositeReward, cache::RewardShiftBufferCache{T}) where {T, A, O, R, G, V, OBS}
     N = env.prob.params.N
     dx = env.prob.x[2] - env.prob.x[1]
     L = env.prob.params.L
@@ -205,7 +205,7 @@ end
     shock_weight::Float32 = 0.8f0
 end
 
-function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rew_strat::ShockSpanReward, ::NoCache) where {T, A, O, R, V, OBS}
+function _compute_reward(env::RDEEnv{T, A, O, R, G, V, OBS}, rew_strat::ShockSpanReward, ::NoCache) where {T, A, O, R, G, V, OBS}
     target_shock_count = get_target_shock_count(env)
     max_span = rew_strat.span_scale
     λ = rew_strat.shock_weight
@@ -237,7 +237,7 @@ end
     abscence_start::Union{Float32, Nothing} = nothing
 end
 
-function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rew_strat::ShockPreservingReward, ::NoCache) where {T, A, O, R, V, OBS}
+function _compute_reward(env::RDEEnv{T, A, O, R, G, V, OBS}, rew_strat::ShockPreservingReward, ::NoCache) where {T, A, O, R, G, V, OBS}
     target_shock_count = get_target_shock_count(env)
     max_span = rew_strat.span_scale
     λ = rew_strat.shock_weight
@@ -276,7 +276,7 @@ mutable struct ShockPreservingSymmetryReward <: AbstractScalarRewardStrategy end
 
 initialize_cache(::ShockPreservingSymmetryReward, N::Int, ::Type{T}) where {T} = RewardShiftBufferCache{T}(zeros(T, N))
 
-function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rew_strat::ShockPreservingSymmetryReward, cache::RewardShiftBufferCache{T}) where {T, A, O, R, V, OBS}
+function _compute_reward(env::RDEEnv{T, A, O, R, G, V, OBS}, rew_strat::ShockPreservingSymmetryReward, cache::RewardShiftBufferCache{T}) where {T, A, O, R, G, V, OBS}
     target_shock_count = get_target_shock_count(env)
     N = env.prob.params.N
     u = env.state[1:N]
@@ -301,7 +301,7 @@ struct PeriodicityReward <: AbstractScalarRewardStrategy end
 
 initialize_cache(::PeriodicityReward, N::Int, ::Type{T}) where {T} = RewardShiftBufferCache{T}(zeros(T, N))
 
-function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, ::PeriodicityReward, cache::RewardShiftBufferCache{T}) where {T <: AbstractFloat, A, O, R, V, OBS}
+function _compute_reward(env::RDEEnv{T, A, O, R, G, V, OBS}, ::PeriodicityReward, cache::RewardShiftBufferCache{T}) where {T <: AbstractFloat, A, O, R, G, V, OBS}
     u, = RDE.split_sol_view(env.state)
     N::Int = env.prob.params.N
     dx::T = env.prob.x[2] - env.prob.x[1]
@@ -365,7 +365,7 @@ end
 
 initialize_cache(::StabilityReward, N::Int, ::Type{T}) where {T} = RewardShiftBufferCache{T}(zeros(T, N))
 
-function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rew_strat::StabilityReward, cache::RewardShiftBufferCache{T}) where {T <: AbstractFloat, A, O, R, V, OBS}
+function _compute_reward(env::RDEEnv{T, A, O, R, G, V, OBS}, rew_strat::StabilityReward, cache::RewardShiftBufferCache{T}) where {T <: AbstractFloat, A, O, R, G, V, OBS}
     if isnothing(env.prob.sol)
         return zero(T)
     end
@@ -461,8 +461,8 @@ struct StabilityTargetReward{T <: AbstractFloat} <: AbstractScalarRewardStrategy
 end
 
 function StabilityTargetReward(;
-        stability_weight::T = 0.7f0,
-        target_weight::T = 0.3f0,
+        stability_weight::T = 0.5f0,
+        target_weight::T = 0.5f0,
         kwargs...
     ) where {T <: AbstractFloat}
     return StabilityTargetReward{T}(
@@ -478,7 +478,7 @@ initialize_cache(rew_strat::StabilityTargetReward, N::Int, ::Type{T}) where {T} 
     NoCache()
 )
 
-function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rew_strat::StabilityTargetReward, cache::WrappedRewardCache) where {T <: AbstractFloat, A, O, R, V, OBS}
+function _compute_reward(env::RDEEnv{T, A, O, R, G, V, OBS}, rew_strat::StabilityTargetReward, cache::WrappedRewardCache) where {T <: AbstractFloat, A, O, R, G, V, OBS}
     # Compute stability reward using inner cache
     stability_value = _compute_reward(env, rew_strat.stability_reward, cache.inner_cache)
 
@@ -534,7 +534,7 @@ function Base.show(io::IO, ::MIME"text/plain", rew_strat::MultiSectionReward)
     return println(io, "  weights: $(rew_strat.weights)")
 end
 
-function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rew_strat::MultiSectionReward, cache::RewardShiftBufferCache{T}) where {T, A, O, R, V, OBS}
+function _compute_reward(env::RDEEnv{T, A, O, R, G, V, OBS}, rew_strat::MultiSectionReward, cache::RewardShiftBufferCache{T}) where {T, A, O, R, G, V, OBS}
     common_reward = global_reward(env, rew_strat, cache)
     efforts = compute_section_control_efforts(env, rew_strat.n_sections)
     individual_modifiers = action_magnitude_factor(rew_strat.lowest_action_magnitude_reward, efforts)
@@ -588,7 +588,7 @@ function Base.show(io::IO, ::MIME"text/plain", rew_strat::CompositeReward)
     return println(io, "  weights: $(rew_strat.weights)")
 end
 
-function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rew_strat::CompositeReward, cache::RewardShiftBufferCache{T}) where {T, A, O, R, V, OBS}
+function _compute_reward(env::RDEEnv{T, A, O, R, G, V, OBS}, rew_strat::CompositeReward, cache::RewardShiftBufferCache{T}) where {T, A, O, R, G, V, OBS}
     reward = global_reward(env, rew_strat, cache)
     # Control-effort scalar modifier based on Δu_p
     Δmax = RDE.turbo_maximum_abs_diff(env.prob.method.cache.u_p_current, env.prob.method.cache.u_p_previous) / env.u_pmax
@@ -673,7 +673,7 @@ function aggregate(rewards::AbstractVector, aggregation::TimeProd)
     return prod(rewards)
 end
 
-function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rew_strat::TimeAggCompositeReward, cache::RewardShiftBufferCache{T}) where {T, A, O, R, V, OBS}
+function _compute_reward(env::RDEEnv{T, A, O, R, G, V, OBS}, rew_strat::TimeAggCompositeReward, cache::RewardShiftBufferCache{T}) where {T, A, O, R, G, V, OBS}
     N = env.prob.params.N
     dx = env.prob.x[2] - env.prob.x[1]
     L = env.prob.params.L
@@ -715,7 +715,7 @@ function Base.show(io::IO, ::MIME"text/plain", rew_strat::ConstantTargetReward)
     return println(io, "  target: $(rew_strat.target)")
 end
 
-_compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rew_strat::ConstantTargetReward{T}, cache) where {T, A, O, R, V, OBS} =
+_compute_reward(env::RDEEnv{T, A, O, R, G, V, OBS}, rew_strat::ConstantTargetReward{T}, cache) where {T, A, O, R, G, V, OBS} =
     -abs(rew_strat.target - mean(env.prob.method.cache.u_p_current)) + one(T)
 
 # ----------------------------------------------------------------------------
@@ -742,7 +742,7 @@ function Base.show(io::IO, ::MIME"text/plain", rew_strat::TimeAggMultiSectionRew
     return println(io, "  weights: $(rew_strat.weights)")
 end
 
-function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rew_strat::TimeAggMultiSectionReward, cache::RewardShiftBufferCache{T}) where {T, A, O, R, V, OBS}
+function _compute_reward(env::RDEEnv{T, A, O, R, G, V, OBS}, rew_strat::TimeAggMultiSectionReward, cache::RewardShiftBufferCache{T}) where {T, A, O, R, G, V, OBS}
     N = env.prob.params.N
     n_sections = rew_strat.n_sections
     shift_buffer = cache.shift_buffer
@@ -813,7 +813,7 @@ initialize_cache(::TimeAggMultiSectionReward, N::Int, ::Type{T}) where {T} = Rew
     threshold_reward::T = 0.3f0
 end
 
-function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rew_strat::TimeDiffNormReward{T}, cache) where {T, A, O, R, V, OBS}
+function _compute_reward(env::RDEEnv{T, A, O, R, G, V, OBS}, rew_strat::TimeDiffNormReward{T}, cache) where {T, A, O, R, G, V, OBS}
     if isnothing(env.prob.sol)
         return zero(T)
     end
@@ -881,7 +881,7 @@ function Base.show(io::IO, ::MIME"text/plain", rew_strat::PeriodMinimumReward)
     return println(io, "  weights: $(rew_strat.weights)")
 end
 
-function time_minimum_global_reward(env::RDEEnv{T, A, O, R, V, OBS}, rew_strat::CachedCompositeReward, cache::RewardShiftBufferCache{T})::T where {T <: AbstractFloat, A, O, R, V, OBS}
+function time_minimum_global_reward(env::RDEEnv{T, A, O, R, G, V, OBS}, rew_strat::CachedCompositeReward, cache::RewardShiftBufferCache{T})::T where {T <: AbstractFloat, A, O, R, G, V, OBS}
     N::Int = env.prob.params.N
     if isnothing(env.prob.sol)
         return zero(T)
@@ -925,7 +925,7 @@ function time_minimum_global_reward(env::RDEEnv{T, A, O, R, V, OBS}, rew_strat::
     return min_rewards[5] * weighted_rewards  # low_span_punishment * weighted_sum
 end
 
-function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rew_strat::PeriodMinimumReward, cache::RewardShiftBufferCache{T}) where {T, A, O, R, V, OBS}
+function _compute_reward(env::RDEEnv{T, A, O, R, G, V, OBS}, rew_strat::PeriodMinimumReward, cache::RewardShiftBufferCache{T}) where {T, A, O, R, G, V, OBS}
     global_reward = time_minimum_global_reward(env, rew_strat, cache)
     Δmax = RDE.turbo_maximum_abs_diff(env.prob.method.cache.u_p_current, env.prob.method.cache.u_p_previous) / env.u_pmax
     action_effort_modifier = action_magnitude_factor(rew_strat.lowest_action_magnitude_reward, Δmax)
@@ -991,7 +991,7 @@ function calculate_variation_punishment(values::Vector{T}, α::T) where {T <: Ab
     return exp(-α * coefficient_of_variation)
 end
 
-function time_minimum_global_reward_with_variation(env::RDEEnv{T, A, O, R, V, OBS}, rew_strat::PeriodMinimumVariationReward, cache::RewardShiftBufferCache{T}) where {T <: AbstractFloat, A, O, R, V, OBS}
+function time_minimum_global_reward_with_variation(env::RDEEnv{T, A, O, R, G, V, OBS}, rew_strat::PeriodMinimumVariationReward, cache::RewardShiftBufferCache{T}) where {T <: AbstractFloat, A, O, R, G, V, OBS}
     N = env.prob.params.N
     if isnothing(env.prob.sol)
         return zero(T)
@@ -1056,7 +1056,7 @@ function time_minimum_global_reward_with_variation(env::RDEEnv{T, A, O, R, V, OB
     return min_low_span_punishment * variation_punishment * weighted_rewards
 end
 
-function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rew_strat::PeriodMinimumVariationReward, cache::RewardShiftBufferCache{T}) where {T, A, O, R, V, OBS}
+function _compute_reward(env::RDEEnv{T, A, O, R, G, V, OBS}, rew_strat::PeriodMinimumVariationReward, cache::RewardShiftBufferCache{T}) where {T, A, O, R, G, V, OBS}
     global_reward = time_minimum_global_reward_with_variation(env, rew_strat, cache)
     Δmax = RDE.turbo_maximum_abs_diff(env.prob.method.cache.u_p_current, env.prob.method.cache.u_p_previous) / env.u_pmax
     action_effort_modifier = action_magnitude_factor(rew_strat.lowest_action_magnitude_reward, Δmax)
@@ -1084,7 +1084,7 @@ end
 
 reward_value_type(::Type{T}, ::MultiSectionPeriodMinimumReward{T}) where {T} = Vector{T}
 
-function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rew_strat::MultiSectionPeriodMinimumReward, cache::RewardShiftBufferCache{T}) where {T, A, O, R, V, OBS}
+function _compute_reward(env::RDEEnv{T, A, O, R, G, V, OBS}, rew_strat::MultiSectionPeriodMinimumReward, cache::RewardShiftBufferCache{T}) where {T, A, O, R, G, V, OBS}
     # Compute the time minimum global reward (same as PeriodMinimumReward)
     common_reward = time_minimum_global_reward(env, rew_strat, cache)
 
@@ -1135,7 +1135,7 @@ end
 initialize_cache(rew_strat::MultiplicativeReward, N::Int, ::Type{T}) where {T} =
     CompositeRewardCache(Tuple(initialize_cache(r, N, T) for r in rew_strat.rewards))
 
-function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rew_strat::MultiplicativeReward, cache::CompositeRewardCache) where {T, A, O, R, V, OBS}
+function _compute_reward(env::RDEEnv{T, A, O, R, G, V, OBS}, rew_strat::MultiplicativeReward, cache::CompositeRewardCache) where {T, A, O, R, G, V, OBS}
     # Compute rewards with their respective caches
     reward = _compute_reward(env, rew_strat.rewards[1], cache.caches[1])
 
@@ -1209,7 +1209,7 @@ initialize_cache(rew_strat::ExponentialAverageReward, N::Int, ::Type{T}) where {
     ExponentialAverageCache{T}(nothing)
 )
 
-function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rew_strat::ExponentialAverageReward, cache::WrappedRewardCache) where {T, A, O, R, V, OBS}
+function _compute_reward(env::RDEEnv{T, A, O, R, G, V, OBS}, rew_strat::ExponentialAverageReward, cache::WrappedRewardCache) where {T, A, O, R, G, V, OBS}
     # Use the inner cache for the wrapped reward
     current_reward = _compute_reward(env, rew_strat.wrapped_reward, cache.inner_cache)
 
@@ -1283,7 +1283,7 @@ initialize_cache(rew_strat::TransitionBasedReward, N::Int, ::Type{T}) where {T} 
     TransitionBasedCache{T}(T[], Int[], false)
 )
 
-function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rew_strat::TransitionBasedReward{S, T}, cache::WrappedRewardCache) where {T, A, O, R, V, OBS, S}
+function _compute_reward(env::RDEEnv{T, A, O, R, G, V, OBS}, rew_strat::TransitionBasedReward{S, T}, cache::WrappedRewardCache) where {T, A, O, R, G, V, OBS, S}
     # Compute the wrapped reward using inner cache
     wrapped_reward_value = _compute_reward(env, rew_strat.wrapped_reward, cache.inner_cache)
 
@@ -1350,7 +1350,7 @@ initialize_cache(rew_strat::ScalarToVectorReward, N::Int, ::Type{T}) where {T} =
     NoCache()
 )
 
-function _compute_reward(env::RDEEnv{T, A, O, R, V, OBS}, rew_strat::ScalarToVectorReward, cache::WrappedRewardCache) where {T, A, O, R, V, OBS}
+function _compute_reward(env::RDEEnv{T, A, O, R, G, V, OBS}, rew_strat::ScalarToVectorReward, cache::WrappedRewardCache) where {T, A, O, R, G, V, OBS}
     reward = _compute_reward(env, rew_strat.wrapped_reward, cache.inner_cache)
     return fill(reward, rew_strat.n)
 end
