@@ -382,9 +382,9 @@ function _compute_reward(env::RDEEnv{T, A, O, R, G, V, OBS}, rew_strat::Stabilit
     shift_buffer = cache.shift_buffer
 
     # Count current shocks
-    current_u = @view env.state[1:N]
-    current_shock_inds = RDE.shock_indices(current_u, dx)
-    current_shocks = length(current_shock_inds)
+    us, _ = RDE.split_sol(sol_states)
+    shock_inds_per_state = RDE.shock_indices.(us, dx)
+    current_shock_inds = shock_inds_per_state[end]
 
     # Collect data across time
     min_values = Vector{T}(undef, n_states)
@@ -415,15 +415,19 @@ function _compute_reward(env::RDEEnv{T, A, O, R, G, V, OBS}, rew_strat::Stabilit
             maxerr = RDE.turbo_maximum(errs)
             periodicity_rewards[i] = exp(-rew_strat.variation_scaling * maxerr)
         else
-            periodicity_rewards[i] = T(0)
+            periodicity_rewards[i] = T(1)
         end
 
         # Calculate shock spacing using target shock count
-        shock_inds = RDE.shock_indices(u, dx)
+        shock_inds = shock_inds_per_state[i]
         shocks = length(shock_inds)
-        if shocks > 1
+        if shocks > 0
             optimal_spacing = L / target_shock_count
-            shock_spacing = mod.(RDE.periodic_diff(shock_inds), N) .* dx
+            if shocks == 1
+                shock_spacing = [L]
+            else
+                shock_spacing = mod.(RDE.periodic_diff(shock_inds), N) .* dx
+            end
             # Use exponential reward function for spacing
             spacing_diffs = abs.(shock_spacing .- optimal_spacing)
             spacing_diffs = max.(spacing_diffs .- T(7.8f-3), zero(T)) #since N ÷ 3 is not a divisor of N, we set the baseline a bit lower
@@ -443,6 +447,7 @@ function _compute_reward(env::RDEEnv{T, A, O, R, G, V, OBS}, rew_strat::Stabilit
     # Calculate worst periodicity and shock spacing over time
     worst_periodicity = minimum(periodicity_rewards)
     worst_shock_spacing = minimum(shock_spacing_rewards)
+
 
     amplitude_stability = span_variation
     spatial_stability = worst_periodicity * worst_shock_spacing
@@ -1241,29 +1246,10 @@ then terminates the environment. Uses transition detection logic similar to dete
 - Transition occurs when: shock count reaches target AND rewards stay above threshold for stability_length time
 - Internal state (past_rewards, past_shock_counts, transition_found) is stored in the cache
 """
-struct TransitionBasedReward{R <: AbstractRewardStrategy, T <: AbstractFloat} <: AbstractScalarRewardStrategy
-    wrapped_reward::R
-    reward_stability_length::T  # in time units
-    reward_threshold::T
-
-    function TransitionBasedReward{R, T}(
-            wrapped_reward::R;
-            reward_stability_length::T = T(20),
-            reward_threshold::T = T(0.99)
-        ) where {R <: AbstractRewardStrategy, T <: AbstractFloat}
-        return new{R, T}(
-            wrapped_reward, reward_stability_length, reward_threshold
-        )
-    end
-    function TransitionBasedReward(
-            wrapped_reward::R;
-            reward_stability_length::Float32 = 20.0f0,
-            reward_threshold::Float32 = 0.99f0
-        ) where {R <: AbstractRewardStrategy}
-        return TransitionBasedReward{R, Float32}(
-            wrapped_reward, reward_stability_length = reward_stability_length, reward_threshold = reward_threshold
-        )
-    end
+@kwdef struct TransitionBasedReward{R <: AbstractScalarRewardStrategy, T <: AbstractFloat} <: AbstractScalarRewardStrategy
+    wrapped_reward::R = StabilityReward()
+    reward_stability_length::T = 20.0f0 # in time units
+    reward_threshold::T = 0.99f0
 end
 
 function Base.show(io::IO, rew_strat::TransitionBasedReward)
