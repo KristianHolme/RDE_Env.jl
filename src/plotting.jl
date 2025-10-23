@@ -140,14 +140,31 @@ function plot_policy_data(
         ax_rewards = Axis(metrics_action_area[1, metrics_action_Area_plots], title = "Rewards", ylabel = "r")
         hidexdecorations!(ax_rewards, grid = false)
         reward_color = :orange
+
+        # Create reward times: first reward at second action_ts, last at end
+        reward_times = if length(action_ts) > 1
+            [action_ts[2:end]; action_ts[end] + (action_ts[end] - action_ts[end - 1])]
+        else
+            [action_ts[1] + 0.1]  # fallback if only one action
+        end
+
         if eltype(rewards) <: AbstractVector
-            stairs!.(Ref(ax_rewards), Ref(action_ts), eachrow(stack(rewards)), color = reward_color)
-            for i in 1:length(rewards[sparse_time_idx[]])
-                scatter!(ax_rewards, fine_time, @lift(rewards[$sparse_time_idx][i]), color = reward_color)
+            # Plot all reward components as scatter points
+            reward_lines = eachrow(stack(rewards))
+            bg_color = reward_color
+            reward_colors = Makie.Colors. distinguishable_colors(length(rewards[1]), [bg_color]; dropseed = false)
+            for i in 1:length(rewards[1])
+                scatterlines!(ax_rewards, reward_times, reward_lines[i], color = reward_colors[i])
+            end
+            # Highlight current reward point (highlight reward earned at current time)
+            for i in 1:length(rewards[1])
+                scatter!(ax_rewards, @lift(reward_times[max(1, $sparse_time_idx - 1)]), @lift(rewards[max(1, $sparse_time_idx - 1)][i]), color = reward_colors[i], markersize = 12)
             end
         else
-            stairs!(ax_rewards, action_ts, rewards, color = reward_color)
-            scatter!(ax_rewards, fine_time, @lift(rewards[$sparse_time_idx]), color = reward_color)
+            # Plot rewards as scatter points
+            scatterlines!(ax_rewards, reward_times, rewards, color = reward_color)
+            # Highlight current reward point (highlight reward earned at current time)
+            scatter!(ax_rewards, @lift(reward_times[max(1, $sparse_time_idx - 1)]), @lift(rewards[max(1, $sparse_time_idx - 1)]), color = reward_color, markersize = 12)
         end
         # vlines!(ax_rewards, fine_time, color=:green, alpha=0.5)
 
@@ -158,6 +175,9 @@ function plot_policy_data(
         lines!(ax_shocks, state_ts, shocks)
         scatter!(ax_shocks, fine_time, @lift(shocks[$time_idx]))
         # vlines!(ax_shocks, fine_time, color=:green, alpha=0.5)
+
+        # Link x-axes of rewards and shocks plots
+        linkxaxes!(ax_rewards, ax_shocks)
     end
 
     if control_history
