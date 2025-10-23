@@ -7,6 +7,17 @@ struct ObservationMinisectionCache{T <: AbstractFloat} <: AbstractCache
     minisection_λ::Vector{T}
 end
 
+struct ObservationPressureHistoryCache{T <: AbstractFloat} <: AbstractCache
+    minisection_u::Vector{T}
+    minisection_λ::Vector{T}
+    pressure_history::Vector{T}
+end
+
+function reset_cache!(cache::ObservationPressureHistoryCache{T}) where {T}
+    cache.pressure_history .= T(-1)
+    return nothing
+end
+
 # ----------------------------------------------------------------------------
 # Helper Functions
 # ----------------------------------------------------------------------------
@@ -15,9 +26,8 @@ function compute_sectioned_observation!(minisection_observations_u, minisection_
     N = prob.params.N
     current_u = @view env.state[1:N]
     current_λ = @view env.state[(N + 1):end]
-    max_shocks = T(6)
-    #TODO: change to 3?
-    max_pressure = T(3)
+    max_shocks = T(4)
+    max_pressure = T(2)
 
     dx = RDE.get_dx(prob)::T
     minisections = obs_strategy.minisections
@@ -134,7 +144,9 @@ function compute_observation!(obs, env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}
 
     return obs
 end
-
+function get_init_observation(::StateObservation, N::Int, ::Type{T}) where {T <: AbstractFloat}
+    return Vector{T}(undef, 2N + 2)
+end
 # ----------------------------------------------------------------------------
 # SectionedStateObservation
 # ----------------------------------------------------------------------------
@@ -143,11 +155,31 @@ end
     minisections::Int = 32
 end
 
+# ----------------------------------------------------------------------------
+# SectionedStateWithPressureHistoryObservation
+# ----------------------------------------------------------------------------
+
+@kwdef struct SectionedStateWithPressureHistoryObservation <: AbstractObservationStrategy
+    minisections::Int = 32
+    history_length::Int = 14
+end
+
 initialize_cache(obs::SectionedStateObservation, N::Int, ::Type{T}) where {T} = begin
     minisection_size = N ÷ obs.minisections
     n_total_minisections = N ÷ minisection_size
     ObservationMinisectionCache{T}(zeros(T, n_total_minisections), zeros(T, n_total_minisections))
 end
+
+initialize_cache(obs::SectionedStateWithPressureHistoryObservation, N::Int, ::Type{T}) where {T} = begin
+    minisection_size = N ÷ obs.minisections
+    n_total_minisections = N ÷ minisection_size
+    ObservationPressureHistoryCache{T}(
+        zeros(T, n_total_minisections),
+        zeros(T, n_total_minisections),
+        fill(T(-1), obs.history_length)
+    )
+end
+
 function compute_observation!(obs, env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}, strategy::SectionedStateObservation) where {T, A, O, RW, G, V, OBS, M, RS, C}
     minisections = strategy.minisections
 
@@ -162,6 +194,44 @@ function compute_observation!(obs, env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}
     # Write scalar values directly to the end of obs
     obs[2 * minisections + 1] = shocks_normalized
     obs[2 * minisections + 2] = target_shock_count_normalized
+
+    return obs
+end
+
+function compute_observation!(obs, env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}, strategy::SectionedStateWithPressureHistoryObservation) where {T, A, O, RW, G, V, OBS, M, RS, C}
+    minisections = strategy.minisections
+    history_length = strategy.history_length
+
+    # Create views into obs for each component
+    minisection_observations_u = @view obs[1:minisections]
+    minisection_observations_λ = @view obs[(minisections + 1):(2 * minisections)]
+    pressure_history_view = @view obs[(2 * minisections + 1):(2 * minisections + history_length)]
+
+    shocks_normalized, target_shock_count_normalized = compute_sectioned_observation!(
+        minisection_observations_u, minisection_observations_λ, env, strategy
+    )
+
+    # Get current mean injection pressure
+    current_pressure = mean(env.prob.method.cache.u_p_current) / env.u_pmax
+
+    # Get pressure history cache
+    pressure_cache = env.cache.observation_cache
+
+    # Check if this is the first observation (all values are -1)
+    if all(≈(-1), pressure_cache.pressure_history)
+        # First observation: fill entire history with current pressure
+        pressure_cache.pressure_history .= current_pressure
+        pressure_history_view .= current_pressure
+    else
+        # Subsequent observations: shift history and add new value
+        circshift!(pressure_cache.pressure_history, -1)
+        pressure_cache.pressure_history[end] = current_pressure
+        pressure_history_view .= pressure_cache.pressure_history
+    end
+
+    # Write scalar values directly to the end of obs
+    obs[2 * minisections + history_length + 1] = shocks_normalized
+    obs[2 * minisections + history_length + 2] = target_shock_count_normalized
 
     return obs
 end
@@ -212,14 +282,13 @@ function compute_observation!(obs, env::RDEEnv{T, A, O, R, G, V, OBS}, strategy:
 
     return obs
 end
+function get_init_observation(strategy::SectionedStateObservation, N::Int, ::Type{T}) where {T <: AbstractFloat}
 
-
-function get_init_observation(::StateObservation, N::Int, ::Type{T}) where {T <: AbstractFloat}
-    return Vector{T}(undef, 2N + 2)
+    return Vector{T}(undef, 2 * strategy.minisections + 2)
 end
 
-function get_init_observation(strategy::SectionedStateObservation, N::Int, ::Type{T}) where {T <: AbstractFloat}
-    return Vector{T}(undef, 2 * strategy.minisections + 2)
+function get_init_observation(strategy::SectionedStateWithPressureHistoryObservation, N::Int, ::Type{T}) where {T <: AbstractFloat}
+    return Vector{T}(undef, 2 * strategy.minisections + strategy.history_length + 2)
 end
 
 # ----------------------------------------------------------------------------
@@ -365,3 +434,5 @@ end
 function get_init_observation(strategy::MeanInjectionPressureObservation, N::Int, ::Type{T}) where {T <: AbstractFloat}
     return Vector{T}(undef, 1)
 end
+
+# ----------------------------------------------------------------------------

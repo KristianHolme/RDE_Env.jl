@@ -44,7 +44,8 @@ include("observations/observations.jl")
 export
     FourierObservation, StateObservation,
     SampledStateObservation, MultiSectionObservation, SectionedStateObservation,
-    MultiCenteredObservation, MeanInjectionPressureObservation
+    MultiCenteredObservation, MeanInjectionPressureObservation,
+    SectionedStateWithPressureHistoryObservation
 export CompositeObservation, compute_sectioned_observation
 
 # Rewards

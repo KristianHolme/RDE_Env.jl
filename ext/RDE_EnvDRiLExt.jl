@@ -30,6 +30,10 @@ _action_space(::RDEEnv, ::ScalarPressureAction) = DRiL.Box([-1.0f0], [1.0f0])
 _action_space(::RDEEnv, ::ScalarAreaScalarPressureAction) = DRiL.Box([-1.0f0, -1.0f0], [1.0f0, 1.0f0])
 _action_space(::RDEEnv, action_strat::VectorPressureAction) = DRiL.Box([-1.0f0 for _ in 1:action_strat.n_sections], [1.0f0 for _ in 1:action_strat.n_sections])
 _action_space(::RDEEnv, ::PIDAction) = DRiL.Box([-1.0f0, -1.0f0, -1.0f0], [1.0f0, 1.0f0, 1.0f0])
+_action_space(::RDEEnv, ::LinearScalarPressureAction) = DRiL.Box([-1.0f0], [1.0f0])
+_action_space(::RDEEnv, ::DirectScalarPressureAction) = DRiL.Box([0.0f0], [1.2f0])
+_action_space(::RDEEnv, action_strat::LinearVectorPressureAction) = DRiL.Box([-1.0f0 for _ in 1:action_strat.n_sections], [1.0f0 for _ in 1:action_strat.n_sections])
+_action_space(::RDEEnv, action_strat::DirectVectorPressureAction) = DRiL.Box([0.0f0 for _ in 1:action_strat.n_sections], [1.2f0 for _ in 1:action_strat.n_sections])
 
 RDE_Env.set_target_shock_count!(env::DRiLRDEEnv, target_shock_count::Int) = set_target_shock_count!(env.core_env, target_shock_count)
 RDE_Env.get_target_shock_count(env::DRiLRDEEnv) = get_target_shock_count(env.core_env)
@@ -84,6 +88,16 @@ function _observation_space(::RDEEnv, strategy::MultiCenteredObservation)
     obs_length = strategy.minisections * 2 + 2  # +2 for shocks, target_shock_count
     low = [0.0f0 for _ in 1:obs_length]
     high = [1.0f0 for _ in 1:obs_length]
+    return DRiL.Box(low, high)
+end
+
+function _observation_space(core_env::RDEEnv, strategy::SectionedStateWithPressureHistoryObservation)
+    minisections = strategy.minisections
+    history_length = strategy.history_length
+    # Layout: [minisection_u, minisection_λ, pressure_history, shocks, target_shocks]
+    obs_length = 2 * minisections + history_length + 2
+    low = [[0.0f0 for _ in 1:(2 * minisections + history_length)]; 0.0f0; 0.0f0]
+    high = [[1.0f0 for _ in 1:(2 * minisections + history_length)]; 1.0f0; 1.0f0]
     return DRiL.Box(low, high)
 end
 
