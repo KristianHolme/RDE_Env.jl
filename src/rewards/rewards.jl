@@ -371,8 +371,8 @@ function _compute_reward(env::RDEEnv{T, A, O, R, G, V, OBS}, rew_strat::Stabilit
     end
 
     # Extract all states from solution
-    sol_states = env.prob.sol.u
-    n_states = length(sol_states)
+    sol_states = env.prob.sol.u::Vector{Vector{T}}
+    n_states::Int = length(sol_states)
 
     # Get constants
     N = env.prob.params.N
@@ -380,11 +380,6 @@ function _compute_reward(env::RDEEnv{T, A, O, R, G, V, OBS}, rew_strat::Stabilit
     L = env.prob.params.L
     target_shock_count = get_target_shock_count(env)
     shift_buffer = cache.shift_buffer
-
-    # Count current shocks
-    us, _ = RDE.split_sol(sol_states)
-    shock_inds_per_state = RDE.shock_indices.(us, dx)
-    current_shock_inds = shock_inds_per_state[end]
 
     # Collect data across time
     min_values = Vector{T}(undef, n_states)
@@ -419,7 +414,8 @@ function _compute_reward(env::RDEEnv{T, A, O, R, G, V, OBS}, rew_strat::Stabilit
         end
 
         # Calculate shock spacing using target shock count
-        shock_inds = shock_inds_per_state[i]
+        u, _ = RDE.split_sol_view(state)
+        shock_inds = RDE.shock_indices(u, dx)
         shocks = length(shock_inds)
         if shocks > 0
             optimal_spacing = L / target_shock_count
