@@ -31,7 +31,7 @@ function update_goal!(cache::GoalCache, goal_strat::RandomTargetGoal, ::Abstract
     return nothing
 end
 
-function get_target_shock_count(goal_strat::RandomTargetGoal, ::AbstractRDEEnv)
+function get_target_shock_count(goal_strat::RandomTargetGoal, env::AbstractRDEEnv)
     return env.cache.goal_cache.target_shock_count
 end
 function set_target_shock_count!(goal_strat::RandomTargetGoal, env::AbstractRDEEnv, v::Int)
