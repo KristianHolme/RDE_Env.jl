@@ -32,7 +32,8 @@ function update_goal!(cache::GoalCache, goal_strat::RandomTargetGoal, ::Abstract
 end
 
 function get_target_shock_count(goal_strat::RandomTargetGoal, env::AbstractRDEEnv)
-    return env.cache.goal_cache.target_shock_count
+    goal_cache = env.cache.goal_cache::GoalCache
+    return goal_cache.target_shock_count
 end
 function set_target_shock_count!(goal_strat::RandomTargetGoal, env::AbstractRDEEnv, v::Int)
     error("Cannot set target shock count with RandomTargetGoal, 
