@@ -18,6 +18,17 @@ function reset_cache!(cache::ObservationPressureHistoryCache{T}) where {T}
     return nothing
 end
 
+struct ObservationMultiCenteredPressureHistoryCache{T <: AbstractFloat} <: AbstractCache
+    minisection_u::Vector{T}
+    minisection_λ::Vector{T}
+    pressure_history::Matrix{T}  # Each column is history for one section
+end
+
+function reset_cache!(cache::ObservationMultiCenteredPressureHistoryCache{T}) where {T}
+    cache.pressure_history .= T(-1)
+    return nothing
+end
+
 # ----------------------------------------------------------------------------
 # Helper Functions
 # ----------------------------------------------------------------------------
@@ -361,6 +372,13 @@ end
 end
 MultiCenteredObservation(n::Int) = MultiCenteredObservation(n_sections = n)
 
+@kwdef struct MultiCenteredObservationWithPressureHistory <: AbstractMultiAgentObservationStrategy
+    n_sections::Int = 8
+    minisections::Int = 32
+    history_length::Int = 14
+end
+MultiCenteredObservationWithPressureHistory(n::Int) = MultiCenteredObservationWithPressureHistory(n_sections = n)
+
 function Base.show(io::IO, obs_strategy::MultiCenteredObservation)
     return if get(io, :compact, false)::Bool
         print(io, "MultiCenteredObservation(n_sections=$(obs_strategy.n_sections))")
@@ -375,10 +393,33 @@ initialize_cache(obs::MultiCenteredObservation, N::Int, ::Type{T}) where {T} = b
     ObservationMinisectionCache{T}(zeros(T, n_total_minisections), zeros(T, n_total_minisections))
 end
 
+initialize_cache(obs::MultiCenteredObservationWithPressureHistory, N::Int, ::Type{T}) where {T} = begin
+    ObservationMultiCenteredPressureHistoryCache{T}(
+        zeros(T, obs.minisections),
+        zeros(T, obs.minisections),
+        fill(T(-1), obs.history_length, obs.n_sections)
+    )
+end
+
 function Base.show(io::IO, ::MIME"text/plain", obs_strategy::MultiCenteredObservation)
     println(io, "MultiCenteredObservation:")
     println(io, "  n_sections: $(obs_strategy.n_sections)")
     return println(io, "  minisections: $(obs_strategy.minisections)")
+end
+
+function Base.show(io::IO, obs_strategy::MultiCenteredObservationWithPressureHistory)
+    return if get(io, :compact, false)::Bool
+        print(io, "MultiCenteredObservationWithPressureHistory(n_sections=$(obs_strategy.n_sections))")
+    else
+        print(io, "MultiCenteredObservationWithPressureHistory(n_sections=$(obs_strategy.n_sections), minisections=$(obs_strategy.minisections), history_length=$(obs_strategy.history_length))")
+    end
+end
+
+function Base.show(io::IO, ::MIME"text/plain", obs_strategy::MultiCenteredObservationWithPressureHistory)
+    println(io, "MultiCenteredObservationWithPressureHistory:")
+    println(io, "  n_sections: $(obs_strategy.n_sections)")
+    println(io, "  minisections: $(obs_strategy.minisections)")
+    return println(io, "  history_length: $(obs_strategy.history_length)")
 end
 
 function compute_observation!(obs, env::RDEEnv{T, A, O, R, G, V, OBS}, obs_strategy::MultiCenteredObservation) where {T, A, O, R, G, V, OBS}
@@ -413,8 +454,72 @@ function compute_observation!(obs, env::RDEEnv{T, A, O, R, G, V, OBS}, obs_strat
     return obs
 end
 
+function compute_observation!(obs, env::RDEEnv{T, A, O, R, G, V, OBS}, obs_strategy::MultiCenteredObservationWithPressureHistory) where {T, A, O, R, G, V, OBS}
+    n_sections = obs_strategy.n_sections
+    minisections = obs_strategy.minisections
+    history_length = obs_strategy.history_length
+    minisections_per_section = minisections ÷ n_sections
+
+    # Use cached buffers
+    obs_cache = env.cache.observation_cache::ObservationMultiCenteredPressureHistoryCache{T}
+    minisection_observations_u = obs_cache.minisection_u
+    minisection_observations_λ = obs_cache.minisection_λ
+    pressure_history_cache = obs_cache.pressure_history
+
+    shocks, target_shock_count = compute_sectioned_observation!(
+        minisection_observations_u, minisection_observations_λ, env, obs_strategy
+    )
+
+    # Calculate points per section for extracting section-specific pressure
+    N = env.prob.params.N
+    points_per_section = N ÷ n_sections
+    u_p_current = env.prob.method.cache.u_p_current
+
+    # Fill the matrix for each section
+    for i in 1:n_sections
+        # Views into obs: [u, λ, pressure_history, shocks, target]
+        obs_u_view = @view obs[1:minisections, i]
+        obs_λ_view = @view obs[(minisections + 1):(minisections * 2), i]
+        pressure_history_view = @view obs[(2 * minisections + 1):(2 * minisections + history_length), i]
+
+        # Copy with circshift! for centered observations (in-place, no allocation)
+        circshift!(obs_u_view, minisection_observations_u, -minisections_per_section * (i - 1))
+        circshift!(obs_λ_view, minisection_observations_λ, -minisections_per_section * (i - 1))
+
+        # Get section-specific mean pressure (normalized)
+        section_start = (i - 1) * points_per_section + 1
+        section_end = i * points_per_section
+        section_u_p = @view u_p_current[section_start:section_end]
+        current_section_pressure = mean(section_u_p) / env.u_pmax
+
+        # Handle pressure history for this section
+        section_history = @view pressure_history_cache[:, i]
+        if all(≈(-1), section_history)
+            # First observation: fill entire history with current pressure
+            section_history .= current_section_pressure
+            pressure_history_view .= current_section_pressure
+        else
+            # Subsequent observations: shift history in-place and add new value
+            circshift!(section_history, -1)
+            section_history[end] = current_section_pressure
+            pressure_history_view .= section_history
+        end
+
+        # Add scalar values at the end
+        obs[end - 1, i] = shocks
+        obs[end, i] = target_shock_count
+    end
+
+    return obs
+end
+
 function get_init_observation(obs_strategy::MultiCenteredObservation, N::Int, ::Type{T}) where {T <: AbstractFloat}
     obs_dim = obs_strategy.minisections * 2 + 2
+    return Matrix{T}(undef, obs_dim, obs_strategy.n_sections)
+end
+
+function get_init_observation(obs_strategy::MultiCenteredObservationWithPressureHistory, N::Int, ::Type{T}) where {T <: AbstractFloat}
+    obs_dim = obs_strategy.minisections * 2 + obs_strategy.history_length + 2
     return Matrix{T}(undef, obs_dim, obs_strategy.n_sections)
 end
 

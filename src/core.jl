@@ -127,7 +127,7 @@ Set the target shock count from the goal strategy.
 function set_target_shock_count! end
 
 """
-    get_target_shock_count(env::AbstractRDEEnv)
+    get_target_shock_count(env::AbstractRDEEnv) -> Int
 Get the target shock count from the goal strategy.
 """
 get_target_shock_count(env::AbstractRDEEnv) = get_target_shock_count(env.goal_strat, env)

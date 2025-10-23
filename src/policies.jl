@@ -471,14 +471,15 @@ Generates random values in [-1, 1] for each control dimension
 """
 struct RandomRDEPolicy{T <: AbstractFloat} <: AbstractRDEPolicy
     env::RDEEnv{T}
-    function RandomRDEPolicy(env::RDEEnv{T}) where {T <: AbstractFloat}
-        return new{T}(env)
+    scale::T
+    function RandomRDEPolicy(env::RDEEnv{T}, scale::T = 1.0f0) where {T <: AbstractFloat}
+        return new{T}(env, scale)
     end
 end
 
 function _predict_action(π::RandomRDEPolicy, state::AbstractVector{T}) where {T <: AbstractFloat}
-    action1 = 2 * rand(T) - 1
-    action2 = 2 * rand(T) - 1
+    action1 = π.scale * (2 * rand(T) - 1)
+    action2 = π.scale * (2 * rand(T) - 1)
     if π.env.action_strat isa ScalarAreaScalarPressureAction
         return [action1, action2]
     elseif π.env.action_strat isa ScalarPressureAction
@@ -489,12 +490,13 @@ function _predict_action(π::RandomRDEPolicy, state::AbstractVector{T}) where {T
 end
 
 function Base.show(io::IO, π::RandomRDEPolicy)
-    return print(io, "RandomRDEPolicy()")
+    return print(io, "RandomRDEPolicy(scale=$(π.scale))")
 end
 
 function Base.show(io::IO, ::MIME"text/plain", π::RandomRDEPolicy)
     println(io, "RandomRDEPolicy:")
     return println(io, "  env: $(typeof(π.env))")
+    return println(io, "  scale: $(π.scale)")
 end
 
 """
