@@ -11,7 +11,7 @@ policy = SinusoidalRDEPolicy(env; w_1 = 1.0f0, w_2 = 0.0f0)
 data = run_policy(policy, env)
 
 # Plot the results
-fig = plot_policy_data(env, data)
+fig = plot_policy_data(data, env)
 
 # Display the figure
 display(fig)

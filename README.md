@@ -39,7 +39,7 @@ policy = RandomRDEPolicy(env)
 data = run_policy(policy, env)
 
 # Visualize results
-plot_policy_data(env, data)
+plot_policy_data(data, env)
 ```
 
 ## Components
@@ -174,7 +174,7 @@ interactive_control(env)  # Opens interactive control GUI (requires GLMakie or W
 The module provides several visualization tools:
 ```julia
 # Basic trajectory plot (requires GLMakie or WGLMakie)
-plot_policy_data(env, data)
+plot_policy_data(data, env)
 
 # plot the whole simulation in a moving referance frame
 plot_shifted_history(data, env.prob.x)

@@ -12,6 +12,6 @@ env = RDEEnv(
     [[3.5f0, 0.64f0], [3.5f0, 0.86f0], [3.5f0, 0.64f0], [3.5f0, 0.94f0]]
 );
 data = run_policy(π, env)
-fig = plot_policy_data(env, data)
+fig = plot_policy_data(data, env)
 ##
 animate_policy_data(data, env; fname = "stepwise_control", fps = 60)

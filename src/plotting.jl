@@ -15,17 +15,17 @@ Plot the results of running a policy in an RDE environment.
 """
 function plot_policy(π::AbstractRDEPolicy, env::RDEEnv)
     data = run_policy(π, env)
-    return plot_policy_data(env, data)
+    return plot_policy_data(data, env)
 end
 
 """
-    plot_policy_data(env::RDEEnv, data::PolicyRunData; kwargs...)
+    plot_policy_data(data::PolicyRunData, env::RDEEnv; kwargs...)
 
 Create an interactive visualization of policy execution data.
 
 # Arguments
-- `env::RDEEnv`: RDE environment
 - `data::PolicyRunData`: Data from policy execution
+- `env::RDEEnv`: RDE environment
 
 # Keywords
 - `time_idx::Observable{Int}=Observable(1)`: Observable for current time index
@@ -51,7 +51,8 @@ The plot includes:
 - Interactive time controls (if player_controls=true)
 """
 function plot_policy_data(
-        env::RDEEnv, data::PolicyRunData;
+        data::PolicyRunData,
+        env::RDEEnv;
         time_idx = Observable(1),
         player_controls = true,
         rewards_and_shocks = true,
@@ -397,7 +398,7 @@ function animate_policy_data(
     )
     time_idx = Observable(1)
     time_steps = length(data.state_ts)
-    fig = plot_policy_data(env, data; time_idx, player_controls = false, show_mouse_vlines = false, kwargs...)
+    fig = plot_policy_data(data, env; time_idx, player_controls = false, show_mouse_vlines = false, kwargs...)
 
     if !isdir(dir_path)
         mkdir(dir_path)
