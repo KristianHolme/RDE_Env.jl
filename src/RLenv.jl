@@ -73,7 +73,6 @@ function RDEEnv(;
     # RDE.reset_cache!(prob.method.cache; τ_smooth, params)
 
     initial_state = vcat(prob.u0, prob.λ0)
-    init_observation = get_init_observation(observation_strat, params.N, T)
     # Initialize typed subcaches (no env dependency)
     reward_cache = initialize_cache(reward_strat, params.N, T)
     action_cache = initialize_cache(action_strat, params.N, T)
@@ -86,6 +85,7 @@ function RDEEnv(;
 
     # Use helper functions to determine type parameters
     V = reward_value_type(T, reward_strat)
+    init_observation = get_init_observation(observation_strat, params.N, T)
     OBS = typeof(init_observation)
 
     # Initialize reward with correct type
@@ -113,6 +113,7 @@ function RDEEnv(;
         action_strat, observation_strat,
         reward_strat, goal_strat, verbose, Dict{String, Any}(), 0, ode_problem
     )
+    compute_observation!(env.observation, env, observation_strat)
     RDE.RDE_RHS!(zeros(T, 2 * params.N), initial_state, prob, T(0.0)) #to update caches
     return env
 end

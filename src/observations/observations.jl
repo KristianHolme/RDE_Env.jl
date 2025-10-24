@@ -372,12 +372,12 @@ end
 end
 MultiCenteredObservation(n::Int) = MultiCenteredObservation(n_sections = n)
 
-@kwdef struct MultiCenteredObservationWithPressureHistory <: AbstractMultiAgentObservationStrategy
+@kwdef struct MultiCenteredWithPressureHistoryObservation <: AbstractMultiAgentObservationStrategy
     n_sections::Int = 8
     minisections::Int = 32
     history_length::Int = 14
 end
-MultiCenteredObservationWithPressureHistory(n::Int) = MultiCenteredObservationWithPressureHistory(n_sections = n)
+MultiCenteredWithPressureHistoryObservation(n::Int) = MultiCenteredWithPressureHistoryObservation(n_sections = n)
 
 function Base.show(io::IO, obs_strategy::MultiCenteredObservation)
     return if get(io, :compact, false)::Bool
@@ -393,7 +393,7 @@ initialize_cache(obs::MultiCenteredObservation, N::Int, ::Type{T}) where {T} = b
     ObservationMinisectionCache{T}(zeros(T, n_total_minisections), zeros(T, n_total_minisections))
 end
 
-initialize_cache(obs::MultiCenteredObservationWithPressureHistory, N::Int, ::Type{T}) where {T} = begin
+initialize_cache(obs::MultiCenteredWithPressureHistoryObservation, N::Int, ::Type{T}) where {T} = begin
     ObservationMultiCenteredPressureHistoryCache{T}(
         zeros(T, obs.minisections),
         zeros(T, obs.minisections),
@@ -407,16 +407,16 @@ function Base.show(io::IO, ::MIME"text/plain", obs_strategy::MultiCenteredObserv
     return println(io, "  minisections: $(obs_strategy.minisections)")
 end
 
-function Base.show(io::IO, obs_strategy::MultiCenteredObservationWithPressureHistory)
+function Base.show(io::IO, obs_strategy::MultiCenteredWithPressureHistoryObservation)
     return if get(io, :compact, false)::Bool
-        print(io, "MultiCenteredObservationWithPressureHistory(n_sections=$(obs_strategy.n_sections))")
+        print(io, "MultiCenteredWithPressureHistoryObservation(n_sections=$(obs_strategy.n_sections))")
     else
-        print(io, "MultiCenteredObservationWithPressureHistory(n_sections=$(obs_strategy.n_sections), minisections=$(obs_strategy.minisections), history_length=$(obs_strategy.history_length))")
+        print(io, "MultiCenteredWithPressureHistoryObservation(n_sections=$(obs_strategy.n_sections), minisections=$(obs_strategy.minisections), history_length=$(obs_strategy.history_length))")
     end
 end
 
-function Base.show(io::IO, ::MIME"text/plain", obs_strategy::MultiCenteredObservationWithPressureHistory)
-    println(io, "MultiCenteredObservationWithPressureHistory:")
+function Base.show(io::IO, ::MIME"text/plain", obs_strategy::MultiCenteredWithPressureHistoryObservation)
+    println(io, "MultiCenteredWithPressureHistoryObservation:")
     println(io, "  n_sections: $(obs_strategy.n_sections)")
     println(io, "  minisections: $(obs_strategy.minisections)")
     return println(io, "  history_length: $(obs_strategy.history_length)")
@@ -454,7 +454,7 @@ function compute_observation!(obs, env::RDEEnv{T, A, O, R, G, V, OBS}, obs_strat
     return obs
 end
 
-function compute_observation!(obs, env::RDEEnv{T, A, O, R, G, V, OBS}, obs_strategy::MultiCenteredObservationWithPressureHistory) where {T, A, O, R, G, V, OBS}
+function compute_observation!(obs, env::RDEEnv{T, A, O, R, G, V, OBS}, obs_strategy::MultiCenteredWithPressureHistoryObservation) where {T, A, O, R, G, V, OBS}
     n_sections = obs_strategy.n_sections
     minisections = obs_strategy.minisections
     history_length = obs_strategy.history_length
@@ -518,7 +518,7 @@ function get_init_observation(obs_strategy::MultiCenteredObservation, N::Int, ::
     return Matrix{T}(undef, obs_dim, obs_strategy.n_sections)
 end
 
-function get_init_observation(obs_strategy::MultiCenteredObservationWithPressureHistory, N::Int, ::Type{T}) where {T <: AbstractFloat}
+function get_init_observation(obs_strategy::MultiCenteredWithPressureHistoryObservation, N::Int, ::Type{T}) where {T <: AbstractFloat}
     obs_dim = obs_strategy.minisections * 2 + obs_strategy.history_length + 2
     return Matrix{T}(undef, obs_dim, obs_strategy.n_sections)
 end

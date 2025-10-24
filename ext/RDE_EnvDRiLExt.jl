@@ -101,7 +101,21 @@ function _observation_space(core_env::RDEEnv, strategy::SectionedStateWithPressu
     return DRiL.Box(low, high)
 end
 
+function _observation_space(core_env::RDEEnv, strategy::MultiCenteredWithPressureHistoryObservation)
+    minisections = strategy.minisections
+    history_length = strategy.history_length
+    # Layout: [minisection_u, minisection_λ, pressure_history, shocks, target_shocks]
+    obs_length = 2 * minisections + history_length + 2
+    low = [[0.0f0 for _ in 1:(2 * minisections + history_length)]; 0.0f0; 0.0f0]
+    high = [[1.0f0 for _ in 1:(2 * minisections + history_length)]; 1.0f0; 1.0f0]
+    return DRiL.Box(low, high)
+end
+
 function _multi_agent_action_space(::RDEEnv, action_strat::VectorPressureAction)
+    return DRiL.Box([-1.0f0], [1.0f0])
+end
+
+function _multi_agent_action_space(::RDEEnv, action_strat::LinearVectorPressureAction)
     return DRiL.Box([-1.0f0], [1.0f0])
 end
 
@@ -115,7 +129,7 @@ struct DRiLMultiAgentRDEEnv{T, A, O, RW, G, V, OBS, M, RS, C} <: DRiL.AbstractPa
     function DRiLMultiAgentRDEEnv(core_env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}) where {T, A, O, RW, G, V, OBS, M, RS, C}
         obs_strategy = core_env.observation_strat
         @assert obs_strategy isa AbstractMultiAgentObservationStrategy
-        @assert core_env.action_strat isa VectorPressureAction
+        @assert core_env.action_strat isa RDE_Env.AbstractVectorActionStrategy
         action_strat = core_env.action_strat
         observation_space = _observation_space(core_env, obs_strategy)
         action_space = _multi_agent_action_space(core_env, action_strat)

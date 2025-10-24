@@ -187,7 +187,7 @@ function interactive_control(
     maximum_action = T(1.2)
     if is_vector_action
         # Build per-section action sliders
-        slider_configs = [(label = "u_p_$(i)", range = minimum_action:T(0.001):maximum_action, startvalue = zero(T)) for i in 1:n_sections]
+        slider_configs = [(label = "u_p_$(i)", range = minimum_action:T(0.001):maximum_action, startvalue = action_obs[][i]) for i in 1:n_sections]
         push!(slider_configs, (label = "Δt", range = T(0):T(0.001):dtmax::T, startvalue = time_step[]))
         slider_grid = SliderGrid(control_area[1, 1], slider_configs...)
         sliders = slider_grid.sliders
@@ -304,7 +304,8 @@ function interactive_control(
         else
             # Matrix observations: use heatmap
             ax_obs = Axis(obs_area[1, 1], title = "Observations", xlabel = "index", ylabel = "Agent")
-            heatmap!(ax_obs, 1:size(_observe(env), 1), 1:size(_observe(env), 2), obs_data)
+            obs_hm = heatmap!(ax_obs, 1:size(_observe(env), 1), 1:size(_observe(env), 2), obs_data, colorrange = (0.0f0, 1.5f0))
+            Colorbar(obs_area[1, 2], obs_hm)
         end
         colsize!(obs_area, 1, Auto(0.3))
     end
