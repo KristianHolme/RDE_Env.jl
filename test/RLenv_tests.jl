@@ -143,19 +143,19 @@ end
 
     # Test subsequent observations with different pressures
     # Step 1: Set pressure to 1.5
-    action1 = 1.5
+    action1 = 1.5f0
     _act!(env, action1)
     obs2 = _observe(env)
     pressure_history2 = obs2[(2 * minisections + 1):(2 * minisections + history_length)]
 
     # Step 2: Set pressure to 2.0
-    action2 = 2.0
+    action2 = 2.0f0
     _act!(env, action2)
     obs3 = _observe(env)
     pressure_history3 = obs3[(2 * minisections + 1):(2 * minisections + history_length)]
 
     # Step 3: Set pressure to 2.5
-    action3 = 2.5
+    action3 = 2.5f0
     _act!(env, action3)
     obs4 = _observe(env)
     pressure_history4 = obs4[(2 * minisections + 1):(2 * minisections + history_length)]
