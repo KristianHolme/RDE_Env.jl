@@ -147,7 +147,11 @@ function run_policy(policy::AbstractRDEPolicy, env::RDEEnv{T}; saves_per_action 
         end
 
         # Save raw action
-        actions[step] = action
+        if action_dim(env.action_strat) == 1 && action isa Vector{T}
+            actions[step] = action[1]
+        else
+            actions[step] = action
+        end
 
         @debug "action: $action"
 
