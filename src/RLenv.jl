@@ -321,6 +321,8 @@ function _reset!(env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}) where {T, A, O, 
     env.cache.prev_λ .= @view env.state[(N + 1):end]
 
     RDE.RDE_RHS!(zeros(T, 2 * env.prob.params.N), env.state, env.prob, T(0.0)) #to update caches
+    #update observation to initial conditions
+    compute_observation!(env.observation, env, env.observation_strat)
 
     return nothing
 end
