@@ -1248,6 +1248,13 @@ then terminates the environment. Uses transition detection logic similar to dete
     reward_threshold::T = 0.99f0
 end
 
+function TransitionBasedReward(
+        wrapped_reward::AbstractScalarRewardStrategy;
+        kwargs...
+    )
+    return TransitionBasedReward(; wrapped_reward, kwargs...)
+end
+
 function Base.show(io::IO, rew_strat::TransitionBasedReward)
     return print(io, "TransitionBasedReward(wrapped=$(typeof(rew_strat.wrapped_reward)))")
 end
