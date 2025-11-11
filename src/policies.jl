@@ -124,7 +124,6 @@ function run_policy(policy::AbstractRDEPolicy, env::RDEEnv{T}; saves_per_action 
         # Pre-action logging
         action_ts[step] = env.t
         observations[step] = _observe(env)
-
         # Record control summaries (pre-action values)
         if eltype(ss) <: AbstractVector
             sections = env.action_strat.n_sections
@@ -140,7 +139,7 @@ function run_policy(policy::AbstractRDEPolicy, env::RDEEnv{T}; saves_per_action 
         end
 
         # Compute action
-        action = _predict_action(policy, observations[step])
+        action = _predict_action(policy, copy(observations[step]))
         if env.observation_strat isa AbstractMultiAgentObservationStrategy && action isa Vector{Vector{T}}
             action = vcat(action...)
             @assert action isa Vector{T}
@@ -535,6 +534,17 @@ function _predict_action(π::DelayedPolicy, s::Union{AbstractVector{T}, Matrix{T
             return zero(T)
         elseif π.env.action_strat isa VectorPressureAction
             return zeros(T, π.env.action_strat.n_sections)
+        elseif π.env.action_strat isa LinearScalarPressureAction || π.env.action_strat isa LinearVectorPressureAction
+            u_p = mean(π.env.prob.method.cache.u_p_current)
+            u_pmax = π.env.u_pmax
+            action = 2 * u_p / u_pmax - 1
+            control_from_action = linear_control_target(action, u_pmax)
+            @assert abs(u_p - control_from_action) < 1.0e-6 "action $(action) and control_from_action $(control_from_action) are not close"
+            if π.env.action_strat isa LinearScalarPressureAction
+                return [action]
+            elseif π.env.action_strat isa LinearVectorPressureAction
+                return fill(action, π.env.action_strat.n_sections)
+            end
         else
             @error "Unknown action type $(typeof(π.env.action_strat)) for DelayedPolicy"
         end
