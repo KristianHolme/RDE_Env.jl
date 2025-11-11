@@ -151,7 +151,7 @@ function plot_policy_data(
         if eltype(rewards) <: AbstractVector
             # Plot all reward components as scatter points
             reward_lines = eachrow(stack(rewards))
-            bg_color = reward_color
+            bg_color = Makie.Colors.RGB(ax_rewards.scene.backgroundcolor[])
             reward_colors = Makie.Colors. distinguishable_colors(length(rewards[1]), [bg_color]; dropseed = false)
             for i in 1:length(rewards[1])
                 scatterlines!(ax_rewards, reward_times, reward_lines[i], color = reward_colors[i])
