@@ -221,7 +221,7 @@ function plot_policy_data(
     end
 
     if live_control && eltype(u_ps) <: AbstractVector
-        u_p_t = @lift(u_ps[$sparse_time_idx])
+        u_p_t = @lift(u_ps[min(length(u_ps), $sparse_time_idx + 1)])
         max_u_p = maximum(maximum.(u_ps))
         ax_live_u_p = Axis(
             main_layout[1, 1][3, 1], ylabel = "uₚ", yaxisposition = :left,
