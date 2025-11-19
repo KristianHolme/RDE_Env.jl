@@ -38,6 +38,11 @@ include("actions/actions.jl")
 export ScalarPressureAction, ScalarAreaScalarPressureAction, VectorPressureAction, PIDAction
 export LinearScalarPressureAction, LinearVectorPressureAction
 export DirectScalarPressureAction, DirectVectorPressureAction
+export LinearScalarPressureWithDtAction
+
+# Control shift strategies
+include("control_shift.jl")
+export MovingFrameControlShift
 
 # Observation strategies
 include("observations/observations.jl")
@@ -45,7 +50,7 @@ export
     FourierObservation, StateObservation,
     SampledStateObservation, MultiSectionObservation, SectionedStateObservation,
     MultiCenteredObservation, MeanInjectionPressureObservation,
-    SectionedStateWithPressureHistoryObservation, MultiCenteredWithPressureHistoryObservation
+    SectionedStateWithPressureHistoryObservation, MultiCenteredWithPressureHistoryObservation, MultiCenteredWithIndexObservation
 export CompositeObservation, compute_sectioned_observation
 
 # Rewards

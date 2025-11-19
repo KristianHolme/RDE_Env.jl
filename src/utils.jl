@@ -76,12 +76,52 @@ function get_block_speeds(block_shock_indices, dx::T, ts::AbstractVector{T}) whe
 end
 
 function speed_tracking(data, dx::T) where {T <: AbstractFloat}
-    # for each block of time having the same number of shocks, get the speed of each shock at eavh time point
+    # for each block of time having the same number of shocks, get the speed of each shock at each time point
     # for each block we have a vector of speed vectors, one for each shock
     # for blocks with no shocks or single point blocks, interpolate the speed from the neighboring blocks
     us, _ = RDE.split_sol(data.states)
     ts = data.state_ts
     return speed_tracking(us, ts, dx)
+end
+
+"""
+    get_avg_wave_speed(us::AbstractVector{T}, ts, dx::T) -> T
+
+Get the average wave speed from the solution data. Computes block speeds. If there is data, average speed for each shock,
+then average the speeds of all shocks to get average speed for the block. Then average again to get average speed over all the blocks. 
+
+# Arguments
+- `us::AbstractVector{T}`: Solution data
+- `ts`: Time points
+- `dx::T`: Spatial spacing
+
+"""
+function get_avg_wave_speed(us::AbstractVector{T}, ts, dx::T) where {T <: AbstractFloat}
+
+    shock_locations = RDE.shock_locations.(us, dx)
+    shock_counts = sum.(shock_locations)
+    blocks_ixs = [1, (findall(diff(shock_counts) .!= 0) .+ 1)..., length(shock_counts) + 1]
+    n_blocks = length(blocks_ixs) - 1
+
+    shock_speeds = []
+    for block in 1:n_blocks
+        block_start_ix = blocks_ixs[block]
+        block_end_ix = blocks_ixs[block + 1] - 1
+        block_shock_locations = get_block_shock_data(shock_locations, blocks_ixs, block)
+        n_shocks = sum(block_shock_locations[1])
+
+
+        if n_shocks == 0 || length(block_shock_locations) == 1
+            continue
+        end
+        block_shock_indices = get_block_shock_indices(block_shock_locations)
+        @assert length(block_shock_indices[1]) == length(block_shock_locations) "length(block_shock_indices[1]) ($(length(block_shock_indices[1]))) != length(block_shock_locations) ($(length(block_shock_locations)))"
+        block_speeds = get_block_speeds(block_shock_indices, dx, ts[block_start_ix:block_end_ix])
+        shocks_avg_speed = mean.(block_speeds)
+        push!(shock_speeds, mean(shocks_avg_speed))
+    end
+
+    return mean(shock_speeds)
 end
 
 function speed_tracking(us::Vector{<:AbstractArray{T}}, ts::AbstractVector{T}, dx::T) where {T <: AbstractFloat}

@@ -65,6 +65,26 @@ end
 end
 
 """
+    LinearScalarPressureWithDtAction{T} <: AbstractVectorActionStrategy
+
+Action type that combines linear pressure control with timestep (dt) control.
+Two action elements: [pressure_action, dt_action] ∈ [-1,1]²
+
+- pressure_action: Maps linearly to pressure control in [0, u_pmax]
+- dt_action: Maps linearly to dt in [dt_min, dt_max]
+
+# Fields
+- `dt_min::T`: Minimum allowed timestep (default: 0.1)
+- `dt_max::T`: Maximum allowed timestep (default: 20.0)
+- `momentum::T`: Optional momentum parameter for pressure control (default: 0.0)
+"""
+@kwdef struct LinearScalarPressureWithDtAction{T <: AbstractFloat} <: AbstractVectorActionStrategy
+    dt_min::T = 0.1f0
+    dt_max::T = 20.0f0
+    momentum::T = 0.0f0
+end
+
+"""
     PIDAction <: AbstractScalarActionStrategy
 
 Action type where the agent supplies PID gains `[Kp, Ki, Kd]` and the
@@ -106,6 +126,10 @@ end
 
 function action_dim(at::DirectVectorPressureAction)
     return at.n_sections
+end
+
+function action_dim(::LinearScalarPressureWithDtAction)
+    return 2
 end
 
 # Scalar-action overloads (avoid building action vectors)
@@ -311,6 +335,32 @@ function apply_action!(env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}, action::T)
     copyto!(method_cache.u_p_previous, method_cache.u_p_current)
 
     method_cache.u_p_current .= momentum_target(action, method_cache.u_p_current[1], momentum(env.action_strat))
+    copyto!(method_cache.s_previous, method_cache.s_current)
+    return nothing
+end
+
+function apply_action!(env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}, action::AbstractVector{T}) where {T <: AbstractFloat, A <: LinearScalarPressureWithDtAction, O, RW, G, V, OBS, M, RS, C}
+    @assert length(action) == 2 "LinearScalarPressureWithDtAction expects two actions: [pressure_action, dt_action]"
+    a_pressure, a_dt = action[1], action[2]
+
+    env_cache = env.cache
+    method_cache = env.prob.method.cache
+
+    if abs(a_pressure) > one(T)
+        @warn "pressure action out of bounds [-1,1]"
+    end
+    if abs(a_dt) > one(T)
+        @warn "dt action out of bounds [-1,1]"
+    end
+
+    # Apply pressure control (same as LinearScalarPressureAction)
+    copyto!(method_cache.u_p_previous, method_cache.u_p_current)
+    method_cache.u_p_current .= linear_action_to_control(a_pressure, method_cache.u_p_current[1], env.u_pmax, momentum(env.action_strat))
+
+    # Apply dt control: map [-1,1] to [dt_min, dt_max]
+    dt_range = env.action_strat.dt_max - env.action_strat.dt_min
+    env.dt = env.action_strat.dt_min + T(0.5) * dt_range * (a_dt + one(T))
+
     copyto!(method_cache.s_previous, method_cache.s_current)
     return nothing
 end

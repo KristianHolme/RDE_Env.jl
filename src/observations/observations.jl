@@ -32,15 +32,32 @@ end
 # ----------------------------------------------------------------------------
 # Helper Functions
 # ----------------------------------------------------------------------------
-function compute_sectioned_observation!(minisection_observations_u, minisection_observations_λ, env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}, obs_strategy::AbstractObservationStrategy) where {T, A, O, RW, G, V, OBS, M, RS, C}
+function compute_sectioned_observation!(
+        minisection_observations_u,
+        minisection_observations_λ,
+        env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C},
+        obs_strategy::AbstractObservationStrategy
+    ) where {T, A, O, RW, G, V, OBS, M, RS, C}
     prob = env.prob #::RDEProblem{T, M, RS, C}
     N = prob.params.N
-    current_u = @view env.state[1:N]
-    current_λ = @view env.state[(N + 1):end]
+    dx = RDE.get_dx(prob)::T
+    control_shift_strategy = prob.control_shift_strategy
+
+    if control_shift_strategy isa MovingFrameControlShift
+        current_u = copy(env.state[1:N])
+        current_λ = copy(env.state[(N + 1):end])
+        shift = Int(round(get_control_shift(control_shift_strategy, current_u, env.t) / dx))
+        if shift != 0
+            circshift!(current_u, -shift)
+            circshift!(current_λ, -shift)
+        end
+    else
+        current_u = @view env.state[1:N]
+        current_λ = @view env.state[(N + 1):end]
+    end
     max_shocks = T(4)
     max_pressure = T(2)
 
-    dx = RDE.get_dx(prob)::T
     minisections = obs_strategy.minisections
     minisection_size = N ÷ minisections
 
@@ -524,6 +541,74 @@ function get_init_observation(obs_strategy::MultiCenteredWithPressureHistoryObse
 end
 
 # ----------------------------------------------------------------------------
+# MultiCenteredWithIndexObservation
+# ----------------------------------------------------------------------------
+
+@kwdef struct MultiCenteredWithIndexObservation <: AbstractMultiAgentObservationStrategy
+    n_sections::Int = 4
+    minisections::Int = 32
+end
+MultiCenteredWithIndexObservation(n::Int) = MultiCenteredWithIndexObservation(n_sections = n)
+
+initialize_cache(obs::MultiCenteredWithIndexObservation, N::Int, ::Type{T}) where {T} = begin
+    minisection_size = N ÷ obs.minisections
+    n_total_minisections = N ÷ minisection_size
+    ObservationMinisectionCache{T}(zeros(T, n_total_minisections), zeros(T, n_total_minisections))
+end
+
+function Base.show(io::IO, obs_strategy::MultiCenteredWithIndexObservation)
+    return if get(io, :compact, false)::Bool
+        print(io, "MultiCenteredWithIndexObservation(n_sections=$(obs_strategy.n_sections))")
+    else
+        print(io, "MultiCenteredWithIndexObservation(n_sections=$(obs_strategy.n_sections), minisections=$(obs_strategy.minisections))")
+    end
+end
+
+function Base.show(io::IO, ::MIME"text/plain", obs_strategy::MultiCenteredWithIndexObservation)
+    println(io, "MultiCenteredWithIndexObservation:")
+    println(io, "  n_sections: $(obs_strategy.n_sections)")
+    return println(io, "  minisections: $(obs_strategy.minisections)")
+end
+
+function compute_observation!(obs, env::RDEEnv{T, A, O, R, G, V, OBS}, obs_strategy::MultiCenteredWithIndexObservation) where {T, A, O, R, G, V, OBS}
+    n_sections = obs_strategy.n_sections
+    minisections = obs_strategy.minisections
+    minisections_per_section = minisections ÷ n_sections
+
+    # Use cached buffers for minisection observations
+    obs_cache = env.cache.observation_cache::ObservationMinisectionCache{T}
+    minisection_observations_u = obs_cache.minisection_u
+    minisection_observations_λ = obs_cache.minisection_λ
+
+    shocks, target_shock_count = compute_sectioned_observation!(
+        minisection_observations_u, minisection_observations_λ, env, obs_strategy
+    )
+
+    # Fill the matrix directly
+    for i in 1:n_sections
+        # Get views into obs for this section
+        obs_u_view = @view obs[1:minisections, i]
+        obs_λ_view = @view obs[(minisections + 1):(minisections * 2), i]
+
+        # Copy with circshift directly into obs
+        obs_u_view .= circshift(minisection_observations_u, -minisections_per_section * (i - 1))
+        obs_λ_view .= circshift(minisection_observations_λ, -minisections_per_section * (i - 1))
+
+        # Add the additional values
+        obs[end - 2, i] = shocks
+        obs[end - 1, i] = target_shock_count
+        obs[end, i] = T(i) / T(n_sections)  # Section index normalized by number of sections
+    end
+
+    return obs
+end
+
+function get_init_observation(obs_strategy::MultiCenteredWithIndexObservation, N::Int, ::Type{T}) where {T <: AbstractFloat}
+    obs_dim = obs_strategy.minisections * 2 + 3  # +3 for shocks, target_shock_count, and section_index
+    return Matrix{T}(undef, obs_dim, obs_strategy.n_sections)
+end
+
+# ----------------------------------------------------------------------------
 # MeanInjectionPressureObservation
 # ----------------------------------------------------------------------------
 
@@ -541,3 +626,91 @@ function get_init_observation(strategy::MeanInjectionPressureObservation, N::Int
 end
 
 # ----------------------------------------------------------------------------
+# MultiCenteredMovingFrameObservation
+# ----------------------------------------------------------------------------
+
+@kwdef struct MultiCenteredMovingFrameObservation <: AbstractMultiAgentObservationStrategy
+    n_sections::Int = 4
+    minisections::Int = 32
+    control_shift_strategy::MovingFrameControlShift = MovingFrameControlShift()
+end
+MultiCenteredMovingFrameObservation(n::Int) = MultiCenteredMovingFrameObservation(n_sections = n)
+
+function Base.show(io::IO, obs_strategy::MultiCenteredMovingFrameObservation)
+    return if get(io, :compact, false)::Bool
+        print(io, "MultiCenteredMovingFrameObservation(n_sections=$(obs_strategy.n_sections))")
+    else
+        print(io, "MultiCenteredMovingFrameObservation(n_sections=$(obs_strategy.n_sections), minisections=$(obs_strategy.minisections), control_shift_strategy=$(obs_strategy.control_shift_strategy))")
+    end
+end
+
+initialize_cache(obs::MultiCenteredMovingFrameObservation, N::Int, ::Type{T}) where {T} = begin
+    minisection_size = N ÷ obs.minisections
+    n_total_minisections = N ÷ minisection_size
+    ObservationMinisectionCache{T}(zeros(T, n_total_minisections), zeros(T, n_total_minisections), obs.control_shift_strategy)
+end
+
+function Base.show(io::IO, ::MIME"text/plain", obs_strategy::MultiCenteredMovingFrameObservation)
+    println(io, "MultiCenteredMovingFrameObservation:")
+    println(io, "  n_sections: $(obs_strategy.n_sections)")
+    println(io, "  minisections: $(obs_strategy.minisections)")
+    println(io, "  control_shift_strategy: $(obs_strategy.control_shift_strategy)")
+    return nothing
+end
+
+
+function compute_observation!(obs, env::RDEEnv{T, A, O, R, G, V, OBS}, obs_strategy::MultiCenteredMovingFrameObservation) where {T, A, O, R, G, V, OBS}
+    n_sections = obs_strategy.n_sections
+    minisections = obs_strategy.minisections
+    minisections_per_section = minisections ÷ n_sections
+
+    # Use cached buffers for minisection observations
+    obs_cache = env.cache.observation_cache::ObservationMinisectionCache{T}
+    minisection_observations_u = obs_cache.minisection_u
+    minisection_observations_λ = obs_cache.minisection_λ
+    control_shift_strategy = obs_cache.control_shift_strategy
+
+    us = env.prob.sol.u
+    t = env.t
+    dx = get_dx(env.prob)
+    if t ≈ 0.0f0 #TODO: move into interface for control shift strategies?
+        control_shift_strategy.position = 0.0f0
+        control_shift_strategy.velocity = 0.0f0 # we dont shift at start
+    else
+        avg_speed = get_avg_wave_speed(us, env.prob.sol.t, dx)
+        control_shift_strategy.velocity = avg_speed
+        control_shift_strategy.position += avg_speed * env.dt # position at end of step
+        control_shift_strategy.t_last = env.t
+    end
+
+    shocks, target_shock_count = compute_sectioned_observation!(
+        minisection_observations_u, minisection_observations_λ, env, obs_strategy
+    )
+
+    if t ≈ 0.0f0
+        # we guess at speed to shift u_p by in the first step
+        control_shift_strategy.velocity = 1.8f0
+    end
+
+    # Fill the matrix directly
+    for i in 1:n_sections
+        # Get views into obs for this section
+        obs_u_view = @view obs[1:minisections, i]
+        obs_λ_view = @view obs[(minisections + 1):(minisections * 2), i]
+
+        # Copy with circshift directly into obs
+        obs_u_view .= circshift(minisection_observations_u, -minisections_per_section * (i - 1))
+        obs_λ_view .= circshift(minisection_observations_λ, -minisections_per_section * (i - 1))
+
+        # Add the additional values
+        obs[end - 1, i] = shocks #is this needed?
+        obs[end, i] = target_shock_count
+    end
+
+    return obs
+end
+
+function get_init_observation(obs_strategy::MultiCenteredMovingFrameObservation, N::Int, ::Type{T}) where {T <: AbstractFloat}
+    obs_dim = obs_strategy.minisections * 2 + 2
+    return Matrix{T}(undef, obs_dim, obs_strategy.n_sections)
+end

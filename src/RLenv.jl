@@ -201,7 +201,6 @@ function _act!(env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}, action; saves_per_
     prob = env.prob::RDEProblem{T}
     tmax = params.tmax
     t = env.t
-    dt = env.dt
     method_cache = prob.method.cache
     env_cache = env.cache
     if t > tmax
@@ -212,10 +211,11 @@ function _act!(env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}, action; saves_per_
     env_cache.prev_u .= @view env.state[1:N]
     env_cache.prev_λ .= @view env.state[(N + 1):end]
 
-    t_span = (t, t + dt)::Tuple{T, T}
     method_cache.control_time::T = t
 
     apply_action!(env, action)
+    dt = env.dt
+    t_span = (t, t + dt)::Tuple{T, T}
 
     # Construct a fully-specialized ODEProblem to keep types concrete
     env.ode_problem = ODEProblem{true, SciMLBase.FullSpecialize}(RDE_RHS!, env.state, t_span, env.prob)
@@ -230,6 +230,10 @@ function _act!(env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}, action; saves_per_
         @debug "length(sol.t) ($(length(tvec))) != saves_per_action + 1 ($(saves_per_action + 1)), at tspan=$(t_span)"
     end
 
+    if env.prob.control_shift_strategy isa MovingFrameControlShift
+        required_saves_per_action = ceil(Int, dt / 0.3f0) # 0.3f0 is safe step to capture shock speeds
+        saves_per_action = max(saves_per_action, required_saves_per_action)
+    end
     #TODO: factor out this
     #Check termination caused by ODE solver
     if !SciMLBase.successful_retcode(sol) || any(isnan, last_u)
