@@ -50,7 +50,8 @@ export
     FourierObservation, StateObservation,
     SampledStateObservation, MultiSectionObservation, SectionedStateObservation,
     MultiCenteredObservation, MeanInjectionPressureObservation,
-    SectionedStateWithPressureHistoryObservation, MultiCenteredWithPressureHistoryObservation, MultiCenteredWithIndexObservation
+    SectionedStateWithPressureHistoryObservation, MultiCenteredWithPressureHistoryObservation,
+    MultiCenteredWithIndexObservation, MultiCenteredMovingFrameObservation
 export CompositeObservation, compute_sectioned_observation
 
 # Rewards

@@ -68,11 +68,9 @@ function RDEEnv(;
         τ_smooth = dt / 8
     end
 
-    prob = RDEProblem(params; kwargs...)
     # RDE.reset_state_and_pressure!(prob, prob.reset_strategy)
     # RDE.reset_cache!(prob.method.cache; τ_smooth, params)
 
-    initial_state = vcat(prob.u0, prob.λ0)
     # Initialize typed subcaches (no env dependency)
     reward_cache = initialize_cache(reward_strat, params.N, T)
     action_cache = initialize_cache(action_strat, params.N, T)
@@ -81,6 +79,15 @@ function RDEEnv(;
     cache = RDEEnvCache{T, typeof(reward_cache), typeof(action_cache), typeof(observation_cache), typeof(goal_cache)}(
         params.N; reward_cache, action_cache, observation_cache, goal_cache
     )
+
+    #TODO should do this somewhere else
+    if observation_strat isa MultiCenteredMovingFrameObservation
+        control_shift_strategy = MovingFrameControlShift()
+    else
+        control_shift_strategy = ZeroControlShift()
+    end
+    prob = RDEProblem(params; control_shift_strategy, kwargs...)
+    initial_state = vcat(prob.u0, prob.λ0)
     ode_problem = ODEProblem{true, SciMLBase.FullSpecialize}(RDE_RHS!, initial_state, (zero(T), dt), prob)
 
     # Use helper functions to determine type parameters

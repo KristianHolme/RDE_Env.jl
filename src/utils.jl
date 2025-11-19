@@ -85,25 +85,26 @@ function speed_tracking(data, dx::T) where {T <: AbstractFloat}
 end
 
 """
-    get_avg_wave_speed(us::AbstractVector{T}, ts, dx::T) -> T
+    get_avg_wave_speed(us::Vector{Vector{T}}, ts, dx::T) -> T
 
 Get the average wave speed from the solution data. Computes block speeds. If there is data, average speed for each shock,
 then average the speeds of all shocks to get average speed for the block. Then average again to get average speed over all the blocks. 
 
 # Arguments
-- `us::AbstractVector{T}`: Solution data
+- `us::Vector{Vector{T}}`: Solution data
 - `ts`: Time points
 - `dx::T`: Spatial spacing
 
 """
-function get_avg_wave_speed(us::AbstractVector{T}, ts, dx::T) where {T <: AbstractFloat}
+function get_avg_wave_speed(us::Vector{Vector{T}}, ts, dx::T) where {T <: AbstractFloat}
 
     shock_locations = RDE.shock_locations.(us, dx)
     shock_counts = sum.(shock_locations)
     blocks_ixs = [1, (findall(diff(shock_counts) .!= 0) .+ 1)..., length(shock_counts) + 1]
     n_blocks = length(blocks_ixs) - 1
 
-    shock_speeds = []
+    shock_speed_sum = zero(T)
+    n_blocks_with_data = 0
     for block in 1:n_blocks
         block_start_ix = blocks_ixs[block]
         block_end_ix = blocks_ixs[block + 1] - 1
@@ -118,10 +119,14 @@ function get_avg_wave_speed(us::AbstractVector{T}, ts, dx::T) where {T <: Abstra
         @assert length(block_shock_indices[1]) == length(block_shock_locations) "length(block_shock_indices[1]) ($(length(block_shock_indices[1]))) != length(block_shock_locations) ($(length(block_shock_locations)))"
         block_speeds = get_block_speeds(block_shock_indices, dx, ts[block_start_ix:block_end_ix])
         shocks_avg_speed = mean.(block_speeds)
-        push!(shock_speeds, mean(shocks_avg_speed))
+        shock_speed_sum += mean(shocks_avg_speed)
+        n_blocks_with_data += 1
     end
-
-    return mean(shock_speeds)
+    if n_blocks_with_data == 0
+        return -one(T)
+    else
+        return shock_speed_sum / n_blocks_with_data
+    end
 end
 
 function speed_tracking(us::Vector{<:AbstractArray{T}}, ts::AbstractVector{T}, dx::T) where {T <: AbstractFloat}

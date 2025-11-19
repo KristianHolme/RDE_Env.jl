@@ -46,7 +46,7 @@ function compute_sectioned_observation!(
     if control_shift_strategy isa MovingFrameControlShift
         current_u = copy(env.state[1:N])
         current_λ = copy(env.state[(N + 1):end])
-        shift = Int(round(get_control_shift(control_shift_strategy, current_u, env.t) / dx))
+        shift = Int(round(RDE.get_control_shift(control_shift_strategy, current_u, env.t) / dx))
         if shift != 0
             circshift!(current_u, -shift)
             circshift!(current_λ, -shift)
@@ -632,7 +632,6 @@ end
 @kwdef struct MultiCenteredMovingFrameObservation <: AbstractMultiAgentObservationStrategy
     n_sections::Int = 4
     minisections::Int = 32
-    control_shift_strategy::MovingFrameControlShift = MovingFrameControlShift()
 end
 MultiCenteredMovingFrameObservation(n::Int) = MultiCenteredMovingFrameObservation(n_sections = n)
 
@@ -647,7 +646,7 @@ end
 initialize_cache(obs::MultiCenteredMovingFrameObservation, N::Int, ::Type{T}) where {T} = begin
     minisection_size = N ÷ obs.minisections
     n_total_minisections = N ÷ minisection_size
-    ObservationMinisectionCache{T}(zeros(T, n_total_minisections), zeros(T, n_total_minisections), obs.control_shift_strategy)
+    ObservationMinisectionCache{T}(zeros(T, n_total_minisections), zeros(T, n_total_minisections))
 end
 
 function Base.show(io::IO, ::MIME"text/plain", obs_strategy::MultiCenteredMovingFrameObservation)
@@ -668,18 +667,23 @@ function compute_observation!(obs, env::RDEEnv{T, A, O, R, G, V, OBS}, obs_strat
     obs_cache = env.cache.observation_cache::ObservationMinisectionCache{T}
     minisection_observations_u = obs_cache.minisection_u
     minisection_observations_λ = obs_cache.minisection_λ
-    control_shift_strategy = obs_cache.control_shift_strategy
+    control_shift_strategy = env.prob.control_shift_strategy
 
-    us = env.prob.sol.u
     t = env.t
-    dx = get_dx(env.prob)
+    dx = RDE.get_dx(env.prob)
     if t ≈ 0.0f0 #TODO: move into interface for control shift strategies?
         control_shift_strategy.position = 0.0f0
         control_shift_strategy.velocity = 0.0f0 # we dont shift at start
     else
+        @assert !isnothing(env.prob.sol) "env.prob.sol is nothing"
+        us, _ = RDE.split_sol(env.prob.sol.u)
         avg_speed = get_avg_wave_speed(us, env.prob.sol.t, dx)
-        control_shift_strategy.velocity = avg_speed
+        if avg_speed > zero(T)
+            control_shift_strategy.velocity = avg_speed
+        end
         control_shift_strategy.position += avg_speed * env.dt # position at end of step
+        L = env.prob.params.L
+        control_shift_strategy.position = mod(control_shift_strategy.position, L)
         control_shift_strategy.t_last = env.t
     end
 

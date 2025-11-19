@@ -34,7 +34,7 @@ _action_space(::RDEEnv, ::LinearScalarPressureAction) = DRiL.Box([-1.0f0], [1.0f
 _action_space(::RDEEnv, ::DirectScalarPressureAction) = DRiL.Box([0.0f0], [1.2f0])
 _action_space(::RDEEnv, action_strat::LinearVectorPressureAction) = DRiL.Box([-1.0f0 for _ in 1:action_strat.n_sections], [1.0f0 for _ in 1:action_strat.n_sections])
 _action_space(::RDEEnv, action_strat::DirectVectorPressureAction) = DRiL.Box([0.0f0 for _ in 1:action_strat.n_sections], [1.2f0 for _ in 1:action_strat.n_sections])
-
+_action_space(::RDEEnv, ::LinearScalarPressureWithDtAction) = DRiL.Box([-1.0f0, -1.0f0], [1.0f0, 1.0f0])
 RDE_Env.set_target_shock_count!(env::DRiLRDEEnv, target_shock_count::Int) = set_target_shock_count!(env.core_env, target_shock_count)
 RDE_Env.get_target_shock_count(env::DRiLRDEEnv) = get_target_shock_count(env.core_env)
 Random.seed!(env::DRiLRDEEnv, seed::Int) = Random.seed!(env.core_env, seed)
@@ -108,6 +108,22 @@ function _observation_space(core_env::RDEEnv, strategy::MultiCenteredWithPressur
     obs_length = 2 * minisections + history_length + 2
     low = [[0.0f0 for _ in 1:(2 * minisections + history_length)]; 0.0f0; 0.0f0]
     high = [[1.0f0 for _ in 1:(2 * minisections + history_length)]; 1.0f0; 1.0f0]
+    return DRiL.Box(low, high)
+end
+
+function _observation_space(core_env::RDEEnv, strategy::MultiCenteredMovingFrameObservation)
+    minisections = strategy.minisections
+    obs_length = 2 * minisections + 2
+    low = [0.0f0 for _ in 1:obs_length]
+    high = [1.0f0 for _ in 1:obs_length]
+    return DRiL.Box(low, high)
+end
+
+function _observation_space(core_env::RDEEnv, strategy::MultiCenteredWithIndexObservation)
+    minisections = strategy.minisections
+    obs_length = 2 * minisections + 3
+    low = [0.0f0 for _ in 1:obs_length]
+    high = [1.0f0 for _ in 1:obs_length]
     return DRiL.Box(low, high)
 end
 
