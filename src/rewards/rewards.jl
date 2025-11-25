@@ -386,7 +386,8 @@ function _compute_reward(env::RDEEnv{T, A, O, R, G, V, OBS}, rew_strat::Stabilit
     max_values = Vector{T}(undef, n_states)
     periodicity_rewards = Vector{T}(undef, n_states)
     shock_spacing_rewards = Vector{T}(undef, n_states)
-
+    #=TODO: dont take all states, but limit to a certain time window backwards. To be better suited for large dt's:
+     going from bad to good should not count the bad states in the beginning=#
     for (i, state) in enumerate(sol_states)
         u = @view state[1:N]
 
@@ -435,6 +436,7 @@ function _compute_reward(env::RDEEnv{T, A, O, R, G, V, OBS}, rew_strat::Stabilit
         end
     end
 
+    #TODO: punish no span, to discourage getting constant solutions and 0.25 total reward.
     # Calculate span variation (worst of min and max variation)
     min_variation = span_variation_reward(min_values, rew_strat.variation_scaling * 2)
     max_variation = span_variation_reward(max_values, rew_strat.variation_scaling * 2)
