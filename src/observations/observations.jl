@@ -639,7 +639,7 @@ function Base.show(io::IO, obs_strategy::MultiCenteredMovingFrameObservation)
     return if get(io, :compact, false)::Bool
         print(io, "MultiCenteredMovingFrameObservation(n_sections=$(obs_strategy.n_sections))")
     else
-        print(io, "MultiCenteredMovingFrameObservation(n_sections=$(obs_strategy.n_sections), minisections=$(obs_strategy.minisections), control_shift_strategy=$(obs_strategy.control_shift_strategy))")
+        print(io, "MultiCenteredMovingFrameObservation(n_sections=$(obs_strategy.n_sections), minisections=$(obs_strategy.minisections))")
     end
 end
 
@@ -653,7 +653,6 @@ function Base.show(io::IO, ::MIME"text/plain", obs_strategy::MultiCenteredMoving
     println(io, "MultiCenteredMovingFrameObservation:")
     println(io, "  n_sections: $(obs_strategy.n_sections)")
     println(io, "  minisections: $(obs_strategy.minisections)")
-    println(io, "  control_shift_strategy: $(obs_strategy.control_shift_strategy)")
     return nothing
 end
 
