@@ -1253,9 +1253,9 @@ then terminates the environment. Uses transition detection logic similar to dete
 - Internal state (past_rewards, past_shock_counts, transition_found) is stored in the cache
 """
 @kwdef struct TransitionBasedReward{R <: AbstractScalarRewardStrategy, T <: AbstractFloat} <: AbstractScalarRewardStrategy
-    wrapped_reward::R = StabilityReward()
+    wrapped_reward::R = StabilityReward(1.0f0)
     reward_stability_length::T = 20.0f0 # in time units
-    reward_threshold::T = 0.99f0
+    reward_threshold::T = 0.9f0
 end
 
 function TransitionBasedReward(
