@@ -227,7 +227,7 @@ function interactive_control(
     step_button = Button(button_area[1, 1], label = "Step", tellwidth = false)
     reset_button = Button(button_area[1, 2], label = "Reset", tellwidth = false)
 
-    time = Observable(env.t)
+    env_time = Observable(env.t)
 
     """
     Update all visualization observables with current environment state.
@@ -235,7 +235,7 @@ function interactive_control(
     function update_observables!()
         u_data[] = env.state[1:N]
         λ_data[] = env.state[(N + 1):end]
-        time[] = env.t
+        env_time[] = env.t
         return if show_observations
             obs_data[] = _observe(env)
         end
@@ -327,7 +327,7 @@ function interactive_control(
         ax_reward.ylabel = "r"
     end
 
-    on(time) do _
+    on(env_time) do _
         y_min, y_max, x_max = reward_axis_bounds()
         ylims!(ax_reward, (y_min, y_max))
         xlims!(ax_reward, (0, x_max))
@@ -336,90 +336,78 @@ function interactive_control(
     rowsize!(fig.layout, 3, Auto(0.3))
 
     # Keyboard control setup
-    pressed_keys = Set{Keyboard.Button}()
+    # Discrete Actions (Reset)
     on(events(fig).keyboardbutton) do event
         if event.action == Keyboard.press
-            push!(pressed_keys, event.key)
-        elseif event.action == Keyboard.release
-            delete!(pressed_keys, event.key)
+            if event.key == Keyboard.r
+                _reset!(env)
+                update_observables!()
+                reset_reward_traces!(env.reward)
+            end
         end
     end
 
-    """
-    Background task that continuously checks for pressed keys and executes corresponding actions.
-    """
-    function key_action_loop()
-        while events(fig.scene).window_open[]
-            if events(fig.scene).hasfocus[]
-                for key in pressed_keys
-                    if key == Keyboard.up
-                        # Increase time step on arrow up
-                        time_step[] += 0.01
-                        time_step[] = min(time_step[], dtmax)
-                        set_close_to!(slider_dt, time_step[])
-                    elseif key == Keyboard.down
-                        # Decrease time step on arrow down
-                        time_step[] -= 0.01
-                        time_step[] = max(time_step[], 0.001)
-                        set_close_to!(slider_dt, time_step[])
-                    elseif key == Keyboard.right
-                        try
-                            _act!(env, action_obs[])
-                            # energy_bal_pts[] = push!(energy_bal_pts[], Point2f(env.t, energy_balance(env.state, params)))
-                            # chamber_p_pts[] = push!(chamber_p_pts[], Point2f(env.t, chamber_pressure(env.state, params)))
-                            record_reward!(env.reward)
-                            update_observables!()
-                            if callback !== nothing
-                                @debug "calling callback"
-                                callback(env)
-                            end
-                        catch e
-                            @error "error taking action" exception = (e, Base.catch_backtrace())
-                            rethrow()  # preserve original backtrace
+    # Continuous Actions (Step, Parameters, Time)
+    last_action_time = time()
+    action_interval = 0.1
+
+    on(events(fig).tick) do tick
+        if time() - last_action_time > action_interval
+            last_action_time = time()
+
+            if ispressed(fig, Keyboard.up)
+                # Increase time step on arrow up
+                time_step[] += 0.01
+                time_step[] = min(time_step[], dtmax)
+                set_close_to!(slider_dt, time_step[])
+            elseif ispressed(fig, Keyboard.down)
+                # Decrease time step on arrow down
+                time_step[] -= 0.01
+                time_step[] = max(time_step[], 0.001)
+                set_close_to!(slider_dt, time_step[])
+            end
+
+            if ispressed(fig, Keyboard.right)
+                try
+                    _act!(env, action_obs[])
+                    record_reward!(env.reward)
+                    update_observables!()
+                    if callback !== nothing
+                        @debug "calling callback"
+                        callback(env)
+                    end
+                catch e
+                    @error "error taking action" exception = (e, Base.catch_backtrace())
+                    rethrow()  # preserve original backtrace
+                end
+            end
+
+            # Parameter Control
+            keys_to_check = (Keyboard.e, Keyboard.d, Keyboard._3, Keyboard.c)
+            for key in keys_to_check
+                if ispressed(fig, key)
+                    if is_vector_action
+                        delta = key == Keyboard._3 || key == Keyboard.c ? T(0.001) : T(0.01)
+                        sign = (key == Keyboard.e || key == Keyboard._3) ? T(1) : T(-1)
+                        a = clamp.(action_obs[] .+ sign * delta, minimum_action, maximum_action)
+                        action_obs[] = a
+                        # Sync sliders to action_obs
+                        for i in 1:n_sections
+                            set_close_to!(action_sliders[i], action_obs[][i])
                         end
                     else
-                        # Direct action types: adjust action observable(s)
-                        if is_vector_action
-                            if key == Keyboard.e || key == Keyboard.d || key == Keyboard._3 || key == Keyboard.c
-                                delta = key == Keyboard._3 || key == Keyboard.c ? T(0.001) : T(0.01)
-                                sign = (key == Keyboard.e || key == Keyboard._3) ? T(1) : T(-1)
-                                a = clamp.(action_obs[] .+ sign * delta, minimum_action, maximum_action)
-                                action_obs[] = a
-                                # Sync sliders to action_obs
-                                for i in 1:n_sections
-                                    set_close_to!(action_sliders[i], action_obs[][i])
-                                end
-                            end
-                        else
-                            if key == Keyboard.e || key == Keyboard.d || key == Keyboard._3 || key == Keyboard.c
-                                delta = key == Keyboard._3 || key == Keyboard.c ? T(0.001) : T(0.01)
-                                sign = (key == Keyboard.e || key == Keyboard._3) ? T(1) : T(-1)
-                                action_obs[] = clamp(action_obs[] + sign * delta, minimum_action, maximum_action)
-                                set_close_to!(action_slider, action_obs[])
-                            end
-                        end
-                    end
-
-                    if key == Keyboard.r
-                        _reset!(env)
-                        update_observables!()
-
-
-                        # energy_bal_pts[] = Point2f[(env.t, energy_balance(env.state, params))]
-                        # chamber_p_pts[] = Point2f[(env.t, chamber_pressure(env.state, params))]
-                        reset_reward_traces!(env.reward)
+                        delta = key == Keyboard._3 || key == Keyboard.c ? T(0.001) : T(0.01)
+                        sign = (key == Keyboard.e || key == Keyboard._3) ? T(1) : T(-1)
+                        action_obs[] = clamp(action_obs[] + sign * delta, minimum_action, maximum_action)
+                        set_close_to!(action_slider, action_obs[])
                     end
                 end
             end
-            sleep(0.1)  # Control loop rate
         end
-        return
     end
 
     # Time label
-    label = Label(upper_area[1, 1], text = @lift("Time: $(round($time, digits = 2))"), tellwidth = false)
+    label = Label(upper_area[1, 1], text = @lift("Time: $(round($env_time[], digits = 2))"), tellwidth = false)
 
-    display(fig)
-    @async key_action_loop()
     return env, fig
 end
