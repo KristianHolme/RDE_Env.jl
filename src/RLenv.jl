@@ -81,7 +81,7 @@ function RDEEnv(;
     )
 
     #TODO should do this somewhere else
-    if observation_strat isa MultiCenteredMovingFrameObservation
+    if observation_strat isa MultiCenteredMovingFrameObservation || observation_strat isa SectionedStateMovingFrameObservation
         control_shift_strategy = MovingFrameControlShift()
     else
         control_shift_strategy = ZeroControlShift()

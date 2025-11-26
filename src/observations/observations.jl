@@ -717,3 +717,76 @@ function get_init_observation(obs_strategy::MultiCenteredMovingFrameObservation,
     obs_dim = obs_strategy.minisections * 2 + 2
     return Matrix{T}(undef, obs_dim, obs_strategy.n_sections)
 end
+
+
+# ----------------------------------------------------------------------------
+# SectionedStateMovingFrameObservation
+# ----------------------------------------------------------------------------
+
+@kwdef struct SectionedStateMovingFrameObservation <: AbstractObservationStrategy
+    minisections::Int = 32
+end
+
+initialize_cache(obs::SectionedStateMovingFrameObservation, N::Int, ::Type{T}) where {T} = begin
+    minisection_size = N ÷ obs.minisections
+    n_total_minisections = N ÷ minisection_size
+    ObservationMinisectionCache{T}(zeros(T, n_total_minisections), zeros(T, n_total_minisections))
+end
+
+function compute_observation!(obs, env::RDEEnv{T, A, O, R, G, V, OBS}, obs_strategy::SectionedStateMovingFrameObservation) where {T, A, O, R, G, V, OBS}
+    minisections = obs_strategy.minisections
+
+    # Use cached buffers for minisection observations
+    obs_cache = env.cache.observation_cache::ObservationMinisectionCache{T}
+    minisection_observations_u = obs_cache.minisection_u
+    minisection_observations_λ = obs_cache.minisection_λ
+    control_shift_strategy = env.prob.control_shift_strategy
+
+    t = env.t
+    dx = RDE.get_dx(env.prob)
+    if t ≈ 0.0f0 #TODO: move into interface for control shift strategies?
+        control_shift_strategy.position = 0.0f0
+        control_shift_strategy.velocity = 0.0f0 # we dont shift at start
+    else
+        @assert !isnothing(env.prob.sol) "env.prob.sol is nothing"
+        us, _ = RDE.split_sol(env.prob.sol.u)
+        avg_speed = get_avg_wave_speed(us, env.prob.sol.t, dx)
+        if avg_speed > zero(T)
+            control_shift_strategy.velocity = avg_speed
+        end
+        control_shift_strategy.position += avg_speed * env.dt # position at end of step
+        L = env.prob.params.L
+        control_shift_strategy.position = mod(control_shift_strategy.position, L)
+        control_shift_strategy.t_last = env.t
+    end
+
+    shocks, target_shock_count = compute_sectioned_observation!(
+        minisection_observations_u, minisection_observations_λ, env, obs_strategy
+    )
+
+    if t ≈ 0.0f0
+        # we guess at speed to shift u_p by in the first step
+        control_shift_strategy.velocity = 1.8f0
+    end
+
+    # Get views into obs
+    obs_u_view = @view obs[1:minisections]
+    obs_λ_view = @view obs[(minisections + 1):(minisections * 2)]
+
+    # Copy directly into obs (no circshift since it's single agent/global frame relative to wave)
+    # But wait, compute_sectioned_observation! already handles the shifting if control_shift_strategy is MovingFrameControlShift
+    # because it uses env.prob.control_shift_strategy inside.
+    obs_u_view .= minisection_observations_u
+    obs_λ_view .= minisection_observations_λ
+
+    # Add the additional values
+    obs[end - 1] = shocks
+    obs[end] = target_shock_count
+
+    return obs
+end
+
+function get_init_observation(obs_strategy::SectionedStateMovingFrameObservation, N::Int, ::Type{T}) where {T <: AbstractFloat}
+    obs_dim = obs_strategy.minisections * 2 + 2
+    return Vector{T}(undef, obs_dim)
+end
