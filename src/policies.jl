@@ -84,8 +84,6 @@ data = run_policy(policy, env, saves_per_action=10)
 function run_policy(policy::AbstractRDEPolicy, env::RDEEnv{T}; saves_per_action = 10) where {T}
     _reset!(env)
     @assert saves_per_action ≥ 1 "saves_per_action must be at least 1"
-    #adjust saves_per_action to make sure speed detection is good
-    saves_per_action = max(saves_per_action, Int(env.dt ÷ 0.3))
 
 
     dt = env.dt
