@@ -371,7 +371,13 @@ function _compute_reward(env::RDEEnv{T, A, O, R, G, V, OBS}, rew_strat::Stabilit
     end
 
     # Extract all states from solution
-    sol_states = env.prob.sol.u::Vector{Vector{T}}
+    t_current = env.t
+    sol_times = env.prob.sol.t::Vector{T}
+    #TODO: maybe move this to reward_strategy struct?
+    stability_window_duration = T(5) #only view states within the last stability_window_duration seconds (for long dt's to not punish if we start bad and end good)
+    lookback_index::Int = findfirst(sol_times .>= (t_current - stability_window_duration))
+    # only use states after
+    sol_states = env.prob.sol.u[lookback_index:end]::Vector{Vector{T}}
     n_states::Int = length(sol_states)
 
     # Get constants
@@ -386,8 +392,6 @@ function _compute_reward(env::RDEEnv{T, A, O, R, G, V, OBS}, rew_strat::Stabilit
     max_values = Vector{T}(undef, n_states)
     periodicity_rewards = Vector{T}(undef, n_states)
     shock_spacing_rewards = Vector{T}(undef, n_states)
-    #=TODO: dont take all states, but limit to a certain time window backwards. To be better suited for large dt's:
-     going from bad to good should not count the bad states in the beginning=#
     for (i, state) in enumerate(sol_states)
         u = @view state[1:N]
 
@@ -436,18 +440,22 @@ function _compute_reward(env::RDEEnv{T, A, O, R, G, V, OBS}, rew_strat::Stabilit
         end
     end
 
-    #TODO: punish no span, to discourage getting constant solutions and 0.25 total reward.
-    # Calculate span variation (worst of min and max variation)
-    min_variation = span_variation_reward(min_values, rew_strat.variation_scaling * 2)
-    max_variation = span_variation_reward(max_values, rew_strat.variation_scaling * 2)
-    span_variation = min(min_variation, max_variation)
+    min_variation_rew = span_variation_reward(min_values, rew_strat.variation_scaling * 2)
+    max_variation_rew = span_variation_reward(max_values, rew_strat.variation_scaling * 2)
+    span_variation_rew = min(min_variation_rew, max_variation_rew)
+
+    # Punish no span, to discourage getting constant solutions and 0.25 total reward.
+    spans = max_values - min_values
+    max_span = maximum(spans)
+    small_span_threshold = T(0.1)
+    small_span_punishment = min(T(1), inv(small_span_threshold) * max_span)
 
     # Calculate worst periodicity and shock spacing over time
     worst_periodicity = minimum(periodicity_rewards)
     worst_shock_spacing = minimum(shock_spacing_rewards)
 
 
-    amplitude_stability = span_variation
+    amplitude_stability = span_variation_rew * small_span_punishment
     spatial_stability = worst_periodicity * worst_shock_spacing
     stability = (amplitude_stability + spatial_stability) / T(2)
     return stability
