@@ -64,6 +64,15 @@ function _observation_space(core_env::RDEEnv, strategy::SectionedStateObservatio
     return DRiL.Box(low, high)
 end
 
+function _observation_space(core_env::RDEEnv, strategy::SectionedStateMovingFrameObservation)
+    N = core_env.prob.params.N
+    minisections = strategy.minisections
+    # Same structure as SectionedStateObservation: [u_obs, λ_obs, shocks, target_shock_count]
+    low = [[0.0f0 for _ in 1:(2 * minisections)]; 0.0f0; 0.0f0]
+    high = [[1.0f0 for _ in 1:(2 * minisections)]; 1.0f0; 1.0f0]
+    return DRiL.Box(low, high)
+end
+
 function _observation_space(core_env::RDEEnv, strategy::SampledStateObservation)
     N = core_env.prob.params.N
     n_samples = strategy.n_samples
