@@ -83,29 +83,74 @@ function plot_policy_data(
         return sparse_ind
     end
 
+    # Frame shifting setup
+    dx = env.prob.x[2] - env.prob.x[1]
+    has_moving_frame = !isempty(data.control_shifts) && data.control_shifts[1] isa MovingFrameControlShift
 
-    u_data = @lift(states[$time_idx][1:N])
-    λ_data = @lift(states[$time_idx][(N + 1):end])
+    # Compute plotting frame speed vector (c) - same as plot_shifted_history
+    us, = RDE.split_sol(states)
+    c_vector = get_plotting_speed_adjustments(data, dx)
+
+    # Precompute cumulative positions for plotting frame (lab_frame -> plot_frame)
+    plot_frame_pos = [zero(eltype(c_vector)); cumsum(c_vector .* diff(state_ts))]
+
+    # Precompute control shift positions if using MovingFrameControlShift
+    control_shift_positions = if has_moving_frame
+        control_ts = getproperty.(data.control_shifts, :t_last)
+        map(enumerate(state_ts)) do (i, t)
+            control_ix = findlast(ct -> ct <= t, control_ts)
+            isnothing(control_ix) && return zero(eltype(state_ts))
+            RDE.get_control_shift(data.control_shifts[control_ix], Float32[], t)
+        end
+    else
+        zeros(eltype(state_ts), length(state_ts))
+    end
+
+    # Observable shifts lifted on time_idx
+    control_to_lab_shift = @lift(Int(round(control_shift_positions[$time_idx] / dx)))
+    lab_to_plot_shift = @lift(Int(round(plot_frame_pos[$time_idx] / dx)))
+
+    # Toggle for moving frame visualization
+    moving_frame_toggle = Observable(true)
+
+    # Combined shift: 0 if toggle off, lab_to_plot_shift if toggle on
+    plot_shift = @lift($moving_frame_toggle ? $lab_to_plot_shift : 0)
+
+    # Raw data observables (u and λ are in lab frame from solver)
+    raw_u = @lift(states[$time_idx][1:N])
+    raw_λ = @lift(states[$time_idx][(N + 1):end])
+
+    # Final shifted data: lab_frame -> plot_frame when toggle active
+    u_data = @lift(circshift($raw_u, -$plot_shift))
+    λ_data = @lift(circshift($raw_λ, -$plot_shift))
     # @info sparse_to_dense_ind(ts, sparse_ts, 3)
     # s = @lift(ss[sparse_to_dense_ind(state_ts, action_ts, $time_idx)])
     # u_p = @lift(u_ps[sparse_to_dense_ind(state_ts, action_ts, $time_idx)])
 
     fig = Figure(; size = fig_size)
-    upper_area = fig[1, 1] = GridLayout()
-    main_layout = fig[2, 1] = GridLayout()
+    main_layout = fig[1, 1] = GridLayout()
+    upper_area = main_layout[1, 1] = GridLayout() #title, time
+    system_plot_layout = main_layout[2, 1] = GridLayout()
     if control_history || energy_and_chamber_pressure || rewards_and_shocks
-        metrics_action_area = fig[end + 1, 1] = GridLayout()
+        metrics_action_layout = fig[1, 2] = GridLayout()
     end
 
     if control_history || energy_and_chamber_pressure || rewards_and_shocks
-        rowsize!(fig.layout, 3, Auto(0.5))
+        colsize!(fig.layout, 1, Relative(0.66))
     end
 
 
-    label = Label(upper_area[1, 1], text = @lift("Time: $(round(state_ts[$time_idx], digits = 1))"), tellwidth = false)
+    label = Label(
+        upper_area[1, 1],
+        text = @lift(
+            "Time: $(round(state_ts[$time_idx], digits = 1))" *
+                ($moving_frame_toggle ? " [Moving Frame]" : "")
+        ),
+        tellwidth = false
+    )
 
     RDE.main_plotting(
-        main_layout, env.prob.x, u_data, λ_data,
+        system_plot_layout, env.prob.x, u_data, λ_data,
         env.prob.params;
         u_max = Observable(3),
         include_subfunctions = false,
@@ -117,7 +162,7 @@ function plot_policy_data(
     sparse_time_idx = @lift(dense_to_sparse_ind(state_ts, action_ts, $time_idx))
     sparse_time = @lift(action_ts[$sparse_time_idx])
 
-    metrics_action_Area_plots = 0
+    metrics_action_layout_plots = 0
 
     # energy_and_chamber_pressure keyword kept for backwards compatibility but ignored
     # energy_bal and chamber_p removed from PolicyRunData
@@ -135,15 +180,15 @@ function plot_policy_data(
     #     end
 
     if rewards_and_shocks
-        metrics_action_Area_plots += 1
+        metrics_action_layout_plots += 1
         # Add rewards and shocks
-        ax_rewards = Axis(metrics_action_area[1, metrics_action_Area_plots], title = "Rewards", ylabel = "r")
+        ax_rewards = Axis(metrics_action_layout[metrics_action_layout_plots, 1], title = "Rewards", ylabel = "r")
         hidexdecorations!(ax_rewards, grid = false)
         reward_color = :orange
 
         # Create reward times: first reward at second action_ts, last at end
         reward_times = if length(action_ts) > 1
-            [action_ts[2:end]; action_ts[end] + (action_ts[end] - action_ts[end - 1])]
+            [action_ts[2:end]; ts[end]]
         else
             [action_ts[1] + 0.1]  # fallback if only one action
         end
@@ -167,8 +212,8 @@ function plot_policy_data(
             scatter!(ax_rewards, @lift(reward_times[max(1, $sparse_time_idx - 1)]), @lift(rewards[max(1, $sparse_time_idx - 1)]), color = reward_color, markersize = 12)
         end
         # vlines!(ax_rewards, fine_time, color=:green, alpha=0.5)
-
-        ax_shocks = Axis(metrics_action_area[2, metrics_action_Area_plots], title = "Shocks", xlabel = "t")
+        metrics_action_layout_plots += 1
+        ax_shocks = Axis(metrics_action_layout[metrics_action_layout_plots, 1], title = "Shocks", xlabel = "t")
         dx = env.prob.x[2] - env.prob.x[1]
         us, = RDE.split_sol(states)
         shocks = RDE.count_shocks.(us, dx)
@@ -181,14 +226,15 @@ function plot_policy_data(
     end
 
     if control_history
-        metrics_action_Area_plots += 1
+        metrics_action_layout_plots += 1
         plot_s = !(norm(diff(ss)) ≈ 0)
 
-        ax_u_p = Axis(metrics_action_area[1:2, metrics_action_Area_plots], ylabel = "uₚ", yticklabelcolor = :royalblue)
+        ax_u_p = Axis(metrics_action_layout[metrics_action_layout_plots, 1], ylabel = "uₚ", yticklabelcolor = :royalblue)
         ylims!(ax_u_p, (0, env.u_pmax * 1.05))
 
         if plot_s
-            ax_s = Axis(metrics_action_area[1:2, metrics_action_Area_plots], xlabel = "t", ylabel = "s", yticklabelcolor = :forestgreen, yaxisposition = :right)
+            metrics_action_layout_plots += 1
+            ax_s = Axis(metrics_action_layout[metrics_action_layout_plots, 1], xlabel = "t", ylabel = "s", yticklabelcolor = :forestgreen, yaxisposition = :right)
             hidespines!(ax_s)
             hidexdecorations!(ax_s)
             hideydecorations!(ax_s, ticklabels = false, ticks = false, label = false)
@@ -216,22 +262,47 @@ function plot_policy_data(
 
     # @show length(sparse_ts)
     if player_controls
-        play_ctrl_area = fig[4, 1] = GridLayout()
+        play_ctrl_area = main_layout[3, 1] = GridLayout()
         RDE.plot_controls(play_ctrl_area, time_idx, length(state_ts))
+
+        toggle_layout = play_ctrl_area[3, 1] = GridLayout()
+        # Add moving frame toggle (row 3, separate from speed controls in row 1-2)
+        frame_toggle_label = Label(toggle_layout[1, 1], text = "Frame:", halign = :right, tellwidth = false)
+        frame_toggle = Toggle(toggle_layout[1, 2], active = to_value(moving_frame_toggle), tellwidth = false)
+        frame_toggle_text = Label(
+            toggle_layout[1, 3],
+            text = lift(a -> a ? "Moving" : "Lab", frame_toggle.active),
+            halign = :left,
+            tellwidth = false
+        )
+        connect!(moving_frame_toggle, frame_toggle.active)
     end
 
     if live_control && eltype(u_ps) <: AbstractVector
-        u_p_t = @lift(u_ps[min(length(u_ps), $sparse_time_idx + 1)])
-        max_u_p = maximum(maximum.(u_ps))
-        ax_live_u_p = Axis(
-            main_layout[1, 1][3, 1], ylabel = "uₚ", yaxisposition = :left,
-            limits = ((nothing, (-0.1, max(max_u_p * 1.1, 1.0e-3))))
-        )
         sections = env.action_strat.n_sections
         section_size = N ÷ sections
-        start = 1 + section_size ÷ 2
-        u_p_pts = collect(start:section_size:N) / N * L
-        stairs!(ax_live_u_p, u_p_pts, u_p_t, step = :center)
+        max_u_p = maximum(maximum.(u_ps))
+
+        # Raw u_p upsampled to full grid
+        raw_u_p_upsampled = @lift begin
+            raw_u_p = u_ps[min(length(u_ps), $sparse_time_idx + 1)]
+            reduce(vcat, [fill(raw_u_p[i], section_size) for i in 1:length(raw_u_p)])
+        end
+
+        # Two-stage shifting using Observable shifts:
+        # Stage 1: control_frame -> lab_frame (always if MovingFrameControlShift)
+        u_p_in_lab_frame = @lift(circshift($raw_u_p_upsampled, $control_to_lab_shift))
+        # Stage 2: lab_frame -> plot_frame (when toggle active, plot_shift is 0 otherwise)
+        u_p_t = @lift(circshift($u_p_in_lab_frame, -$plot_shift))
+
+        ax_live_u_p = Axis(
+            system_plot_layout[1, 1][1, 1][3, 1], ylabel = "uₚ", yaxisposition = :left,
+            limits = ((nothing, (-0.1, max(max_u_p * 1.1, 1.0e-3))))
+        )
+
+        # Full grid x coordinates (always upsampled now)
+        u_p_pts = collect(1:N) / N * L
+        lines!(ax_live_u_p, u_p_pts, u_p_t)
     end
 
     if observations
@@ -281,8 +352,13 @@ function plot_shifted_history(
         title = nothing,
         size = (1200, 600),
         u_hm_kwargs = (),
-        u_ax_kwargs = ()
+        u_ax_kwargs = (),
+        control_shifts = nothing,
+        u_p_follow_u = true,
+        movingframe = true,
     )
+
+    dx = x[2] - x[1]
     pre_check_ts!(ts)
     pre_check_ts!(action_ts)
     shifted_us = Array.(RDE.shift_inds(us, x, ts, c))
@@ -297,7 +373,7 @@ function plot_shifted_history(
     hm = heatmap!(ax, ts, x, stack(shifted_us)', colorscale = identity, u_hm_kwargs...)
     Colorbar(fig[1, 2], hm)
     if plot_shocks
-        counts = RDE.count_shocks.(us, x[2] - x[1])
+        counts = RDE.count_shocks.(us, dx)
         ax2 = Axis(
             fig[end + 1, 1], xlabel = "t", ylabel = "Number of shocks",
             limits = (nothing, (-0.05, maximum(counts) * 1.05)),
@@ -323,6 +399,7 @@ function plot_shifted_history(
                 yzoomlock = true, ypanlock = true,
                 limits = (extrema(ts), extrema(x)),
                 xautolimitmargin = (0.0, 0.0),
+                title = "uₚ(ψ, t)",
                 u_ax_kwargs...
             )
             points_per_section = length(x) ÷ length(u_ps[1])
@@ -342,8 +419,38 @@ function plot_shifted_history(
                 spatially_upsampled[action_idx]
             end
 
-            # Now shift with fine grid - this shows u_ps drifting backward in the moving frame
-            shifted_u_ps = Array.(RDE.shift_inds(upsampled_u_ps, x, ts, c))
+            @debug "upsampled_u_ps[]: $(length(upsampled_u_ps))"
+
+            # if we have a moving reference frame we shift u_p forwards to match u
+            static_ref_u_ps = deepcopy.(upsampled_u_ps)
+            if movingframe && !isnothing(control_shifts) && control_shifts[1] isa MovingFrameControlShift
+                control_ts = getproperty.(control_shifts, :t_last)
+                for i in eachindex(static_ref_u_ps)
+                    t = ts[i]
+                    control_ix = findlast(ct -> ct <= t, control_ts)
+                    if isnothing(control_ix)
+                        error("No control shift found for time $t, control_ts: $control_ts, i: $i, ts: $ts, action_ts: $action_ts")
+                    end
+                    shift_pos = RDE.get_control_shift(control_shifts[control_ix], x, t)
+                    shift = Int(round(shift_pos / dx))
+                    @debug "t: $(round(t, digits = 2)), control_ix: $control_ix, shift_pos: $(round(shift_pos, digits = 2)), shift: $shift"
+
+                    # Apply shifts
+                    if shift != 0
+                        circshift!(static_ref_u_ps[i], upsampled_u_ps[i], shift)
+                    end
+                end
+                c_at_action_ts = c[searchsortedlast.(Ref(ts), action_ts)]
+                @debug "c | control_speeds="
+                @debug display(hcat(c_at_action_ts, getproperty.(control_shifts, :velocity)))
+            end
+
+            # Now we shift u_p backwards, matching u
+            if u_p_follow_u
+                shifted_u_ps = Array.(RDE.shift_inds(static_ref_u_ps, x, ts, c))
+            else
+                shifted_u_ps = copy(static_ref_u_ps)
+            end
             hm_u_ps = heatmap!(ax3, ts, x, stack(shifted_u_ps)')
             Colorbar(fig[end, 2], hm_u_ps)
             # lines!.(Ref(ax3), Ref(action_ts), eachrow(stack(u_ps)), color = :royalblue)
@@ -357,11 +464,18 @@ function plot_shifted_history(
             if !isempty(u_ax_kwargs) && haskey(u_ax_kwargs, :xticks)
                 ax3.xticks = u_ax_kwargs[:xticks]
             end
-            lines!(ax3, action_ts, u_ps, color = :royalblue)
+            stairs!(ax3, action_ts, u_ps, color = :royalblue, step = :post)
+
+            lines!(ax3, [action_ts[end], ts[end]], [u_ps[end], u_ps[end]], color = :royalblue)
         end
         linkxaxes!(ax, ax3)
     end
     if rewards !== nothing
+        reward_ts = if length(action_ts) > 1
+            [action_ts[2:end]; ts[end]]
+        else
+            [action_ts[1] + 0.1]  # fallback if only one action
+        end
         rewards_minimum = minimum(minimum.(rewards))
         rewards_maximum = maximum(maximum.(rewards))
         ax4 = Axis(
@@ -370,9 +484,9 @@ function plot_shifted_history(
             xautolimitmargin = (0.0, 0.0)
         )
         if eltype(rewards) <: AbstractVector
-            lines!.(Ref(ax4), Ref(action_ts), eachrow(stack(rewards)), color = :orange)
+            scatterlines!.(Ref(ax4), Ref(reward_ts), eachrow(stack(rewards)), color = :orange)
         else
-            lines!(ax4, action_ts, rewards, color = :orange)
+            scatterlines!(ax4, reward_ts, rewards, color = :orange)
         end
         linkxaxes!(ax, ax4)
     end
@@ -403,7 +517,7 @@ function plot_shifted_history(data::PolicyRunData, x::AbstractArray, c = :auto; 
     end
     return plot_shifted_history(
         us, x, data.state_ts, c;
-        u_ps = data.u_ps, rewards = use_rewards ? data.rewards : nothing, action_ts = data.action_ts, kwargs...
+        u_ps = data.u_ps, rewards = use_rewards ? data.rewards : nothing, action_ts = data.action_ts, control_shifts = data.control_shifts, kwargs...
     )
 end
 
@@ -414,17 +528,17 @@ end
 
 function animate_policy_data(
         data::PolicyRunData, env::RDEEnv;
-        dir_path = "./videos/", fname = "policy", format = ".mp4", fps = 25, kwargs...
+        dir = "./videos/", fname = "policy", format = ".mp4", fps = 25, kwargs...
     )
     time_idx = Observable(1)
     time_steps = length(data.state_ts)
     fig = plot_policy_data(data, env; time_idx, player_controls = false, show_mouse_vlines = false, kwargs...)
 
-    if !isdir(dir_path)
-        mkdir(dir_path)
+    if !isdir(dir)
+        mkpath(dir)
     end
 
-    path = joinpath(dir_path, fname * format)
+    path = joinpath(dir, fname * format)
     p = Progress(time_steps, desc = "Recording animation...")
     return record(fig, path, 1:time_steps, framerate = fps) do i
         time_idx[] = i

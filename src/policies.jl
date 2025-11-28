@@ -29,6 +29,7 @@ struct PolicyRunData{T <: AbstractFloat}
     state_ts::Vector{T}
     states::Vector{Vector{T}}
     observations::Union{Vector{Vector{T}}, Vector{Matrix{T}}}
+    control_shifts::Vector{<:AbstractControlShift} # moving reference velocity.
 end
 
 function Base.show(io::IO, data::PolicyRunData)
@@ -50,7 +51,9 @@ function Base.show(io::IO, ::MIME"text/plain", data::PolicyRunData)
     println(io, "  actions: $(typeof(data.actions))($(length(data.actions)))")
     println(io, "  state_ts: $(typeof(data.state_ts))($(length(data.state_ts)))")
     println(io, "  states: $(typeof(data.states))($(length(data.states)))")
-    return println(io, "  observations: $(typeof(data.observations))($(length(data.observations)))")
+    println(io, "  observations: $(typeof(data.observations))($(length(data.observations)))")
+    println(io, "  control_shifts: $(typeof(data.control_shifts))($(length(data.control_shifts)))")
+    return nothing
 end
 
 """
@@ -94,7 +97,7 @@ function run_policy(policy::AbstractRDEPolicy, env::RDEEnv{T}; saves_per_action 
     action_ts = Vector{T}(undef, max_actions)
     ss, u_ps = get_init_control_data(env, env.action_strat, max_actions)
     rewards = get_init_rewards(env, env.reward_strat, max_actions)
-
+    control_shifts = Vector{typeof(env.prob.control_shift_strategy)}(undef, max_actions)
     # Preallocate actions using action_dim
     actions = if action_dim(env.action_strat) == 1
         Vector{T}(undef, max_actions)
@@ -126,19 +129,7 @@ function run_policy(policy::AbstractRDEPolicy, env::RDEEnv{T}; saves_per_action 
         # Pre-action logging
         action_ts[step] = env.t
         observations[step] = _observe(env)
-        # Record control summaries (pre-action values)
-        if eltype(ss) <: AbstractVector
-            sections = env.action_strat.n_sections
-            ss[step] = section_reduction(env.prob.method.cache.s_current, sections)
-        elseif eltype(ss) <: Number
-            ss[step] = mean(env.prob.method.cache.s_current)
-        end
-        if eltype(u_ps) <: AbstractVector
-            sections = env.action_strat.n_sections
-            u_ps[step] = section_reduction(env.prob.method.cache.u_p_current, sections)
-        elseif eltype(u_ps) <: Number
-            u_ps[step] = mean(env.prob.method.cache.u_p_current)
-        end
+        control_shifts[step] = deepcopy(env.prob.control_shift_strategy)
 
         # Compute action
         action = _predict_action(policy, copy(observations[step]))
@@ -159,6 +150,20 @@ function run_policy(policy::AbstractRDEPolicy, env::RDEEnv{T}; saves_per_action 
         # Step environment
         _act!(env, action; saves_per_action)
 
+        # Record control summaries. This is the controls during the action step.
+        if eltype(ss) <: AbstractVector
+            sections = env.action_strat.n_sections
+            ss[step] = section_reduction(env.prob.method.cache.s_current, sections)
+        elseif eltype(ss) <: Number
+            ss[step] = mean(env.prob.method.cache.s_current)
+        end
+        if eltype(u_ps) <: AbstractVector
+            sections = env.action_strat.n_sections
+            u_ps[step] = section_reduction(env.prob.method.cache.u_p_current, sections)
+        elseif eltype(u_ps) <: Number
+            u_ps[step] = mean(env.prob.method.cache.u_p_current)
+        end
+
         # Collect solver states (drop first which is pre-action state)
         if typeof(env.prob.sol) == Nothing
             @info "sol is nothing at step $step"
@@ -166,22 +171,18 @@ function run_policy(policy::AbstractRDEPolicy, env::RDEEnv{T}; saves_per_action 
             step_states = Vector{Vector{T}}()
             step_ts = Vector{T}()
         else
-            if length(env.prob.sol.t) != saves_per_action + 1
-                @debug "length(env.prob.sol.t) ($(length(env.prob.sol.t))) != saves_per_action + 1 ($(saves_per_action + 1))"
-                if env.prob.sol.t[end] - env.prob.sol.t[end - 1] < env.dt / 10
-                    step_states = env.prob.sol.u[2:(end - 1)]
-                    step_ts = env.prob.sol.t[2:(end - 1)]
-                else
-                    @warn "Too many states, but last two indices are not similar, using all states"
-                    step_states = env.prob.sol.u[2:end]
-                    step_ts = env.prob.sol.t[2:end]
-                end
+            @debug "length(env.prob.sol.t) ($(length(env.prob.sol.t))) != saves_per_action + 1 ($(saves_per_action + 1))"
+            last_ministep = env.prob.sol.t[end] - env.prob.sol.t[end - 1]
+            second_last_ministep = env.prob.sol.t[end - 1] - env.prob.sol.t[end - 2]
+            if last_ministep < second_last_ministep / 10 #sometimes last step is very small, so we disregard the secon_to_last step
+                steps = length(env.prob.sol.t)
+                inds = [collect(1:(steps - 2)); steps]
+                step_states = env.prob.sol.u[inds]
+                step_ts = env.prob.sol.t[inds]
             else
+                # @warn "Too many states, but last two indices are not similar, using all states"
                 step_states = env.prob.sol.u[2:end]
                 step_ts = env.prob.sol.t[2:end]
-            end
-            if length(step_states) != saves_per_action
-                @warn "length(step_states) ($(length(step_states))) != saves_per_action ($(saves_per_action))"
             end
         end
 
@@ -205,11 +206,7 @@ function run_policy(policy::AbstractRDEPolicy, env::RDEEnv{T}; saves_per_action 
         total_state_steps += n_states
 
         # Post-action reward
-        if eltype(rewards) <: AbstractVector
-            rewards[step] = env.reward
-        else
-            rewards[step] = env.reward
-        end
+        rewards[step] = env.reward
 
         if env.terminated && env.verbose > 0
             @info "Env terminated at step $step"
@@ -235,8 +232,9 @@ function run_policy(policy::AbstractRDEPolicy, env::RDEEnv{T}; saves_per_action 
     observations = observations[1:n_actions]
     state_ts = state_ts[1:total_state_steps]
     states = states[1:total_state_steps]
+    control_shifts = control_shifts[1:n_actions]
 
-    return PolicyRunData{T}(action_ts, ss, u_ps, rewards, actions, state_ts, states, observations)
+    return PolicyRunData{T}(action_ts, ss, u_ps, rewards, actions, state_ts, states, observations, control_shifts)
 end
 
 function get_init_rewards(env::RDEEnv{T}, reward_strat::AbstractRewardStrategy, max_steps::Int) where {T}

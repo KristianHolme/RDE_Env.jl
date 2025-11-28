@@ -228,8 +228,8 @@ function _act!(env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}, action; saves_per_
     env.ode_problem = ODEProblem{true, SciMLBase.FullSpecialize}(RDE_RHS!, env.state, t_span, env.prob)
     #env.ode_problem = remake(env.ode_problem; u0 = env.state, tspan = t_span)::SciMLBase.ODEProblem
 
-    #adjust saves_per_action to make sure speed detection is good. 0.3 is safe step to capture shock speeds
-    saves_per_action = max(saves_per_action, Int(env.dt ÷ 0.3))
+    #adjust saves_per_action to make sure speed detection is good. 0.1 is safe step to capture shock speeds
+    saves_per_action = max(saves_per_action, Int(env.dt ÷ 0.1))
     sol = step_env!(env; saves_per_action)::SciMLBase.ODESolution
 
     tvec = sol.t::Vector{T}

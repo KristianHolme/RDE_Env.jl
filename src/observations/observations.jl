@@ -672,7 +672,7 @@ function compute_observation!(obs, env::RDEEnv{T, A, O, R, G, V, OBS}, obs_strat
     dx = RDE.get_dx(env.prob)
     if t ≈ 0.0f0 #TODO: move into interface for control shift strategies?
         control_shift_strategy.position = 0.0f0
-        control_shift_strategy.velocity = 0.0f0 # we dont shift at start
+        control_shift_strategy.velocity = 0.0f0 # we dont shift observation at start
     else
         @assert !isnothing(env.prob.sol) "env.prob.sol is nothing"
         us, _ = RDE.split_sol(env.prob.sol.u)
@@ -683,8 +683,8 @@ function compute_observation!(obs, env::RDEEnv{T, A, O, R, G, V, OBS}, obs_strat
         control_shift_strategy.position += avg_speed * env.dt # position at end of step
         L = env.prob.params.L
         control_shift_strategy.position = mod(control_shift_strategy.position, L)
-        control_shift_strategy.t_last = env.t
     end
+    control_shift_strategy.t_last = env.t
 
     shocks, target_shock_count = compute_sectioned_observation!(
         minisection_observations_u, minisection_observations_λ, env, obs_strategy
@@ -757,8 +757,8 @@ function compute_observation!(obs, env::RDEEnv{T, A, O, R, G, V, OBS}, obs_strat
         control_shift_strategy.position += avg_speed * env.dt # position at end of step
         L = env.prob.params.L
         control_shift_strategy.position = mod(control_shift_strategy.position, L)
-        control_shift_strategy.t_last = env.t
     end
+    control_shift_strategy.t_last = env.t
 
     shocks, target_shock_count = compute_sectioned_observation!(
         minisection_observations_u, minisection_observations_λ, env, obs_strategy
