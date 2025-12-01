@@ -203,7 +203,53 @@ function get_adjustment_speeds(block_speeds)
     return speeds
 end
 
-function get_plotting_speed_adjustments(data, dx)
+function get_plotting_speed_adjustments(data, dx; max_speed = 4.6f0)
     block_speeds = speed_tracking(data, dx)
-    return get_adjustment_speeds(block_speeds)[2:end]
+    plot_speeds = get_adjustment_speeds(block_speeds)[2:end]
+    @debug "max_speed: $(maximum(plot_speeds)), min_speed: $(minimum(plot_speeds))"
+    plot_speeds = adjust_for_jumps!(plot_speeds, max_speed)
+    return plot_speeds
+end
+
+"""
+    adjust_for_jumps!(plot_speeds, max_speed; fallback_speed = 1.8f0)
+Sometimes speed blocks fail, e.g. if a single shock is dissappearing in the same frame as another is appearing.
+Then it will appear as if there is a single shock that jumps to a new position.
+Here we try to detect these jumps and adjust the entries with high speed. 
+Adjustment is done by finding the nearby non-jump entries and averaging them.
+If this fails, we set speed to `fallback_speed`.     
+"""
+function adjust_for_jumps!(plot_speeds, max_speed; fallback_speed = 1.8f0)
+    all_indices = eachindex(plot_speeds)
+    if any(s -> s > max_speed, plot_speeds)
+        jump_indices = findall(s -> s > max_speed, plot_speeds)
+        @debug "jump_indices: $jump_indices"
+        @debug "jump_speeds: $(plot_speeds[jump_indices])"
+        if !isempty(jump_indices)
+            while !isempty(jump_indices)
+                ix = popfirst!(jump_indices)
+                non_jump_indices = setdiff(all_indices, jump_indices)
+                previous_indices = non_jump_indices[non_jump_indices .< ix]
+                next_indices = non_jump_indices[non_jump_indices .> ix]
+                # @debug "previous_indices: $previous_indices"
+                # @debug "next_indices: $next_indices"
+                #find previous and next index with valid speed
+                prev_ix = last(previous_indices)
+                next_ix = first(next_indices)
+                @debug "ix: $ix, prev_ix: $prev_ix, next_ix: $next_ix"
+                if isnothing(prev_ix) || isnothing(next_ix)
+                    @warn "Cant correct for jump, setting speed at index $ix to $fallback_speed"
+                    plot_speeds[ix] = fallback_speed
+                else
+                    prev_speed = plot_speeds[prev_ix]
+                    next_speed = plot_speeds[next_ix]
+                    adjusted_speed = (prev_speed + next_speed) / 2
+                    @debug "jump_speed: $(plot_speeds[ix])"
+                    @debug "prev_speed: $prev_speed, next_speed: $next_speed, adjusted_speed: $adjusted_speed"
+                    plot_speeds[ix] = adjusted_speed
+                end
+            end
+        end
+    end
+    return plot_speeds
 end

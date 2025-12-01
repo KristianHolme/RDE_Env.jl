@@ -61,6 +61,7 @@ function plot_policy_data(
         observations = false,
         live_control = false,
         fig_size = (1000, 900),
+        max_jump_speed = 4.6f0,
         kwargs...
     )
     action_ts = data.action_ts
@@ -89,7 +90,7 @@ function plot_policy_data(
 
     # Compute plotting frame speed vector (c) - same as plot_shifted_history
     us, = RDE.split_sol(states)
-    c_vector = get_plotting_speed_adjustments(data, dx)
+    c_vector = get_plotting_speed_adjustments(data, dx, max_speed = max_jump_speed)
 
     # Precompute cumulative positions for plotting frame (lab_frame -> plot_frame)
     plot_frame_pos = [zero(eltype(c_vector)); cumsum(c_vector .* diff(state_ts))]
@@ -188,7 +189,7 @@ function plot_policy_data(
 
         # Create reward times: first reward at second action_ts, last at end
         reward_times = if length(action_ts) > 1
-            [action_ts[2:end]; ts[end]]
+            [action_ts[2:end]; state_ts[end]]
         else
             [action_ts[1] + 0.1]  # fallback if only one action
         end
@@ -252,8 +253,9 @@ function plot_policy_data(
                 scatter!(ax_u_p, fine_time, @lift(u_ps[min($sparse_time_idx + 1, length(u_ps))][i]), color = :royalblue)
             end
         else
-            stairs!(ax_u_p, action_ts, u_ps, color = :royalblue)
-            scatter!(ax_u_p, fine_time, @lift(u_ps[min($sparse_time_idx + 1, length(u_ps))]), color = :royalblue)
+            stairs!(ax_u_p, action_ts, u_ps, color = :royalblue, step = :post)
+            lines!(ax_u_p, [action_ts[end], state_ts[end]], [u_ps[end], u_ps[end]], color = :royalblue)
+            scatter!(ax_u_p, fine_time, @lift(u_ps[min($sparse_time_idx, length(u_ps))]), color = :royalblue)
         end
 
         #Time indicator
@@ -278,31 +280,37 @@ function plot_policy_data(
         connect!(moving_frame_toggle, frame_toggle.active)
     end
 
-    if live_control && eltype(u_ps) <: AbstractVector
-        sections = env.action_strat.n_sections
-        section_size = N ÷ sections
-        max_u_p = maximum(maximum.(u_ps))
-
-        # Raw u_p upsampled to full grid
-        raw_u_p_upsampled = @lift begin
-            raw_u_p = u_ps[min(length(u_ps), $sparse_time_idx + 1)]
-            reduce(vcat, [fill(raw_u_p[i], section_size) for i in 1:length(raw_u_p)])
-        end
-
-        # Two-stage shifting using Observable shifts:
-        # Stage 1: control_frame -> lab_frame (always if MovingFrameControlShift)
-        u_p_in_lab_frame = @lift(circshift($raw_u_p_upsampled, $control_to_lab_shift))
-        # Stage 2: lab_frame -> plot_frame (when toggle active, plot_shift is 0 otherwise)
-        u_p_t = @lift(circshift($u_p_in_lab_frame, -$plot_shift))
-
+    if live_control
+        max_u_p = eltype(u_ps) <: AbstractVector ? maximum(maximum.(u_ps)) : maximum(u_ps)
         ax_live_u_p = Axis(
             system_plot_layout[1, 1][1, 1][3, 1], ylabel = "uₚ", yaxisposition = :left,
             limits = ((nothing, (-0.1, max(max_u_p * 1.1, 1.0e-3))))
         )
+        if eltype(u_ps) <: AbstractVector
+            sections = env.action_strat.n_sections
+            section_size = N ÷ sections
 
-        # Full grid x coordinates (always upsampled now)
-        u_p_pts = collect(1:N) / N * L
-        lines!(ax_live_u_p, u_p_pts, u_p_t)
+            # Raw u_p upsampled to full grid
+            raw_u_p_upsampled = @lift begin
+                raw_u_p = u_ps[min(length(u_ps), $sparse_time_idx + 1)]
+                reduce(vcat, [fill(raw_u_p[i], section_size) for i in 1:length(raw_u_p)])
+            end
+
+            # Two-stage shifting using Observable shifts:
+            # Stage 1: control_frame -> lab_frame (always if MovingFrameControlShift)
+            u_p_in_lab_frame = @lift(circshift($raw_u_p_upsampled, $control_to_lab_shift))
+            # Stage 2: lab_frame -> plot_frame (when toggle active, plot_shift is 0 otherwise)
+            u_p_t = @lift(circshift($u_p_in_lab_frame, -$plot_shift))
+
+
+            # Full grid x coordinates (always upsampled now)
+            u_p_pts = collect(1:N) / N * L
+            lines!(ax_live_u_p, u_p_pts, u_p_t)
+        else
+            stairs!(ax_live_u_p, action_ts, u_ps, color = :royalblue, step = :post)
+            lines!(ax_live_u_p, [action_ts[end], state_ts[end]], [u_ps[end], u_ps[end]], color = :royalblue)
+            scatter!(ax_live_u_p, fine_time, @lift(u_ps[min($sparse_time_idx, length(u_ps))]), color = :royalblue)
+        end
     end
 
     if observations
@@ -497,11 +505,18 @@ function plot_shifted_history(
     return fig
 end
 
-function plot_shifted_history(data::PolicyRunData, x::AbstractArray, c = :auto; use_rewards = true, kwargs...)
+function plot_shifted_history(
+        data::PolicyRunData,
+        x::AbstractArray,
+        c = :auto;
+        use_rewards = true,
+        max_jump_speed = 4.6f0,
+        kwargs...
+    )
     us, = RDE.split_sol(data.states)
     saves_per_action = (length(data.state_ts) - 1) ÷ length(data.action_ts)
     if c == :auto
-        c = get_plotting_speed_adjustments(data, x[2] - x[1])
+        c = get_plotting_speed_adjustments(data, x[2] - x[1], max_speed = max_jump_speed)
     elseif c == :legacy
         counts = RDE.count_shocks.(us, x[2] - x[1])
         u_ps = data.u_ps
