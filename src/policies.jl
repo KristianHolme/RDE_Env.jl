@@ -534,7 +534,9 @@ function _predict_action(π::DelayedPolicy, s::Union{AbstractVector{T}, Matrix{T
             return zero(T)
         elseif π.env.action_strat isa VectorPressureAction
             return zeros(T, π.env.action_strat.n_sections)
-        elseif π.env.action_strat isa LinearScalarPressureAction || π.env.action_strat isa LinearVectorPressureAction
+        elseif π.env.action_strat isa LinearScalarPressureAction ||
+                π.env.action_strat isa LinearVectorPressureAction ||
+                π.env.action_strat isa LinearScalarPressureWithDtAction
             u_p = mean(π.env.prob.method.cache.u_p_current)
             u_pmax = π.env.u_pmax
             action = 2 * u_p / u_pmax - 1
@@ -544,6 +546,13 @@ function _predict_action(π::DelayedPolicy, s::Union{AbstractVector{T}, Matrix{T
                 return [action]
             elseif π.env.action_strat isa LinearVectorPressureAction
                 return fill(action, π.env.action_strat.n_sections)
+            elseif π.env.action_strat isa LinearScalarPressureWithDtAction
+                dt_max = π.env.action_strat.dt_max
+                dt_min = π.env.action_strat.dt_min
+                dt = π.env.dt
+                progress = (dt - dt_min) / (dt_max - dt_min)
+                time_action = 2progress - 1
+                return [action, time_action]
             end
         else
             @error "Unknown action type $(typeof(π.env.action_strat)) for DelayedPolicy"
