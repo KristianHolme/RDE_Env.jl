@@ -454,10 +454,15 @@ function _compute_reward(env::RDEEnv{T, A, O, R, G, V, OBS}, rew_strat::Stabilit
     worst_periodicity = minimum(periodicity_rewards)
     worst_shock_spacing = minimum(shock_spacing_rewards)
 
+    @debug "span_variation_rew: $span_variation_rew"
+    @debug "small_span_punishment: $small_span_punishment"
 
     amplitude_stability = span_variation_rew * small_span_punishment
     spatial_stability = worst_periodicity * worst_shock_spacing
     stability = (amplitude_stability + spatial_stability) / T(2)
+    @debug "amplitude_stability: $amplitude_stability"
+    @debug "spatial_stability: $spatial_stability"
+    @debug "stability: $stability"
     return stability
 end
 
