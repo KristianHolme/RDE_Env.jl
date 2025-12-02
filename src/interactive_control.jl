@@ -76,6 +76,7 @@ function interactive_control(
     fig = Figure(size = (1200, show_observations ? 900 : 700))
     upper_area = fig[1, 1] = GridLayout()
     plotting_area = fig[2, 1] = GridLayout()
+    plotting_area_inner = plotting_area[1, 1] = GridLayout()
     energy_area = fig[3, 1][1, 1] = GridLayout()
     control_area = fig[3, 1][1, 2] = GridLayout()
 
@@ -280,7 +281,7 @@ function interactive_control(
 
     # Create main visualization
     RDE.main_plotting(
-        plotting_area, env.prob.x, u_data, λ_data, env.prob.params;
+        plotting_area_inner, env.prob.x, u_data, λ_data, env.prob.params;
         u_max = u_max,
         s = action_strat isa ScalarAreaScalarPressureAction ? control_s : Observable(params.s),
         u_p = action_strat isa ScalarPressureAction ? control_u_p :

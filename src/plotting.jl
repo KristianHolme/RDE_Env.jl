@@ -62,6 +62,7 @@ function plot_policy_data(
         live_control = false,
         fig_size = (1000, 900),
         max_jump_speed = 4.6f0,
+        initial_moving_frame = true,
         kwargs...
     )
     action_ts = data.action_ts
@@ -112,7 +113,7 @@ function plot_policy_data(
     lab_to_plot_shift = @lift(Int(round(plot_frame_pos[$time_idx] / dx)))
 
     # Toggle for moving frame visualization
-    moving_frame_toggle = Observable(true)
+    moving_frame_toggle = Observable(initial_moving_frame)
 
     # Combined shift: 0 if toggle off, lab_to_plot_shift if toggle on
     plot_shift = @lift($moving_frame_toggle ? $lab_to_plot_shift : 0)
@@ -248,9 +249,10 @@ function plot_policy_data(
         end
 
         if eltype(u_ps) <: AbstractVector
-            stairs!.(Ref(ax_u_p), Ref(action_ts), eachrow(stack(u_ps)), color = :royalblue)
+            stairs!.(Ref(ax_u_p), Ref(action_ts), eachrow(stack(u_ps)), color = :royalblue, step = :post)
             for i in 1:length(u_ps[sparse_time_idx[]])
-                scatter!(ax_u_p, fine_time, @lift(u_ps[min($sparse_time_idx + 1, length(u_ps))][i]), color = :royalblue)
+                lines!(ax_u_p, [action_ts[end], state_ts[end]], [u_ps[end][i], u_ps[end][i]], color = :royalblue)
+                scatter!(ax_u_p, fine_time, @lift(u_ps[min($sparse_time_idx, length(u_ps))][i]), color = :royalblue)
             end
         else
             stairs!(ax_u_p, action_ts, u_ps, color = :royalblue, step = :post)
