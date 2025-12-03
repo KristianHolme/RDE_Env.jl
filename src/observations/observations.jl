@@ -692,7 +692,7 @@ function compute_observation!(obs, env::RDEEnv{T, A, O, R, G, V, OBS}, obs_strat
 
     if t ≈ 0.0f0
         # we guess at speed to shift u_p by in the first step
-        control_shift_strategy.velocity = 1.8f0
+        control_shift_strategy.velocity = 1.71f0
     end
 
     # Fill the matrix directly
@@ -766,7 +766,7 @@ function compute_observation!(obs, env::RDEEnv{T, A, O, R, G, V, OBS}, obs_strat
 
     if t ≈ 0.0f0
         # we guess at speed to shift u_p by in the first step
-        control_shift_strategy.velocity = 1.8f0
+        control_shift_strategy.velocity = 1.71f0
     end
 
     # Get views into obs
