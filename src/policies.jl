@@ -173,16 +173,16 @@ function run_policy(policy::AbstractRDEPolicy, env::RDEEnv{T}; saves_per_action 
         else
             @debug "length(env.prob.sol.t) ($(length(env.prob.sol.t))) != saves_per_action + 1 ($(saves_per_action + 1))"
             last_ministep = env.prob.sol.t[end] - env.prob.sol.t[end - 1]
-            second_last_ministep = env.prob.sol.t[end - 1] - env.prob.sol.t[end - 2]
-            if last_ministep < second_last_ministep / 10 #sometimes last step is very small, so we disregard the secon_to_last step
-                steps = length(env.prob.sol.t)
-                inds = [collect(1:(steps - 2)); steps]
-                step_states = env.prob.sol.u[inds]
-                step_ts = env.prob.sol.t[inds]
-            else
-                # @warn "Too many states, but last two indices are not similar, using all states"
-                step_states = env.prob.sol.u[2:end]
-                step_ts = env.prob.sol.t[2:end]
+            step_states = env.prob.sol.u[2:end]
+            step_ts = env.prob.sol.t[2:end]
+            if length(env.prob.sol.t) > 2
+                second_last_ministep = env.prob.sol.t[end - 1] - env.prob.sol.t[end - 2]
+                if last_ministep < second_last_ministep / 10 #sometimes last step is very small, so we disregard the secon_to_last step
+                    steps = length(env.prob.sol.t)
+                    inds = [collect(1:(steps - 2)); steps]
+                    step_states = env.prob.sol.u[inds]
+                    step_ts = env.prob.sol.t[inds]
+                end
             end
         end
 
