@@ -132,12 +132,21 @@ _observe(env::RDEEnv) = copy(env.observation)
 
 @inline get_saveat(env::RDEEnv{T}, saves_per_action::Int) where {T <: AbstractFloat} = saves_per_action == 0 ? nothing : (env.dt / saves_per_action)
 
-function step_env!(env::RDEEnv{T, A, O, R, G, V, OBS}; saves_per_action::Int = 10) where {T <: AbstractFloat, A, O, R, G, V, OBS}
-    return _step!(env, env.prob.method; saves_per_action = saves_per_action)
+# function step_env!(env::RDEEnv{T, A, O, R, G, V, OBS}; saves_per_action::Int = 10) where {T <: AbstractFloat, A, O, R, G, V, OBS}
+#     return _step!(env, env.prob.method; saves_per_action = saves_per_action)
+# end
+
+function solve_step(env::RDEEnv{T, A, O, R, G, V, OBS}; saves_per_action::Int = 10) where {T <: AbstractFloat, A, O, R, G, V, OBS}
+    t0, t1 = env.ode_problem.tspan::Tuple{T, T}
+    saveat = collect(range(t0, t1; length = saves_per_action + 1))
+    sol = RDE.solve_pde_step(env.prob, env.ode_problem; saveat = saveat)
+    if sol.retcode != :Success
+        @warn "Failed to solve PDE step for $(typeof(env.prob.method))"
+    end
+    return sol
 end
 
-
-function _step!(env::RDEEnv{T, A, O, R, G, V, OBS, M, RS, C}, ::RDE.FiniteVolumeMethod{T}; saves_per_action::Int = 10) where {T <: AbstractFloat, A, O, R, G, V, OBS, M, RS, C}
+#= function _step!(env::RDEEnv{T, A, O, R, G, V, OBS, M, RS, C}, ::RDE.FiniteVolumeMethod{T}; saves_per_action::Int = 10) where {T <: AbstractFloat, A, O, R, G, V, OBS, M, RS, C}
     # Assertions
     prob = env.prob
     params = prob.params::RDEParam{T}
@@ -182,8 +191,52 @@ function _step!(env::RDEEnv{T, A, O, R, G, V, OBS}, ::RDE.AbstractMethod; saves_
     # Environment-specific updates
     env.prob.sol = sol
     return sol
-end
+end =#
 
+function _act_postprocessing!(env::RDEEnv{T}, sol::SciMLBase.ODESolution) where {T <: AbstractFloat}
+    tvec = sol.t::Vector{T}
+    sol_u = sol.u::Vector{Vector{T}}
+    last_u = sol_u[end]
+
+    if !SciMLBase.successful_retcode(sol) || any(isnan, last_u)
+        if any(isnan, last_u)
+            @warn "NaN state detected"
+        end
+        env.terminated = true
+        env.done = true
+        set_termination_reward!(env, -100.0)
+        env.info["Termination.Reason"] = "ODE solver failed"
+        env.info["Termination.ReturnCode"] = sol.retcode
+        env.info["Termination.env_t"] = env.t
+        @logmsg LogLevel(-500) "ODE solver failed, t=$(env.t), terminating"
+    else #advance environment
+        env.prob.sol = sol
+        env.t = tvec[end]::T
+        env.state .= last_u
+
+        env.steps_taken += 1
+
+        set_reward!(env, env.reward_strat)
+        compute_observation!(env.observation, env, env.observation_strat)
+        if env.terminated #maybe reward caused termination
+            # set_termination_reward!(env, -2.0)
+            env.done = true
+            @logmsg LogLevel(-10000) "termination caused by reward"
+            @logmsg LogLevel(-500) "terminated, t=$(env.t), from reward?"
+        elseif env.t ≥ env.prob.params.tmax #dont mark as truncated if terminated by reward or solver
+            env.done = true
+            env.truncated = true
+            @logmsg LogLevel(-10000) "tmax reached, t=$(env.t)"
+            env.info["Truncation.Reason"] = "tmax reached"
+        end
+    end
+
+    if env.done != xor(env.truncated, env.terminated)
+        @warn "done is not xor(truncated, terminated), at t=$(env.t)" env.done, env.truncated, env.terminated
+        @info "info: $(env.info)"
+    end
+    return env
+end
 
 """
     _act!(env::RDEEnv{T}, action; saves_per_action::Int=0) where {T<:AbstractFloat}
@@ -230,59 +283,61 @@ function _act!(env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}, action; saves_per_
 
     #adjust saves_per_action to make sure speed detection is good. 0.1 is safe step to capture shock speeds
     saves_per_action = max(saves_per_action, Int(env.dt ÷ 0.1))
-    sol = step_env!(env; saves_per_action)::SciMLBase.ODESolution
+    sol = solve_step(env; saves_per_action)
 
-    tvec = sol.t::Vector{T}
-    sol_u = sol.u::Vector{Vector{T}}
-    last_u = sol_u[end]
-    if saves_per_action > 0 && length(tvec) != saves_per_action + 1
-        @debug "length(sol.t) ($(length(tvec))) != saves_per_action + 1 ($(saves_per_action + 1)), at tspan=$(t_span)"
+    if saves_per_action > 0 && length(sol.t) != saves_per_action + 1
+        @debug "length(sol.t) ($(length(sol.t))) != saves_per_action + 1 ($(saves_per_action + 1)), at tspan=$(t_span)"
     end
+    # tvec = sol.t::Vector{T}
+    # sol_u = sol.u::Vector{Vector{T}}
+    # last_u = sol_u[end]
 
-    if env.prob.control_shift_strategy isa MovingFrameControlShift
-        required_saves_per_action = ceil(Int, dt / 0.3f0) # 0.3f0 is safe step to capture shock speeds
-        saves_per_action = max(saves_per_action, required_saves_per_action)
-    end
+    # if env.prob.control_shift_strategy isa MovingFrameControlShift
+    #     required_saves_per_action = ceil(Int, dt / 0.3f0) # 0.3f0 is safe step to capture shock speeds
+    #     saves_per_action = max(saves_per_action, required_saves_per_action)
+    # end
+
     #TODO: factor out this
-    #Check termination caused by ODE solver
-    if !SciMLBase.successful_retcode(sol) || any(isnan, last_u)
-        if any(isnan, last_u)
-            @warn "NaN state detected"
-        end
-        env.terminated = true
-        env.done = true
-        set_termination_reward!(env, -100.0)
-        env.info["Termination.Reason"] = "ODE solver failed"
-        env.info["Termination.ReturnCode"] = sol.retcode
-        env.info["Termination.env_t"] = env.t
-        @logmsg LogLevel(-500) "ODE solver failed, t=$(env.t), terminating"
-    else #advance environment
-        prob.sol = sol::SciMLBase.ODESolution
-        env.t = tvec[end]::T
-        env.state .= last_u
+    # #Check termination caused by ODE solver
+    # if !SciMLBase.successful_retcode(sol) || any(isnan, last_u)
+    #     if any(isnan, last_u)
+    #         @warn "NaN state detected"
+    #     end
+    #     env.terminated = true
+    #     env.done = true
+    #     set_termination_reward!(env, -100.0)
+    #     env.info["Termination.Reason"] = "ODE solver failed"
+    #     env.info["Termination.ReturnCode"] = sol.retcode
+    #     env.info["Termination.env_t"] = env.t
+    #     @logmsg LogLevel(-500) "ODE solver failed, t=$(env.t), terminating"
+    # else #advance environment
+    #     prob.sol = sol::SciMLBase.ODESolution #TODO: this is already done
+    #     env.t = tvec[end]::T
+    #     env.state .= last_u
 
-        env.steps_taken += 1
+    #     env.steps_taken += 1
 
-        set_reward!(env, env.reward_strat)
-        compute_observation!(env.observation, env, env.observation_strat)
-        if env.terminated #maybe reward caused termination
-            # set_termination_reward!(env, -2.0)
-            env.done = true
-            @logmsg LogLevel(-10000) "termination caused by reward"
-            @logmsg LogLevel(-500) "terminated, t=$(env.t), from reward?"
-        elseif env.t ≥ env.prob.params.tmax #dont mark as truncated if terminated by reward or solver
-            env.done = true
-            env.truncated = true
-            @logmsg LogLevel(-10000) "tmax reached, t=$(env.t)"
-            env.info["Truncation.Reason"] = "tmax reached"
-        end
-    end
+    #     set_reward!(env, env.reward_strat)
+    #     compute_observation!(env.observation, env, env.observation_strat)
+    #     if env.terminated #maybe reward caused termination
+    #         # set_termination_reward!(env, -2.0)
+    #         env.done = true
+    #         @logmsg LogLevel(-10000) "termination caused by reward"
+    #         @logmsg LogLevel(-500) "terminated, t=$(env.t), from reward?"
+    #     elseif env.t ≥ env.prob.params.tmax #dont mark as truncated if terminated by reward or solver
+    #         env.done = true
+    #         env.truncated = true
+    #         @logmsg LogLevel(-10000) "tmax reached, t=$(env.t)"
+    #         env.info["Truncation.Reason"] = "tmax reached"
+    #     end
+    # end
 
-    if env.done != xor(env.truncated, env.terminated)
-        @warn "done is not xor(truncated, terminated), at t=$(env.t)" env.done, env.truncated, env.terminated
-        @info "info: $(env.info)"
-    end
+    # if env.done != xor(env.truncated, env.terminated)
+    #     @warn "done is not xor(truncated, terminated), at t=$(env.t)" env.done, env.truncated, env.terminated
+    #     @info "info: $(env.info)"
+    # end
 
+    _act_postprocessing!(env, sol)
     return env.reward
 end
 
