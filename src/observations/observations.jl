@@ -175,6 +175,29 @@ end
 function get_init_observation(::StateObservation, N::Int, ::Type{T}) where {T <: AbstractFloat}
     return Vector{T}(undef, 2N + 2)
 end
+
+# ----------------------------------------------------------------------------
+# FullStateObservation
+# ----------------------------------------------------------------------------
+
+struct FullStateObservation <: AbstractObservationStrategy end
+
+initialize_cache(::FullStateObservation, N::Int, ::Type{T}) where {T} = NoCache()
+
+function compute_observation!(obs, env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}, ::FullStateObservation) where {T, A, O, RW, G, V, OBS, M, RS, C}
+    N = length(env.state) ÷ 2
+    obs_u = @view obs[1:N]
+    obs_λ = @view obs[(N + 1):(2 * N)]
+    u = @view env.state[1:N]
+    λ = @view env.state[(N + 1):end]
+    obs_u .= u
+    obs_λ .= λ
+    return obs
+end
+
+function get_init_observation(::FullStateObservation, N::Int, ::Type{T}) where {T <: AbstractFloat}
+    return Vector{T}(undef, 2N)
+end
 # ----------------------------------------------------------------------------
 # SectionedStateObservation
 # ----------------------------------------------------------------------------

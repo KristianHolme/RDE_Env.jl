@@ -5,6 +5,15 @@ abstract type AbstractRDEPolicy end
 """
 function _predict_action end
 
+function _predict_action(policy::DRiL.AbstractPolicy, observation::Vector)
+    return policy(observation; deterministic = true)
+end
+
+function _predict_action(policy::DRiL.AbstractPolicy, observation::Matrix)
+    obs_batch = collect(eachcol(observation))
+    return policy(obs_batch; deterministic = true)
+end
+
 """
     PolicyRunData{T<:AbstractFloat}
 
@@ -317,13 +326,20 @@ struct ConstantRDEPolicy <: AbstractRDEPolicy
 end
 
 function _predict_action(π::ConstantRDEPolicy, s::AbstractVector{T}) where {T <: AbstractFloat}
-    @assert !(π.env.action_strat isa DirectScalarPressureAction) && !(π.env.action_strat isa DirectVectorPressureAction) "ConstantRDEPolicy not supported with direct actions"
     if π.env.action_strat isa ScalarAreaScalarPressureAction
         return zeros(T, 2)
     elseif π.env.action_strat isa ScalarPressureAction
         return zero(T)
     elseif π.env.action_strat isa VectorPressureAction
         return zeros(T, π.env.action_strat.n_sections)
+    elseif π.env.action_strat isa DirectScalarPressureAction
+        u_p = mean(π.env.prob.method.cache.u_p_current)
+        return clamp(u_p, zero(T), π.env.u_pmax)
+    elseif π.env.action_strat isa DirectVectorPressureAction
+        N = π.env.prob.params.N
+        points_per_section = N ÷ π.env.action_strat.n_sections
+        controls = π.env.prob.method.cache.u_p_current[1:points_per_section:end]
+        return clamp.(controls, zero(T), π.env.u_pmax)
     else
         @error "Unknown action type $(typeof(π.env.action_strat)) for ConstantRDEPolicy"
     end
@@ -356,7 +372,6 @@ struct SinusoidalRDEPolicy{T <: AbstractFloat} <: AbstractRDEPolicy
 end
 
 function _predict_action(π::SinusoidalRDEPolicy, s::AbstractVector{T}) where {T <: AbstractFloat}
-    @assert !(π.env.action_strat isa DirectScalarPressureAction) && !(π.env.action_strat isa DirectVectorPressureAction) "SinusoidalRDEPolicy not supported with direct actions"
     t = π.env.t
     action1 = T(sin(π.w_1 * t)) * π.scale
     action2 = T(sin(π.w_2 * t)) * π.scale
@@ -364,6 +379,15 @@ function _predict_action(π::SinusoidalRDEPolicy, s::AbstractVector{T}) where {T
         return [action1, action2]
     elseif π.env.action_strat isa ScalarPressureAction
         return action2
+    elseif π.env.action_strat isa DirectScalarPressureAction
+        base = mean(π.env.prob.method.cache.u_p_current)
+        delta = π.scale * π.env.u_pmax * T(sin(π.w_2 * t))
+        return clamp(base + delta, zero(T), π.env.u_pmax)
+    elseif π.env.action_strat isa DirectVectorPressureAction
+        base = mean(π.env.prob.method.cache.u_p_current)
+        delta = π.scale * π.env.u_pmax * T(sin(π.w_2 * t))
+        action_value = clamp(base + delta, zero(T), π.env.u_pmax)
+        return fill(action_value, π.env.action_strat.n_sections)
     else
         @error "Unknown action type $(typeof(π.env.action_strat)) for SinusoidalRDEPolicy"
     end
@@ -487,6 +511,10 @@ function _predict_action(π::RandomRDEPolicy, state::AbstractVector{T}) where {T
         return [action1, action2]
     elseif π.env.action_strat isa ScalarPressureAction
         return action2
+    elseif π.env.action_strat isa DirectScalarPressureAction
+        return rand(T) * π.env.u_pmax
+    elseif π.env.action_strat isa DirectVectorPressureAction
+        return rand(T, π.env.action_strat.n_sections) .* π.env.u_pmax
     else
         @error "Unknown action type $(typeof(π.env.action_strat)) for RandomRDEPolicy"
     end
@@ -534,6 +562,14 @@ function _predict_action(π::DelayedPolicy, s::Union{AbstractVector{T}, Matrix{T
             return zero(T)
         elseif π.env.action_strat isa VectorPressureAction
             return zeros(T, π.env.action_strat.n_sections)
+        elseif π.env.action_strat isa DirectScalarPressureAction
+            u_p = mean(π.env.prob.method.cache.u_p_current)
+            return clamp(u_p, zero(T), π.env.u_pmax)
+        elseif π.env.action_strat isa DirectVectorPressureAction
+            N = π.env.prob.params.N
+            points_per_section = N ÷ π.env.action_strat.n_sections
+            controls = π.env.prob.method.cache.u_p_current[1:points_per_section:end]
+            return clamp.(controls, zero(T), π.env.u_pmax)
         elseif π.env.action_strat isa LinearScalarPressureAction ||
                 π.env.action_strat isa LinearVectorPressureAction ||
                 π.env.action_strat isa LinearScalarPressureWithDtAction

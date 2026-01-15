@@ -1,20 +1,13 @@
-@testitem "DRiLExt Single env methods" begin
+@testitem "DRiL Single env methods" begin
     using DRiL
     using RDE
 
-    # Helper functions
-    function get_dril_ext()
-        return Base.get_extension(RDE_Env, :RDE_EnvDRiLExt)
-    end
-
     function get_env()
         env = RDEEnv(
-            observation_strat = SectionedStateObservation(),
-            action_strat = ScalarPressureAction(),
+            observation_strat = FullStateObservation(),
+            action_strat = DirectScalarPressureAction(),
             params = RDEParam(N = 512, tmax = 100.0f0)
         )
-        DRiLExt = get_dril_ext()
-        env = DRiLExt.DRiLRDEEnv(env)
         return env
     end
 
@@ -42,23 +35,16 @@
     @test test_single_env_usage(env)
 end
 
-@testitem "DRiLExt single env usage" begin
+@testitem "DRiL single env usage" begin
     using DRiL
     using RDE
 
-    # Helper functions
-    function get_dril_ext()
-        return Base.get_extension(RDE_Env, :RDE_EnvDRiLExt)
-    end
-
     function get_env()
         env = RDEEnv(
-            observation_strat = SectionedStateObservation(),
-            action_strat = ScalarPressureAction(),
+            observation_strat = FullStateObservation(),
+            action_strat = DirectScalarPressureAction(),
             params = RDEParam(N = 512, tmax = 100.0f0)
         )
-        DRiLExt = get_dril_ext()
-        env = DRiLExt.DRiLRDEEnv(env)
         return env
     end
 
@@ -94,25 +80,19 @@ end
     @test test_parallel_env_usage(norm_env)
 end
 
-@testitem "DRiLExt multi-agent env" begin
+@testitem "DRiL multi-agent env" begin
     using DRiL
     using RDE
 
-    # Helper functions
-    function get_dril_ext()
-        return Base.get_extension(RDE_Env, :RDE_EnvDRiLExt)
-    end
-
     function get_multi_agent_env()
+        n_sections = 4
         env = RDEEnv(
-            observation_strat = MultiCenteredObservation(n_sections = 4),
-            action_strat = VectorPressureAction(n_sections = 4),
-            reward_strat = MultiSectionPeriodMinimumReward(n_sections = 4, lowest_action_magnitude_reward = 0.0f0, weights = [1.0f0, 1.0f0, 5.0f0, 1.0f0]),
+            observation_strat = MultiCenteredObservation(n_sections = n_sections),
+            action_strat = DirectVectorPressureAction(n_sections = n_sections),
+            reward_strat = ScalarToVectorReward(USpanReward(), n_sections),
             params = RDEParam(N = 512, tmax = 100.0f0)
         )
-        DRiLExt = get_dril_ext()
-        env = DRiLExt.DRiLMultiAgentRDEEnv(env)
-        return env
+        return MultiAgentRDEEnv(env)
     end
 
     function test_parallel_env_usage(env)
@@ -142,25 +122,19 @@ end
     @test test_parallel_env_usage(env)
 end
 
-@testitem "DRiLExt multi-agent env usage" begin
+@testitem "DRiL multi-agent env usage" begin
     using DRiL
     using RDE
 
-    # Helper functions
-    function get_dril_ext()
-        return Base.get_extension(RDE_Env, :RDE_EnvDRiLExt)
-    end
-
     function get_multi_agent_env()
+        n_sections = 4
         env = RDEEnv(
-            observation_strat = MultiCenteredObservation(n_sections = 4),
-            action_strat = VectorPressureAction(n_sections = 4),
-            reward_strat = MultiSectionPeriodMinimumReward(n_sections = 4, lowest_action_magnitude_reward = 0.0f0, weights = [1.0f0, 1.0f0, 5.0f0, 1.0f0]),
+            observation_strat = MultiCenteredObservation(n_sections = n_sections),
+            action_strat = DirectVectorPressureAction(n_sections = n_sections),
+            reward_strat = ScalarToVectorReward(USpanReward(), n_sections),
             params = RDEParam(N = 512, tmax = 100.0f0)
         )
-        DRiLExt = get_dril_ext()
-        env = DRiLExt.DRiLMultiAgentRDEEnv(env)
-        return env
+        return MultiAgentRDEEnv(env)
     end
 
     function test_parallel_env_usage(env)
@@ -186,24 +160,18 @@ end
     @test test_parallel_env_usage(norm_env)
 end
 
-@testitem "DRiLExt SAVA env" begin
+@testitem "DRiL SAVA env" begin
     using DRiL
     using RDE
 
-    # Helper functions
-    function get_dril_ext()
-        return Base.get_extension(RDE_Env, :RDE_EnvDRiLExt)
-    end
-
     function get_SAVA_env()
+        n_sections = 4
         env = RDEEnv(
-            observation_strat = SectionedStateObservation(),
-            action_strat = VectorPressureAction(n_sections = 4),
-            reward_strat = PeriodMinimumReward(),
+            observation_strat = FullStateObservation(),
+            action_strat = DirectVectorPressureAction(n_sections = n_sections),
+            reward_strat = ScalarToVectorReward(USpanReward(), n_sections),
             params = RDEParam(N = 512, tmax = 100.0f0)
         )
-        DRiLExt = get_dril_ext()
-        env = DRiLExt.DRiLRDEEnv(env)
         return env
     end
 
@@ -218,24 +186,18 @@ end
     @test hasmethod(DRiL.truncated, (typeof(env),))
 end
 
-@testitem "DRiLExt SAVA env usage" begin
+@testitem "DRiL SAVA env usage" begin
     using DRiL
     using RDE
 
-    # Helper functions
-    function get_dril_ext()
-        return Base.get_extension(RDE_Env, :RDE_EnvDRiLExt)
-    end
-
     function get_SAVA_env()
+        n_sections = 4
         env = RDEEnv(
-            observation_strat = SectionedStateObservation(),
-            action_strat = VectorPressureAction(n_sections = 4),
-            reward_strat = PeriodMinimumReward(),
+            observation_strat = FullStateObservation(),
+            action_strat = DirectVectorPressureAction(n_sections = n_sections),
+            reward_strat = ScalarToVectorReward(USpanReward(), n_sections),
             params = RDEParam(N = 512, tmax = 100.0f0)
         )
-        DRiLExt = get_dril_ext()
-        env = DRiLExt.DRiLRDEEnv(env)
         return env
     end
 

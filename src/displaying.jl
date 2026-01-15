@@ -30,6 +30,16 @@ function Base.show(io::IO, ::MIME"text/plain", ::StateObservation)
     return nothing
 end
 
+function Base.show(io::IO, ::FullStateObservation)
+    print(io, "FullStateObservation()")
+    return nothing
+end
+
+function Base.show(io::IO, ::MIME"text/plain", ::FullStateObservation)
+    println(io, "FullStateObservation: returns raw [u; λ]")
+    return nothing
+end
+
 function Base.show(io::IO, obs::FourierObservation)
     print(io, "FourierObservation(fft_terms=$(obs.fft_terms))")
     return nothing

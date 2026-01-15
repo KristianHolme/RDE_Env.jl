@@ -179,13 +179,13 @@ function interactive_control(
     is_vector_action = action_strat isa DirectVectorPressureAction
     n_sections = is_vector_action ? action_strat.n_sections : 1
 
-    # action_obs holds current action(s) in [-1, 1]
+    # action_obs holds current action(s) in [0, u_pmax]
     init_action_value = mean(env.prob.method.cache.u_p_current)
     action_obs = is_vector_action ? Observable(fill(init_action_value, n_sections)) : Observable(init_action_value)
 
     # Slider grid: action slider(s) + dt
     minimum_action = T(0)
-    maximum_action = T(1.2)
+    maximum_action = env.u_pmax
     if is_vector_action
         # Build per-section action sliders
         slider_configs = [(label = "u_p_$(i)", range = minimum_action:T(0.001):maximum_action, startvalue = action_obs[][i]) for i in 1:n_sections]

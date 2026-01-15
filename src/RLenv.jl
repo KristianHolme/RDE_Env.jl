@@ -31,9 +31,9 @@ RDEEnv{T}(;
     
     τ_smooth=1.25,
     fft_terms::Int=32,
-    observation_strat::AbstractObservationStrategy=FourierObservation(fft_terms),
-    action_strat::AbstractActionStrategy=ScalarPressureAction(),
-    reward_strat::AbstractRewardStrategy=ShockSpanReward(target_shock_count=3),
+    observation_strat::AbstractObservationStrategy=FullStateObservation(),
+    action_strat::AbstractActionStrategy=DirectScalarPressureAction(),
+    reward_strat::AbstractRewardStrategy=USpanReward(),
     verbose::Bool=true,
     kwargs...
 ) where {T<:AbstractFloat}
@@ -50,9 +50,9 @@ function RDEEnv(;
         u_pmax = 1.2f0,
         params::RDEParam{T} = RDEParam(),
         τ_smooth = 0.1f0,
-        action_strat::A = ScalarPressureAction(),
-        observation_strat::O = SectionedStateObservation(),
-        reward_strat::RW = PeriodMinimumReward(),
+        action_strat::A = DirectScalarPressureAction(),
+        observation_strat::O = FullStateObservation(),
+        reward_strat::RW = USpanReward(),
         goal_strat::G = FixedTargetGoal(2),
         verbose::Bool = false,
         kwargs...
@@ -132,10 +132,6 @@ _observe(env::RDEEnv) = copy(env.observation)
 
 @inline get_saveat(env::RDEEnv{T}, saves_per_action::Int) where {T <: AbstractFloat} = saves_per_action == 0 ? nothing : (env.dt / saves_per_action)
 
-# function step_env!(env::RDEEnv{T, A, O, R, G, V, OBS}; saves_per_action::Int = 10) where {T <: AbstractFloat, A, O, R, G, V, OBS}
-#     return _step!(env, env.prob.method; saves_per_action = saves_per_action)
-# end
-
 function solve_step(env::RDEEnv{T, A, O, R, G, V, OBS}; saves_per_action::Int = 10) where {T <: AbstractFloat, A, O, R, G, V, OBS}
     t0, t1 = env.ode_problem.tspan::Tuple{T, T}
     saveat = collect(range(t0, t1; length = saves_per_action + 1))
@@ -145,53 +141,6 @@ function solve_step(env::RDEEnv{T, A, O, R, G, V, OBS}; saves_per_action::Int = 
     end
     return sol
 end
-
-#= function _step!(env::RDEEnv{T, A, O, R, G, V, OBS, M, RS, C}, ::RDE.FiniteVolumeMethod{T}; saves_per_action::Int = 10) where {T <: AbstractFloat, A, O, R, G, V, OBS, M, RS, C}
-    # Assertions
-    prob = env.prob
-    params = prob.params::RDEParam{T}
-    method_cache = prob.method.cache
-    ode_u0 = env.ode_problem.u0::Vector{T}
-    u0_view = @view ode_u0[1:params.N]
-    @assert all(isfinite, u0_view) "Non-finite values found in u0_view: $(u0_view)"
-
-    dtmax0 = RDE.cfl_dtmax(params, u0_view, method_cache)
-    # @assert isfinite(dtmax0) && dtmax0 > 0 "Invalid dt computed: dtmax0 = $dtmax0"
-    @assert saves_per_action ≥ 1 "saves_per_action must be non-negative"
-
-    # Use the new helper
-    t0, t1 = env.ode_problem.tspan::Tuple{T, T}
-    saveat = collect(range(t0, t1; length = saves_per_action + 1))
-    # CFL logic: limit step size using official callback
-    cfl_cb = StepsizeLimiter(RDE.cfl_dtFE; safety_factor = T(0.62), max_step = true, cached_dtcache = zero(T))
-
-
-    sol = OrdinaryDiffEq.solve(env.ode_problem, SSPRK33(); adaptive = false, dt = dtmax0, saveat = saveat, isoutofdomain = RDE.outofdomain, callback = cfl_cb)
-    if sol.retcode != :Success
-        @warn "Failed to solve PDE step for FiniteVolumeMethod"
-    end
-
-    # Environment-specific updates
-    env.prob.sol = sol
-    return sol
-end
-
-
-function _step!(env::RDEEnv{T, A, O, R, G, V, OBS}, ::RDE.AbstractMethod; saves_per_action::Int = 10) where {T <: AbstractFloat, A, O, R, G, V, OBS}
-    @assert saves_per_action ≥ 1 "saves_per_action must be non-negative"
-    # Use the new helper for other methods
-    t0, t1 = env.ode_problem.tspan::Tuple{T, T}
-    saveat = collect(range(t0, t1; length = saves_per_action + 1))
-    # Limit adaptive steps by CFL in the Tsit5 branch as well
-    sol = OrdinaryDiffEq.solve(env.ode_problem, Tsit5(); adaptive = true, saveat = saveat, isoutofdomain = RDE.outofdomain)
-    if sol.retcode != :Success
-        @warn "Failed to solve PDE step for $(typeof(env.prob.method))"
-    end
-
-    # Environment-specific updates
-    env.prob.sol = sol
-    return sol
-end =#
 
 function _act_postprocessing!(env::RDEEnv{T}, sol::SciMLBase.ODESolution) where {T <: AbstractFloat}
     tvec = sol.t::Vector{T}
@@ -288,54 +237,6 @@ function _act!(env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}, action; saves_per_
     if saves_per_action > 0 && length(sol.t) != saves_per_action + 1
         @debug "length(sol.t) ($(length(sol.t))) != saves_per_action + 1 ($(saves_per_action + 1)), at tspan=$(t_span)"
     end
-    # tvec = sol.t::Vector{T}
-    # sol_u = sol.u::Vector{Vector{T}}
-    # last_u = sol_u[end]
-
-    # if env.prob.control_shift_strategy isa MovingFrameControlShift
-    #     required_saves_per_action = ceil(Int, dt / 0.3f0) # 0.3f0 is safe step to capture shock speeds
-    #     saves_per_action = max(saves_per_action, required_saves_per_action)
-    # end
-
-    #TODO: factor out this
-    # #Check termination caused by ODE solver
-    # if !SciMLBase.successful_retcode(sol) || any(isnan, last_u)
-    #     if any(isnan, last_u)
-    #         @warn "NaN state detected"
-    #     end
-    #     env.terminated = true
-    #     env.done = true
-    #     set_termination_reward!(env, -100.0)
-    #     env.info["Termination.Reason"] = "ODE solver failed"
-    #     env.info["Termination.ReturnCode"] = sol.retcode
-    #     env.info["Termination.env_t"] = env.t
-    #     @logmsg LogLevel(-500) "ODE solver failed, t=$(env.t), terminating"
-    # else #advance environment
-    #     prob.sol = sol::SciMLBase.ODESolution #TODO: this is already done
-    #     env.t = tvec[end]::T
-    #     env.state .= last_u
-
-    #     env.steps_taken += 1
-
-    #     set_reward!(env, env.reward_strat)
-    #     compute_observation!(env.observation, env, env.observation_strat)
-    #     if env.terminated #maybe reward caused termination
-    #         # set_termination_reward!(env, -2.0)
-    #         env.done = true
-    #         @logmsg LogLevel(-10000) "termination caused by reward"
-    #         @logmsg LogLevel(-500) "terminated, t=$(env.t), from reward?"
-    #     elseif env.t ≥ env.prob.params.tmax #dont mark as truncated if terminated by reward or solver
-    #         env.done = true
-    #         env.truncated = true
-    #         @logmsg LogLevel(-10000) "tmax reached, t=$(env.t)"
-    #         env.info["Truncation.Reason"] = "tmax reached"
-    #     end
-    # end
-
-    # if env.done != xor(env.truncated, env.terminated)
-    #     @warn "done is not xor(truncated, terminated), at t=$(env.t)" env.done, env.truncated, env.terminated
-    #     @info "info: $(env.info)"
-    # end
 
     _act_postprocessing!(env, sol)
     return env.reward

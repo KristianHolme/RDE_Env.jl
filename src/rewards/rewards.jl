@@ -197,6 +197,19 @@ end
 # ============================================================================
 
 # ----------------------------------------------------------------------------
+# USpanReward
+# ----------------------------------------------------------------------------
+
+struct USpanReward <: AbstractScalarRewardStrategy end
+
+function _compute_reward(env::RDEEnv{T, A, O, R, G, V, OBS}, ::USpanReward, ::NoCache) where {T, A, O, R, G, V, OBS}
+    N = env.prob.params.N
+    u = @view env.state[1:N]
+    u_min, u_max = RDE.turbo_extrema(u)
+    return u_max - u_min
+end
+
+# ----------------------------------------------------------------------------
 # ShockSpanReward
 # ----------------------------------------------------------------------------
 

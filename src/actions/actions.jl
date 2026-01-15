@@ -334,7 +334,11 @@ function apply_action!(env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}, action::T)
 
     copyto!(method_cache.u_p_previous, method_cache.u_p_current)
 
-    method_cache.u_p_current .= momentum_target(action, method_cache.u_p_current[1], momentum(env.action_strat))
+    if action < zero(T) || action > env.u_pmax
+        @warn "direct action (u_p) out of bounds [0, u_pmax]"
+    end
+    clamped_action = clamp(action, zero(T), env.u_pmax)
+    method_cache.u_p_current .= momentum_target(clamped_action, method_cache.u_p_current[1], momentum(env.action_strat))
     copyto!(method_cache.s_previous, method_cache.s_current)
     return nothing
 end
@@ -375,6 +379,10 @@ function apply_action!(env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}, action::Ab
     method_cache = env.prob.method.cache
     env_cache = env.cache
 
+    if any(action .< zero(T)) || any(action .> env.u_pmax)
+        @warn "direct action out of bounds [0, u_pmax]"
+    end
+
     copyto!(method_cache.u_p_previous, method_cache.u_p_current)
 
 
@@ -384,7 +392,8 @@ function apply_action!(env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}, action::Ab
     current_section_controls = @view method_cache.u_p_current[1:points_per_section:end]
     @assert env_cache.action_cache isa VectorActionCache{T}
     section_controls = env_cache.action_cache.section_controls
-    section_controls .= momentum_target.(action, current_section_controls, momentum(env.action_strat))
+    clamped_action = clamp.(action, zero(T), env.u_pmax)
+    section_controls .= momentum_target.(clamped_action, current_section_controls, momentum(env.action_strat))
     # Fill each section with its corresponding action value, directly writing into method_cache.u_p_current (no new allocation)
     for i in 1:action_strat.n_sections
         start_idx = (i - 1) * points_per_section + 1

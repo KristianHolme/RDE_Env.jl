@@ -6,7 +6,7 @@ A Julia module providing a reinforcement learning environment interface for the 
 
 ## Overview
 
-RDE_Env wraps the RDE simulation in a reinforcement learning environment with package extensions for both DRiL.jl and CommonRLInterface.jl. It provides:
+RDE_Env wraps the RDE simulation in a reinforcement learning environment built for DRiL.jl. It provides:
 - Various action spaces for controlling RDE parameters
 - Multiple observation strategies
 - Customizable reward functions
@@ -27,11 +27,11 @@ using RDE_Env
 
 # Create a basic environment
 env = RDEEnv(
-    dt=0.5f0,                                    # Time step
-    τ_smooth=0.01f0,                             # Control smoothing time constant
-    observation_strat=FourierObservation(16),  # Use 16 Fourier modes as observation
-    action_strat=ScalarPressureAction(),          # Single pressure control
-    reward_strat=PeriodicityReward()              # Reward based on wave stability
+    dt=0.5f0,                                  # Time step
+    τ_smooth=0.01f0,                           # Control smoothing time constant
+    observation_strat=FullStateObservation(), # Raw u, λ state
+    action_strat=DirectScalarPressureAction(), # Direct pressure control
+    reward_strat=USpanReward()                 # Span of u
 )
 
 # Run a random policy
@@ -45,39 +45,24 @@ plot_policy_data(data, env)
 ## Components
 
 ### Action Types
-- `ScalarPressureAction`: Single pressure control
-- `ScalarAreaScalarPressureAction`: Independent area and pressure control
-- `VectorPressureAction`: Multiple pressure controls along the domain (for multi-agent setups)
-- `PIDAction`: PID controller-based action
+- `DirectScalarPressureAction`: Direct scalar pressure control
+- `DirectVectorPressureAction`: Direct per-section pressure control
 
 ### Observation Strategies
 
 **Single-Agent:**
-- `StateObservation`: Full state observation
-- `FourierObservation`: Fourier modes of the state
-- `SampledStateObservation`: Sampled points from the state
-- `SectionedStateObservation`: State divided into sections with aggregated features
-- `CompositeObservation`: FFT features + shock count + span metrics
-- `MeanInjectionPressureObservation`: Mean injection pressure only
+- `FullStateObservation`: Raw `[u; λ]` state
 
 **Multi-Agent:**
-- `MultiSectionObservation`: Each agent observes a section with look-ahead
 - `MultiCenteredObservation`: Each agent observes the full domain centered on their section
 
 ### Reward Types
 
 **Single-Agent:**
-- `PeriodicityReward`: Rewards stable wave patterns
-- `ShockSpanReward`: Rewards specific shock spacing
-- `ShockPreservingReward`: Rewards maintaining shock count
-- `PeriodMinimumReward`: Rewards based on period-averaged minimum pressure
-- `CompositeReward`: Combination of multiple reward components
-- `ExponentialAverageReward`: Exponentially weighted reward averaging
-- `TransitionBasedReward`: Rewards based on state transitions
+- `USpanReward`: Rewards span of `u`
 
 **Multi-Agent:**
-- `MultiSectionReward`: Section-wise composite rewards
-- `MultiSectionPeriodMinimumReward`: Period minimum reward per section
+- `ScalarToVectorReward`: Wrap a scalar reward into per-agent values
 
 ### Policies
 - `StepwiseRDEPolicy`: Predefined control sequence
@@ -90,25 +75,24 @@ plot_policy_data(data, env)
 - `DelayedPolicy`: Wrapper to delay policy activation
 
 ## Advanced Features
+# Extra strategy variants
+
+Additional action, observation, and reward strategy variants are maintained in the project repository and are available via `DRL_RDE.RDE_Env_Strategies`.
 
 ### DRiL.jl Integration
 
-RDE_Env provides a package extension for seamless integration with [DRiL.jl](https://github.com/KristianHolme/DRiL.jl):
+`RDEEnv` directly implements the [DRiL.jl](https://github.com/KristianHolme/DRiL.jl) environment interface:
 
 ```julia
 using RDE_Env
-using DRiL  # This automatically loads the extension
+using DRiL
 
 # Create base environment
-base_env = RDEEnv(
+env = RDEEnv(
     observation_strat = FourierObservation(16),
     action_strat = ScalarPressureAction(),
     params = RDEParam(N = 512, tmax = 100.0f0)
 )
-
-# Wrap for DRiL interface
-DRiLExt = Base.get_extension(RDE_Env, :RDE_EnvDRiLExt)
-env = DRiLExt.DRiLRDEEnv(base_env)
 
 # Create parallel environment for training
 parallel_env = BroadcastedParallelEnv([env for _ in 1:4])
@@ -144,8 +128,7 @@ base_env = RDEEnv(
 )
 
 # Wrap for DRiL multi-agent interface
-DRiLExt = Base.get_extension(RDE_Env, :RDE_EnvDRiLExt)
-env = DRiLExt.DRiLMultiAgentRDEEnv(base_env)
+env = MultiAgentRDEEnv(base_env)
 
 # Create parallel multi-agent environment (multiple instances of multi-agent env)
 parallel_env = MultiAgentParallelEnv([env for _ in 1:4])
