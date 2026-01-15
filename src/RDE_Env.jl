@@ -23,10 +23,10 @@ export action_dim, _reset_action!, set_N!
 export compute_observation, get_init_observation
 export set_reward!
 export RDEEnv, RDEEnvCache
-export AbstractCache, NoCache, CompositeRewardCache, initialize_cache, reset_cache!
+export AbstractCache, NoCache, initialize_cache, reset_cache!
 export AbstractGoalStrategy
 include("utils.jl")
-export sigmoid_to_linear, reward_sigmoid, sigmoid, linear_to_sigmoid, get_plotting_speed_adjustments
+export get_plotting_speed_adjustments
 
 # goals
 include("goals.jl")
@@ -59,15 +59,9 @@ include("dril_interface.jl")
 export MultiAgentRDEEnv
 
 include("policies.jl")
-export AbstractRDEPolicy, StepwiseRDEPolicy, RandomRDEPolicy, ConstantRDEPolicy, SinusoidalRDEPolicy,
-    DelayedPolicy, LinearPolicy, get_env, SawtoothPolicy
-export reset_pid_cache!, _predict_action
-
-
-# Policies
+export AbstractRDEPolicy, get_env
 export PolicyRunData, run_policy
-export ConstantRDEPolicy, SinusoidalRDEPolicy, StepwiseRDEPolicy, RandomRDEPolicy
-export ScaledPolicy
+export _predict_action
 
 # Plotting
 include("plotting.jl")
