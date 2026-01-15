@@ -1,6 +1,3 @@
-using RDE_Env
-using Test
-using TestItems
 using TestItemRunner
 
 @testitem "Code quality (Aqua.jl)" tags = [:quality] begin
