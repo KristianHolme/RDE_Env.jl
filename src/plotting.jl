@@ -133,6 +133,7 @@ function plot_policy_data(
     main_layout = fig[1, 1] = GridLayout()
     upper_area = main_layout[1, 1] = GridLayout() #title, time
     system_plot_layout = main_layout[2, 1] = GridLayout()
+    metrics_action_layout = nothing
     if control_history || energy_and_chamber_pressure || rewards_and_shocks
         metrics_action_layout = fig[1, 2] = GridLayout()
     end
@@ -184,7 +185,8 @@ function plot_policy_data(
     if rewards_and_shocks
         metrics_action_layout_plots += 1
         # Add rewards and shocks
-        ax_rewards = Axis(metrics_action_layout[metrics_action_layout_plots, 1], title = "Rewards", ylabel = "r")
+        layout = metrics_action_layout::GridLayout
+        ax_rewards = Axis(layout[metrics_action_layout_plots, 1], title = "Rewards", ylabel = "r")
         hidexdecorations!(ax_rewards, grid = false)
         reward_color = :orange
 
@@ -215,7 +217,8 @@ function plot_policy_data(
         end
         # vlines!(ax_rewards, fine_time, color=:green, alpha=0.5)
         metrics_action_layout_plots += 1
-        ax_shocks = Axis(metrics_action_layout[metrics_action_layout_plots, 1], title = "Shocks", xlabel = "t")
+        layout = metrics_action_layout::GridLayout
+        ax_shocks = Axis(layout[metrics_action_layout_plots, 1], title = "Shocks", xlabel = "t")
         dx = env.prob.x[2] - env.prob.x[1]
         us, = RDE.split_sol(states)
         shocks = RDE.count_shocks.(us, dx)
@@ -231,21 +234,25 @@ function plot_policy_data(
         metrics_action_layout_plots += 1
         plot_s = !(norm(diff(ss)) ≈ 0)
 
-        ax_u_p = Axis(metrics_action_layout[metrics_action_layout_plots, 1], ylabel = "uₚ", yticklabelcolor = :royalblue)
+        layout = metrics_action_layout::GridLayout
+        ax_u_p = Axis(layout[metrics_action_layout_plots, 1], ylabel = "uₚ", yticklabelcolor = :royalblue)
         ylims!(ax_u_p, (0, env.u_pmax * 1.05))
 
+        ax_s = nothing
         if plot_s
             metrics_action_layout_plots += 1
-            ax_s = Axis(metrics_action_layout[metrics_action_layout_plots, 1], xlabel = "t", ylabel = "s", yticklabelcolor = :forestgreen, yaxisposition = :right)
+            ax_s = Axis(layout[metrics_action_layout_plots, 1], xlabel = "t", ylabel = "s", yticklabelcolor = :forestgreen, yaxisposition = :right)
             hidespines!(ax_s)
             hidexdecorations!(ax_s)
             hideydecorations!(ax_s, ticklabels = false, ticks = false, label = false)
         end
 
         if eltype(ss) <: AbstractVector && plot_s
-            lines!.(Ref(ax_s), Ref(action_ts), eachrow(stack(ss)), color = :forestgreen)
+            ax_s_local = ax_s::Axis
+            lines!.(Ref(ax_s_local), Ref(action_ts), eachrow(stack(ss)), color = :forestgreen)
         elseif plot_s
-            lines!(ax_s, action_ts, ss, color = :forestgreen)
+            ax_s_local = ax_s::Axis
+            lines!(ax_s_local, action_ts, ss, color = :forestgreen)
         end
 
         if eltype(u_ps) <: AbstractVector

@@ -2,7 +2,6 @@ module RDE_Env
 using RDE
 using CircularArrays
 using DomainSets
-using FFTW
 using LinearAlgebra
 using Statistics
 using Random
@@ -19,8 +18,8 @@ using ProgressMeter
 include("core.jl")
 export AbstractRDEEnv, AbstractActionStrategy, AbstractObservationStrategy, AbstractMultiAgentObservationStrategy,
     AbstractRewardStrategy
-export action_dim, _reset_action!, set_N!
-export compute_observation, get_init_observation
+export action_dim, _reset_action!
+export compute_observation!, get_init_observation
 export set_reward!
 export RDEEnv, RDEEnvCache
 export AbstractCache, NoCache, initialize_cache, reset_cache!
@@ -53,7 +52,7 @@ export ScalarToVectorReward
 
 # Environment
 include("RLenv.jl")
-export _reset!, _act!, _observe, state, terminated
+export _reset!, _act!, _observe, terminated
 
 include("dril_interface.jl")
 export MultiAgentRDEEnv

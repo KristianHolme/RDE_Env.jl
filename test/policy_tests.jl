@@ -1,5 +1,6 @@
 @testitem "Policy Execution" begin
     using RDE
+    using DRiL
 
     @testset "run_policy with different saves_per_action" begin
         # Setup a small environment for testing
@@ -10,7 +11,7 @@
             params = RDEParam(; N = 32, tmax = 0.05),
             τ_smooth = 0.5,  # Small smoothing time to avoid discontinuities
         )
-        policy = RandomPolicy(env)
+        policy = DRiL.RandomPolicy(env)
 
         # Test with different saves_per_action values
         for saves_per_action in [1, 2, 5]

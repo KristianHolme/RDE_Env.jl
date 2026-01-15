@@ -81,7 +81,7 @@ function interactive_control(
     u_data = Observable(env.state[1:N])
     λ_data = Observable(env.state[(N + 1):end])
     u_max = @lift(maximum($u_data))
-    obs_data = show_observations ? Observable(_observe(env)) : nothing
+    obs_data = Observable(_observe(env))
 
     # energy_bal_pts = Observable(Point2f[(env.t, energy_balance(env.state, params))])
     # chamber_p_pts = Observable(Point2f[(env.t, chamber_pressure(env.state, params))])
