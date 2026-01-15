@@ -53,7 +53,7 @@ function RDEEnv(;
         action_strat::A = DirectScalarPressureAction(),
         observation_strat::O = FullStateObservation(),
         reward_strat::RW = USpanReward(),
-        goal_strat::G = FixedTargetGoal(2),
+        goal_strat::G = NoGoal(),
         verbose::Bool = false,
         kwargs...
     ) where {
@@ -81,12 +81,13 @@ function RDEEnv(;
     )
 
     #TODO should do this somewhere else
-    if observation_strat isa MultiCenteredMovingFrameObservation || observation_strat isa SectionedStateMovingFrameObservation
-        control_shift_strategy = MovingFrameControlShift()
-    else
-        control_shift_strategy = ZeroControlShift()
-    end
-    prob = RDEProblem(params; control_shift_strategy, kwargs...)
+    # if observation_strat isa MultiCenteredMovingFrameObservation || observation_strat isa SectionedStateMovingFrameObservation
+    #     control_shift_strategy = MovingFrameControlShift()
+    # else
+    #     control_shift_strategy = ZeroControlShift()
+    # end
+    #TODO: remember to supply control shift strategy in kwargs if applicable
+    prob = RDEProblem(params; kwargs...)
     initial_state = vcat(prob.u0, prob.λ0)
     ode_problem = ODEProblem{true, SciMLBase.FullSpecialize}(RDE_RHS!, initial_state, (zero(T), dt), prob)
 
@@ -282,7 +283,7 @@ function _reset!(env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}) where {T, A, O, 
     RDE.reset_cache!(env.prob.method.cache, τ_smooth = env.τ_smooth, params = env.prob.params)
     #reset caches
     reset_cache!(env.cache)
-    update_goal!(env.cache.goal_cache, env.goal_strat, env)
+    on_reset!(env.cache.goal_cache, env.goal_strat, env)
     env.prob.sol = nothing
     # Initialize previous state
     N = env.prob.params.N

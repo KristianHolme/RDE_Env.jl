@@ -1,3 +1,5 @@
+using RDE_Env
+
 @testitem "DRiL Single env methods" begin
     using DRiL
     using RDE
@@ -87,7 +89,7 @@ end
     function get_multi_agent_env()
         n_sections = 4
         env = RDEEnv(
-            observation_strat = MultiCenteredObservation(n_sections = n_sections),
+            observation_strat = FullStateCenteredObservation(n_sections = n_sections),
             action_strat = DirectVectorPressureAction(n_sections = n_sections),
             reward_strat = ScalarToVectorReward(USpanReward(), n_sections),
             params = RDEParam(N = 512, tmax = 100.0f0)
@@ -129,7 +131,7 @@ end
     function get_multi_agent_env()
         n_sections = 4
         env = RDEEnv(
-            observation_strat = MultiCenteredObservation(n_sections = n_sections),
+            observation_strat = FullStateCenteredObservation(n_sections = n_sections),
             action_strat = DirectVectorPressureAction(n_sections = n_sections),
             reward_strat = ScalarToVectorReward(USpanReward(), n_sections),
             params = RDEParam(N = 512, tmax = 100.0f0)
@@ -169,7 +171,7 @@ end
         env = RDEEnv(
             observation_strat = FullStateObservation(),
             action_strat = DirectVectorPressureAction(n_sections = n_sections),
-            reward_strat = ScalarToVectorReward(USpanReward(), n_sections),
+            reward_strat = USpanReward(),
             params = RDEParam(N = 512, tmax = 100.0f0)
         )
         return env
@@ -195,7 +197,7 @@ end
         env = RDEEnv(
             observation_strat = FullStateObservation(),
             action_strat = DirectVectorPressureAction(n_sections = n_sections),
-            reward_strat = ScalarToVectorReward(USpanReward(), n_sections),
+            reward_strat = USpanReward(),
             params = RDEParam(N = 512, tmax = 100.0f0)
         )
         return env
@@ -206,6 +208,7 @@ end
         obs = observe(env)
         action = rand(action_space(env))
         reward = act!(env, action)
+        @test reward isa Float32
         random_obs = rand(observation_space(env))
         reset!(env)
         terminated(env)
@@ -224,6 +227,8 @@ end
         reset!(env)
         terminated(env)
         truncated(env)
+        @test rewards isa Vector{Float32}
+        @test length(rewards) == number_of_envs(env)
         return true
     end
 

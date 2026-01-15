@@ -54,7 +54,7 @@ plot_policy_data(data, env)
 - `FullStateObservation`: Raw `[u; λ]` state
 
 **Multi-Agent:**
-- `MultiCenteredObservation`: Each agent observes the full domain centered on their section
+- `FullStateCenteredObservation`: Raw full state centered per section
 
 ### Reward Types
 
@@ -121,9 +121,9 @@ using DRiL
 
 # Create multi-agent base environment
 base_env = RDEEnv(
-    observation_strat = MultiCenteredObservation(n_sections = 4),
-    action_strat = VectorPressureAction(n_sections = 4),
-    reward_strat = MultiSectionPeriodMinimumReward(n_sections = 4),
+    observation_strat = FullStateCenteredObservation(n_sections = 4),
+    action_strat = DirectVectorPressureAction(n_sections = 4),
+    reward_strat = ScalarToVectorReward(USpanReward(), 4),
     params = RDEParam(N = 512, tmax = 100.0f0)
 )
 

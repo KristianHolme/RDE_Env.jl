@@ -9,11 +9,8 @@
             u_pmax = 1.2,
             params = RDEParam(; N = 32, tmax = 0.05),
             τ_smooth = 0.5,  # Small smoothing time to avoid discontinuities
-            observation_strat = FourierObservation(8),
-            action_strat = ScalarPressureAction(),
-            reward_strat = CompositeReward()
         )
-        policy = RandomRDEPolicy(env)
+        policy = RandomPolicy(env)
 
         # Test with different saves_per_action values
         for saves_per_action in [1, 2, 5]

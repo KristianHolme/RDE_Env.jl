@@ -13,7 +13,6 @@ using DRiL
 using Makie
 using Observables
 # using Polyester
-# using POMDPTools
 using PrecompileTools
 using ProgressMeter
 
@@ -25,14 +24,13 @@ export compute_observation, get_init_observation
 export set_reward!
 export RDEEnv, RDEEnvCache
 export AbstractCache, NoCache, CompositeRewardCache, initialize_cache, reset_cache!
-export get_target_shock_count, set_target_shock_count!
-export AbstractGoalStrategy, AbstractGoalCache
+export AbstractGoalStrategy
 include("utils.jl")
 export sigmoid_to_linear, reward_sigmoid, sigmoid, linear_to_sigmoid, get_plotting_speed_adjustments
 
 # goals
 include("goals.jl")
-export FixedTargetGoal
+export NoGoal
 
 # Actions
 include("actions/actions.jl")
@@ -45,7 +43,7 @@ export MovingFrameControlShift
 # Observation strategies
 include("observations/observations.jl")
 export
-    FullStateObservation, MultiCenteredObservation
+    FullStateObservation, FullStateCenteredObservation
 
 # Rewards
 include("rewards/rewards.jl")
@@ -62,7 +60,7 @@ export MultiAgentRDEEnv
 
 include("policies.jl")
 export AbstractRDEPolicy, StepwiseRDEPolicy, RandomRDEPolicy, ConstantRDEPolicy, SinusoidalRDEPolicy,
-    DelayedPolicy, LinearPolicy, get_env, SawtoothPolicy, PIDControllerPolicy
+    DelayedPolicy, LinearPolicy, get_env, SawtoothPolicy
 export reset_pid_cache!, _predict_action
 
 
@@ -90,7 +88,8 @@ include("displaying.jl")
             observation_strat = FullStateObservation(),
             action_strat = DirectScalarPressureAction()
         )
-        policy = RandomRDEPolicy(env)
+
+        policy = DRiL.RandomPolicy(env)
         data = run_policy(policy, env)
     catch e
         rethrow(e)

@@ -100,38 +100,13 @@ initialize_cache(::Any, ::Int, ::Type{T}) where {T} = NoCache()
 
 # goals
 abstract type AbstractGoalStrategy end
-abstract type AbstractGoalCache <: AbstractCache end
-
-mutable struct GoalCache <: AbstractGoalCache
-    target_shock_count::Int
-end
 
 """
-    update_goal!(cache::AbstractGoalCache, goal::AbstractGoalStrategy, env::AbstractRDEEnv)
+    on_reset!(cache::AbstractCache, goal::AbstractGoalStrategy, env::AbstractRDEEnv)
 
 Update the goal cache. Called when environment is reset.
 """
-function update_goal! end
-
-"""
-    get_target_shock_count(goal_strat::AbstractGoalStrategy, env::AbstractRDEEnv)
-
-Get the target shock count from the goal strategy.
-"""
-function get_target_shock_count end
-
-"""
-    set_target_shock_count!(goal_strat::AbstractGoalStrategy, env::AbstractRDEEnv, v::Int)
-Set the target shock count from the goal strategy.
-"""
-function set_target_shock_count! end
-
-"""
-    get_target_shock_count(env::AbstractRDEEnv) -> Int
-Get the target shock count from the goal strategy.
-"""
-get_target_shock_count(env::AbstractRDEEnv) = get_target_shock_count(env.goal_strat, env)
-set_target_shock_count!(env::AbstractRDEEnv, v::Int) = set_target_shock_count!(env.goal_strat, env, v)
+function on_reset! end
 
 ## env
 """

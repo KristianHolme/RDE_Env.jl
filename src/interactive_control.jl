@@ -16,24 +16,21 @@ Create an interactive visualization and control interface for an RDE simulation.
 - `→`: Step simulation forward
 - `↑`: Increase timestep
 - `↓`: Decrease timestep
-- `w`: Increase s parameter (ScalarAreaScalarPressureAction only)
-- `s`: Decrease s parameter (ScalarAreaScalarPressureAction only)
 - `e`: Increase u_p parameter by 0.01 or first section pressure
 - `d`: Decrease u_p parameter by 0.01 or first section pressure
 - `3`: Fine increase u_p parameter by 0.001
 - `c`: Fine decrease u_p parameter by 0.001
 - `r`: Reset simulation
 
-For VectorPressureAction:
+For DirectVectorPressureAction:
 - `e`/`d`: Modify pressure in all sections by 0.01 simultaneously
 - `3`/`c`: Fine control pressure in all sections by 0.001 simultaneously
 - (Individual sections can be controlled via sliders)
 
 ## Interactive Elements
 - Sliders for control parameters based on action type:
-  - ScalarAreaScalarPressureAction: s (0.001 increments), u_p (0.001 increments), and timestep sliders
-  - ScalarPressureAction: u_p (0.001 increments) and timestep sliders
-  - VectorPressureAction: multiple u_p sliders (0.001 increments, one per section) and timestep slider
+  - DirectScalarPressureAction: u_p (0.001 increments) and timestep sliders
+  - DirectVectorPressureAction: multiple u_p sliders (0.001 increments, one per section) and timestep slider
 - Control buttons:
   - Step: Advance simulation by one timestep
   - Reset: Reset simulation to initial state
@@ -55,9 +52,9 @@ env, fig = interactive_control(show_observations=true)
 # Add custom callback
 env, fig = interactive_control(callback=(env)->println("t = \$(env.t)"))
 
-# With VectorPressureAction and MultiSectionObservation (matrix observations)
-env = RDEEnv(action_strat=VectorPressureAction(4), observation_strat=MultiSectionObservation(4))
-env, fig = interactive_control(env, show_observations=true)
+# With DirectVectorPressureAction and FullStateCenteredObservation (matrix observations)
+env = RDEEnv(action_strat = DirectVectorPressureAction(4), observation_strat = FullStateCenteredObservation(4))
+env, fig = interactive_control(env, show_observations = true)
 ```
 
 # Notes
@@ -283,10 +280,8 @@ function interactive_control(
     RDE.main_plotting(
         plotting_area_inner, env.prob.x, u_data, λ_data, env.prob.params;
         u_max = u_max,
-        s = action_strat isa ScalarAreaScalarPressureAction ? control_s : Observable(params.s),
-        u_p = action_strat isa ScalarPressureAction ? control_u_p :
-            action_strat isa ScalarAreaScalarPressureAction ? control_u_p :
-            Observable(params.u_p),
+        s = Observable(params.s),
+        u_p = Observable(params.u_p),
         kwargs...
     )
 

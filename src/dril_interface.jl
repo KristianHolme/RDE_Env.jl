@@ -7,32 +7,8 @@ DRiL.get_info(env::AbstractRDEEnv) = env.info
 DRiL.action_space(env::AbstractRDEEnv) = _action_space(env, env.action_strat)
 DRiL.observation_space(env::AbstractRDEEnv) = _observation_space(env, env.observation_strat)
 
-function _action_space(::RDEEnv, ::ScalarPressureAction)
-    return DRiL.Box([-1.0f0], [1.0f0])
-end
-function _action_space(::RDEEnv, ::ScalarAreaScalarPressureAction)
-    return DRiL.Box([-1.0f0, -1.0f0], [1.0f0, 1.0f0])
-end
-function _action_space(::RDEEnv, action_strat::VectorPressureAction)
-    return DRiL.Box(
-        [-1.0f0 for _ in 1:action_strat.n_sections],
-        [1.0f0 for _ in 1:action_strat.n_sections]
-    )
-end
-function _action_space(::RDEEnv, ::PIDAction)
-    return DRiL.Box([-1.0f0, -1.0f0, -1.0f0], [1.0f0, 1.0f0, 1.0f0])
-end
-function _action_space(::RDEEnv, ::LinearScalarPressureAction)
-    return DRiL.Box([-1.0f0], [1.0f0])
-end
 function _action_space(env::RDEEnv, ::DirectScalarPressureAction)
     return DRiL.Box([0.0f0], [Float32(env.u_pmax)])
-end
-function _action_space(::RDEEnv, action_strat::LinearVectorPressureAction)
-    return DRiL.Box(
-        [-1.0f0 for _ in 1:action_strat.n_sections],
-        [1.0f0 for _ in 1:action_strat.n_sections]
-    )
 end
 function _action_space(env::RDEEnv, action_strat::DirectVectorPressureAction)
     return DRiL.Box(
@@ -40,114 +16,21 @@ function _action_space(env::RDEEnv, action_strat::DirectVectorPressureAction)
         [Float32(env.u_pmax) for _ in 1:action_strat.n_sections]
     )
 end
-function _action_space(::RDEEnv, ::LinearScalarPressureWithDtAction)
-    return DRiL.Box([-1.0f0, -1.0f0], [1.0f0, 1.0f0])
-end
-
-function _observation_space(core_env::RDEEnv, strategy::FourierObservation)
-    N = core_env.prob.params.N
-    n_fft_terms = min(strategy.fft_terms, N ÷ 2 + 1)
-    total_terms = 2 * n_fft_terms + 2
-    low = [[-1.0f0 for _ in 1:(2 * n_fft_terms)]; 0.0f0; 0.0f0]
-    high = [[1.0f0 for _ in 1:(2 * n_fft_terms)]; 1.0f0; 1.0f0]
-    return DRiL.Box(low, high)
-end
-
-function _observation_space(core_env::RDEEnv, ::StateObservation)
-    N = length(core_env.state) ÷ 2
-    low = [[-1.0f0 for _ in 1:N]; 0.0f0; 0.0f0]
-    high = [[1.0f0 for _ in 1:N]; 1.0f0; 1.0f0]
-    return DRiL.Box(low, high)
-end
 
 function _observation_space(core_env::RDEEnv, ::FullStateObservation)
     N = length(core_env.state) ÷ 2
-    bound = 1.0e6f0
+    bound = 1.0f6
     low = [fill(-bound, N); fill(-bound, N)]
     high = [fill(bound, N); fill(bound, N)]
     return DRiL.Box(low, high)
 end
 
-function _observation_space(core_env::RDEEnv, strategy::SectionedStateObservation)
-    minisections = strategy.minisections
-    low = [[0.0f0 for _ in 1:(2 * minisections)]; 0.0f0; 0.0f0]
-    high = [[1.0f0 for _ in 1:(2 * minisections)]; 1.0f0; 1.0f0]
+function _observation_space(core_env::RDEEnv, ::FullStateCenteredObservation)
+    N = length(core_env.state) ÷ 2
+    bound = 1.0f6
+    low = [fill(-bound, N); fill(-bound, N)]
+    high = [fill(bound, N); fill(bound, N)]
     return DRiL.Box(low, high)
-end
-
-function _observation_space(core_env::RDEEnv, strategy::SectionedStateMovingFrameObservation)
-    minisections = strategy.minisections
-    low = [[0.0f0 for _ in 1:(2 * minisections)]; 0.0f0; 0.0f0]
-    high = [[1.0f0 for _ in 1:(2 * minisections)]; 1.0f0; 1.0f0]
-    return DRiL.Box(low, high)
-end
-
-function _observation_space(core_env::RDEEnv, strategy::SampledStateObservation)
-    n_samples = strategy.n_samples
-    low = [[0.0f0 for _ in 1:(2 * n_samples)]; 0.0f0]
-    high = [[1.0f0 for _ in 1:(2 * n_samples)]; 1.0f0]
-    return DRiL.Box(low, high)
-end
-
-function _observation_space(core_env::RDEEnv, strategy::CompositeObservation)
-    N = core_env.prob.params.N
-    n_fft_terms = min(strategy.fft_terms, N ÷ 2 + 1)
-    low = [[-1.0f0 for _ in 1:n_fft_terms]; 0.0f0; 0.0f0; 0.0f0]
-    high = [[1.0f0 for _ in 1:n_fft_terms]; 1.0f0; 1.0f0; 1.0f0]
-    return DRiL.Box(low, high)
-end
-
-function _observation_space(core_env::RDEEnv, ::MeanInjectionPressureObservation)
-    return DRiL.Box([0.0f0], [Float32(core_env.u_pmax)])
-end
-
-function _observation_space(::RDEEnv, strategy::MultiCenteredObservation)
-    obs_length = strategy.minisections * 2 + 2
-    low = [0.0f0 for _ in 1:obs_length]
-    high = [1.0f0 for _ in 1:obs_length]
-    return DRiL.Box(low, high)
-end
-
-function _observation_space(core_env::RDEEnv, strategy::SectionedStateWithPressureHistoryObservation)
-    minisections = strategy.minisections
-    history_length = strategy.history_length
-    obs_length = 2 * minisections + history_length + 2
-    low = [[0.0f0 for _ in 1:(2 * minisections + history_length)]; 0.0f0; 0.0f0]
-    high = [[1.0f0 for _ in 1:(2 * minisections + history_length)]; 1.0f0; 1.0f0]
-    return DRiL.Box(low, high)
-end
-
-function _observation_space(core_env::RDEEnv, strategy::MultiCenteredWithPressureHistoryObservation)
-    minisections = strategy.minisections
-    history_length = strategy.history_length
-    obs_length = 2 * minisections + history_length + 2
-    low = [[0.0f0 for _ in 1:(2 * minisections + history_length)]; 0.0f0; 0.0f0]
-    high = [[1.0f0 for _ in 1:(2 * minisections + history_length)]; 1.0f0; 1.0f0]
-    return DRiL.Box(low, high)
-end
-
-function _observation_space(core_env::RDEEnv, strategy::MultiCenteredMovingFrameObservation)
-    minisections = strategy.minisections
-    obs_length = 2 * minisections + 2
-    low = [0.0f0 for _ in 1:obs_length]
-    high = [1.0f0 for _ in 1:obs_length]
-    return DRiL.Box(low, high)
-end
-
-function _observation_space(core_env::RDEEnv, strategy::MultiCenteredWithIndexObservation)
-    minisections = strategy.minisections
-    obs_length = 2 * minisections + 3
-    low = [0.0f0 for _ in 1:obs_length]
-    high = [1.0f0 for _ in 1:obs_length]
-    return DRiL.Box(low, high)
-end
-
-function _multi_agent_action_space(::RDEEnv, ::VectorPressureAction)
-    return DRiL.Box([-1.0f0], [1.0f0])
-end
-
-function _multi_agent_action_space(::RDEEnv, ::LinearVectorPressureAction)
-    return DRiL.Box([-1.0f0], [1.0f0])
 end
 
 function _multi_agent_action_space(env::RDEEnv, ::DirectVectorPressureAction)
@@ -171,9 +54,6 @@ struct MultiAgentRDEEnv{T, A, O, RW, G, V, OBS, M, RS, C} <: DRiL.AbstractParall
         return new{T, A, O, RW, G, V, OBS, M, RS, C}(core_env, observation_space, action_space, n_envs)
     end
 end
-
-RDE_Env.set_target_shock_count!(env::MultiAgentRDEEnv, target_shock_count::Int) = set_target_shock_count!(env.core_env, target_shock_count)
-RDE_Env.get_target_shock_count(env::MultiAgentRDEEnv) = get_target_shock_count(env.core_env)
 
 function DRiL.reset!(env::MultiAgentRDEEnv)
     return _reset!(env.core_env)
