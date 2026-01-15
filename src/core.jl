@@ -11,16 +11,8 @@ Return the dimension of the action space for the given action type.
 """
 function action_dim end
 
-"""
-    _reset_action!(action_strat::AbstractActionStrategy)
-
-Reset the action type to its initial state. Mainly used for resetting cache. Called when environment is reset.
-"""
-function _reset_action! end
 
 # Constructors
-# PIDAction(; N::Int = 512, target::Float32 = 0.0f0) = PIDAction{Float32}(N = N, target = target)
-
 #Observations
 abstract type AbstractObservationStrategy end
 abstract type AbstractMultiAgentObservationStrategy <: AbstractObservationStrategy end
@@ -77,9 +69,6 @@ function initialize_cache(::AbstractRewardStrategy, ::Int, ::Type{T}) where {T}
     return NoCache()
 end
 
-#TODO: deprecate, remove
-abstract type CachedCompositeReward <: AbstractRewardStrategy end
-abstract type MultiAgentCachedCompositeReward <: CachedCompositeReward end
 
 # Cache API
 abstract type AbstractCache end

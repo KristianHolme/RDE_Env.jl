@@ -5,7 +5,7 @@ abstract type AbstractRDEPolicy <: DRiL.AbstractPolicy end
 """
 function _predict_action end
 
-function _predict_action(policy::DRiL.AbstractPolicy, observation::Vector)
+function _predict_action(policy::DRiL.AbstractPolicy, observation)
     return policy(observation; deterministic = true)
 end
 
@@ -251,44 +251,6 @@ function get_init_rewards(env::RDEEnv{T}, reward_strat::AbstractRewardStrategy, 
     return Vector{reward_strat}(undef, max_steps)
 end
 
-# function get_init_rewards(env::RDEEnv{T}, reward_strat::AbstractRewardStrategy, max_steps::Int) where {T}
-#     return Vector{T}(undef, max_steps)
-# end
-
-# function get_init_rewards(env::RDEEnv{T}, reward_strat::MultiAgentCachedCompositeReward, max_steps::Int) where {T}
-#     # n_section = reward_strat.n_sections
-#     return Vector{Vector{T}}(undef, max_steps)
-# end
-
-# function get_init_rewards(env::RDEEnv{T}, reward_strat::ScalarToVectorReward, max_steps::Int) where {T}
-#     return Vector{Vector{T}}(undef, max_steps)
-# end
-
-# function get_init_rewards(env::RDEEnv{T}, reward_strat::MultiplicativeReward, max_steps::Int) where {T}
-#     # Check if any of the component rewards is a multi-agent reward
-#     if any(r isa MultiAgentCachedCompositeReward for r in reward_strat.rewards)
-#         return Vector{Vector{T}}(undef, max_steps)
-#     else
-#         return Vector{T}(undef, max_steps)
-#     end
-# end
-
-#TODO: remove need for these
-# function get_init_control_data(env::RDEEnv{T}, action_strat::AbstractActionStrategy, max_steps::Int) where {T}
-#     return Vector{T}(undef, max_steps), Vector{T}(undef, max_steps)
-# end
-
-# function get_init_control_data(env::RDEEnv{T}, action_strat::VectorPressureAction, max_steps::Int) where {T}
-#     return Vector{T}(undef, max_steps), Vector{Vector{T}}(undef, max_steps)
-# end
-
-# function get_init_control_data(env::RDEEnv{T}, action_strat::DirectVectorPressureAction, max_steps::Int) where {T}
-#     return Vector{T}(undef, max_steps), Vector{Vector{T}}(undef, max_steps)
-# end
-
-# function get_init_control_data(env::RDEEnv{T}, action_strat::LinearVectorPressureAction, max_steps::Int) where {T}
-#     return Vector{T}(undef, max_steps), Vector{Vector{T}}(undef, max_steps)
-# end
 function get_init_control_data(env::RDEEnv{T}, action_strat::AbstractActionStrategy, max_steps::Int) where {T}
     a_space = DRiL.action_space(env)
     rand_action = rand(a_space)

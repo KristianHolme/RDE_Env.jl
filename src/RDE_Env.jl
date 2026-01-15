@@ -18,7 +18,7 @@ using ProgressMeter
 include("core.jl")
 export AbstractRDEEnv, AbstractActionStrategy, AbstractObservationStrategy, AbstractMultiAgentObservationStrategy,
     AbstractRewardStrategy
-export action_dim, _reset_action!
+export action_dim
 export compute_observation!, get_init_observation
 export set_reward!
 export RDEEnv, RDEEnvCache
