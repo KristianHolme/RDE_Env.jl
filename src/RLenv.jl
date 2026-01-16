@@ -58,7 +58,7 @@ function RDEEnv(;
         kwargs...
     ) where {
         T <: AbstractFloat, A <: AbstractActionStrategy,
-        O <: AbstractObservationStrategy, RW <: AbstractRewardStrategy,
+        O <: AbstractObservationStrategy, RW <: Union{AbstractScalarRewardStrategy, AbstractVectorRewardStrategy},
         CS <: AbstractContextStrategy,
     }
 
@@ -91,13 +91,13 @@ function RDEEnv(;
     initial_state = vcat(prob.u0, prob.λ0)
     ode_problem = ODEProblem{true, SciMLBase.FullSpecialize}(RDE_RHS!, initial_state, (zero(T), dt), prob)
 
-    # Use helper functions to determine type parameters
-    V = reward_value_type(T, reward_strat)
+    is_vector_reward = reward_strat isa AbstractVectorRewardStrategy
+    V = is_vector_reward ? Vector{T} : T
     init_observation = get_init_observation(observation_strat, params.N, T)
     OBS = typeof(init_observation)
 
     # Initialize reward with correct type
-    initial_reward = if V <: Vector
+    initial_reward = if is_vector_reward
         # For multi-section rewards, determine the number of sections
         n_sections = if hasfield(typeof(reward_strat), :n_sections)
             reward_strat.n_sections
@@ -224,7 +224,12 @@ function _act!(env::RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C}, action; saves_per
 
     method_cache.control_time::T = t
 
-    apply_action!(env, action, env.cache.context)
+    action_to_apply = action
+    if env.action_strat isa AbstractScalarActionStrategy && action isa AbstractVector
+        @assert length(action) == 1 "Expected scalar action as length-1 vector"
+        action_to_apply = action[1]
+    end
+    apply_action!(env, action_to_apply, env.cache.context)
     dt = env.dt
     t_span = (t, t + dt)::Tuple{T, T}
 

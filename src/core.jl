@@ -4,14 +4,6 @@ abstract type AbstractRDEEnv <: DRiL.AbstractEnv end
 abstract type AbstractActionStrategy end
 abstract type AbstractVectorActionStrategy <: AbstractActionStrategy end
 abstract type AbstractScalarActionStrategy <: AbstractActionStrategy end
-"""
-    action_dim(action_strat::AbstractActionStrategy)
-
-Return the dimension of the action space for the given action type.
-"""
-function action_dim end
-
-
 # Constructors
 #Observations
 abstract type AbstractObservationStrategy end
@@ -36,22 +28,6 @@ function get_init_observation end
 abstract type AbstractRewardStrategy end
 abstract type AbstractVectorRewardStrategy <: AbstractRewardStrategy end
 abstract type AbstractScalarRewardStrategy <: AbstractRewardStrategy end
-
-"""
-    reward_value_type(T::Type{<:AbstractFloat}, rt::AbstractRewardStrategy)
-
-Return the type of the reward value for the given reward type.
-
-# Examples
-```julia
-reward_value_type(Float32, ShockSpanReward())  # Returns Float32
-reward_value_type(Float32, MultiSectionReward())  # Returns Vector{Float32}
-```
-"""
-function reward_value_type end
-
-reward_value_type(::Type{T}, ::AbstractScalarRewardStrategy) where {T} = T
-reward_value_type(::Type{T}, ::AbstractVectorRewardStrategy) where {T} = Vector{T}
 
 """
     set_reward!(env::AbstractRDEEnv, rt::AbstractRewardStrategy, context::AbstractCache)
@@ -150,7 +126,7 @@ mutable struct RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C} <: AbstractRDEEnv where
         T <: AbstractFloat,
         A <: AbstractActionStrategy,
         O <: AbstractObservationStrategy,
-        RW <: AbstractRewardStrategy,
+        RW <: Union{AbstractScalarRewardStrategy, AbstractVectorRewardStrategy},
         CS <: AbstractContextStrategy,
         V <: Union{T, Vector{T}},
         OBS <: AbstractArray{T},

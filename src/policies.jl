@@ -107,8 +107,9 @@ function run_policy(policy::AbstractPolicy, env::RDEEnv{T}; saves_per_action = 1
     ss, u_ps = get_init_control_data(env, env.action_strat, max_actions)
     rewards = get_init_rewards(env, env.reward_strat, max_actions)
     control_shifts = Vector{typeof(env.prob.control_shift_strategy)}(undef, max_actions)
-    # Preallocate actions using action_dim
-    actions = if action_dim(env.action_strat) == 1
+    action_space = DRiL.action_space(env)
+    is_scalar_action = size(action_space) == (1,)
+    actions = if is_scalar_action
         Vector{T}(undef, max_actions)
     else
         Vector{Vector{T}}(undef, max_actions)
@@ -148,7 +149,8 @@ function run_policy(policy::AbstractPolicy, env::RDEEnv{T}; saves_per_action = 1
         end
 
         # Save raw action
-        if action_dim(env.action_strat) == 1 && action isa Vector{T}
+        if is_scalar_action && action isa AbstractVector
+            @assert length(action) == 1 "Expected scalar action as length-1 vector"
             actions[step] = action[1]
         else
             actions[step] = action
@@ -246,9 +248,12 @@ function run_policy(policy::AbstractPolicy, env::RDEEnv{T}; saves_per_action = 1
     return PolicyRunData{T}(action_ts, ss, u_ps, rewards, actions, state_ts, states, observations, control_shifts)
 end
 
-function get_init_rewards(env::RDEEnv{T}, reward_strat::AbstractRewardStrategy, max_steps::Int) where {T}
-    reward_strat = typeof(env.reward)
-    return Vector{reward_strat}(undef, max_steps)
+function get_init_rewards(env::RDEEnv{T}, reward_strat::AbstractScalarRewardStrategy, max_steps::Int) where {T}
+    return Vector{T}(undef, max_steps)
+end
+
+function get_init_rewards(env::RDEEnv{T}, reward_strat::AbstractVectorRewardStrategy, max_steps::Int) where {T}
+    return Vector{Vector{T}}(undef, max_steps)
 end
 
 function get_init_control_data(env::RDEEnv{T}, action_strat::AbstractActionStrategy, max_steps::Int) where {T}

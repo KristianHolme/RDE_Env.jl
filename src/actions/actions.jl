@@ -15,14 +15,6 @@ function momentum(at::AbstractActionStrategy)
     return getfield(at, :momentum)
 end
 
-function action_dim(::AbstractScalarActionStrategy)
-    return 1
-end
-
-function action_dim(at::DirectVectorPressureAction)
-    return at.n_sections
-end
-
 function momentum_target(control_target::T, previous_target::T, momentum::T) where {T <: AbstractFloat}
     return momentum * previous_target + (one(T) - momentum) * control_target
 end

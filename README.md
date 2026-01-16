@@ -4,166 +4,309 @@
 [![Aqua](https://raw.githubusercontent.com/JuliaTesting/Aqua.jl/master/badge.svg)](https://github.com/JuliaTesting/Aqua.jl)
 [![JET](https://img.shields.io/badge/JET.jl-enabled-blue)](https://github.com/aviatesk/JET.jl)
 
-A Julia module providing a reinforcement learning environment interface for the Rotating Detonation Engine (RDE) simulator from [RDE.jl](https://github.com/KristianHolme/RDE.jl).
+RDE_Env wraps the Rotating Detonation Engine (RDE) simulator from [RDE.jl](https://github.com/KristianHolme/RDE.jl) as a reinforcement learning environment built for [DRiL.jl](https://github.com/KristianHolme/DRiL.jl).
 
-## Overview
-
-RDE_Env wraps the RDE simulator in a reinforcement learning environment built for [DRiL.jl](https://github.com/KristianHolme/DRiL.jl). It provides:
-- Customizable action spaces for controlling RDE parameters
-- Customizable observation strategiesq
-- Customizable reward functions
-- Single-agent and multi-agent environment support
-- Policy implementations and evaluation tools
-- Visualization utilities
+It provides:
+- `RDEEnv` implementing the DRiL environment interface
+- Swappable strategies (action/observation/reward/context) with optional caching
+- `run_policy` for evaluating any `DRiL.AbstractPolicy`
+- Makie-based plotting and animation utilities
+- And more...
 
 ## Installation
 
 ```julia
 ] add https://github.com/KristianHolme/RDE_Env.jl
 ```
-
-## Basic Usage
-
+or
 ```julia
-using RDE_Env
-
-# Create a basic environment
-env = RDEEnv(
-    dt=0.5f0,                                  # Time step
-    τ_smooth=0.01f0,                           # Control smoothing time constant
-    observation_strat=FullStateObservation(), # Raw u, λ state
-    action_strat=DirectScalarPressureAction(), # Direct pressure control
-    reward_strat=USpanReward()                 # Span of u
-)
-
-# Run a random policy
-policy = RandomRDEPolicy(env)
-data = run_policy(policy, env)
-
-# Visualize results
-plot_policy_data(data, env)
+using Pkg
+Pkg.add(url="https://github.com/KristianHolme/RDE_Env.jl")
 ```
 
-## Components
-
-### Action Types
-- `DirectScalarPressureAction`: Direct scalar pressure control
-- `DirectVectorPressureAction`: Direct per-section pressure control
-
-### Observation Strategies
-
-**Single-Agent:**
-- `FullStateObservation`: Raw `[u; λ]` state
-
-**Multi-Agent:**
-- `FullStateCenteredObservation`: Raw full state centered per section
-
-### Reward Types
-
-**Single-Agent:**
-- `USpanReward`: Rewards span of `u`
-
-**Multi-Agent:**
-- `ScalarToVectorReward`: Wrap a scalar reward into per-agent values
-
-### Policies
-- `StepwiseRDEPolicy`: Predefined control sequence
-- `RandomRDEPolicy`: Random actions
-- `ConstantRDEPolicy`: Constant controls
-- `SinusoidalRDEPolicy`: Sinusoidal control patterns
-- `LinearPolicy`: Linear interpolation between control points
-- `SawtoothPolicy`: Sawtooth pressure control pattern
-- `PIDControllerPolicy`: PID controller for shock count stabilization
-- `DelayedPolicy`: Wrapper to delay policy activation
-
-## Advanced Features
-# Extra strategy variants
-
-Additional action, observation, and reward strategy variants are maintained in the project repository and are available via `DRL_RDE.RDE_Env_Strategies`.
-
-### DRiL.jl Integration
-
-`RDEEnv` directly implements the [DRiL.jl](https://github.com/KristianHolme/DRiL.jl) environment interface:
+## Quickstart (single-agent)
 
 ```julia
-using RDE_Env
 using DRiL
+using RDE_Env
 
-# Create base environment
-env = RDEEnv(
-    observation_strat = FourierObservation(16),
-    action_strat = ScalarPressureAction(),
-    params = RDEParam(N = 512, tmax = 100.0f0)
+env = RDEEnv(;
+    dt = 0.5f0,
+    τ_smooth = 0.01f0,
+    action_strat = DirectScalarPressureAction(),
+    observation_strat = FullStateObservation(),
+    reward_strat = USpanReward(),
+    context_strat = NoContextStrategy(),
 )
 
-# Create parallel environment for training
-parallel_env = BroadcastedParallelEnv([env for _ in 1:4])
-parallel_env = MonitorWrapperEnv(parallel_env)
-parallel_env = NormalizeWrapperEnv(parallel_env)
-
-# Create policy
-policy = ActorCriticPolicy(observation_space(env), action_space(env))
-
-# Create PPO algorithm and agent
-alg = PPO(n_steps=2048, batch_size=64, epochs=10, learning_rate=3f-4)
-agent = ActorCriticAgent(policy, alg; verbose=2)
-
-# Train the agent
-max_steps = 100_000
-learn_stats, to = learn!(agent, parallel_env, alg, max_steps)
+DRiL.reset!(env)
+obs = DRiL.observe(env)
+action = rand(DRiL.action_space(env))
+reward = DRiL.act!(env, action)
 ```
 
-### Multi-Agent Environments
-
-Create multi-agent environments with section-wise control:
+### Multi-agent wrapper
+To use a multi-agent interface, build a base `RDEEnv` with a multi-agent observation strategy and a vector action strategy, then wrap it in `MultiAgentRDEEnv`:
 
 ```julia
 using RDE_Env
-using DRiL
 
-# Create multi-agent base environment
-base_env = RDEEnv(
+base_env = RDEEnv(;
     observation_strat = FullStateCenteredObservation(n_sections = 4),
     action_strat = DirectVectorPressureAction(n_sections = 4),
     reward_strat = ScalarToVectorReward(USpanReward(), 4),
-    params = RDEParam(N = 512, tmax = 100.0f0)
 )
+ma_env = MultiAgentRDEEnv(base_env)
+```
 
-# Wrap for DRiL multi-agent interface
-env = MultiAgentRDEEnv(base_env)
+## Interfaces (strategies + caching)
 
-# Create parallel multi-agent environment (multiple instances of multi-agent env)
-parallel_env = MultiAgentParallelEnv([env for _ in 1:4])
-parallel_env = MonitorWrapperEnv(parallel_env)
-parallel_env = NormalizeWrapperEnv(parallel_env)
+Strategies are regular Julia types that specialize a few methods. Most hooks receive a `context::AbstractCache` argument, which lets action/observation/reward share state.
 
-# Create policy and agent
+### Caching model
+- `initialize_cache(strategy, N, T) -> cache::AbstractCache` (default returns `NoCache()`).
+- `reset_cache!(cache)` (default is no-op).
+- Caches live in `env.cache.*`:
+  - `env.cache.action_cache`
+  - `env.cache.observation_cache`
+  - `env.cache.reward_cache`
+  - `env.cache.context`
+
+### Action strategies
+Subtype `AbstractScalarActionStrategy` or `AbstractVectorActionStrategy`.
+
+Implement:
+- `RDE_Env.apply_action!(env, action, context::AbstractCache)`
+- `RDE_Env._action_space(env, action_strat)`
+
+Optional:
+- `initialize_cache(action_strat, N, T)`, `reset_cache!`
+
+### Observation strategies
+Subtype `AbstractObservationStrategy` (or `AbstractMultiAgentObservationStrategy`).
+
+Implement:
+- `RDE_Env.get_init_observation(strategy, N, T)`
+- `RDE_Env.compute_observation!(obs, env, strategy, context::AbstractCache)`
+
+If using custom cache, implement:
+- `RDE_Env._observation_space(env, strategy)`
+
+Optional:
+- `initialize_cache(strategy, N, T)`, `reset_cache!`
+
+### Reward strategies
+Subtype `AbstractScalarRewardStrategy` or `AbstractVectorRewardStrategy`.
+
+Implement:
+- `RDE_Env._compute_reward(env, rew_strat, reward_cache, context::AbstractCache)`
+
+Require:
+- Subtype either `AbstractScalarRewardStrategy` or `AbstractVectorRewardStrategy`.
+
+If using custom cache, implement:
+- `initialize_cache(rew_strat, N, T)`, `reset_cache!`
+
+Rewards may also set termination/truncation flags and store diagnostics in `env.info`.
+
+### Context strategies (shared state)
+Subtype `AbstractContextStrategy`.
+
+If using custom cache, implement:
+- `initialize_cache(context_strat, N, T)` (default `NoCache()`)
+- `on_reset!(context_cache, context_strat, env)`
+- `on_step!(context_cache, context_strat, env)` (default no-op)
+
+## Custom implementations
+
+### Custom context strategy
+
+```julia
+using RDE_Env
+
+mutable struct TargetContext <: AbstractCache
+    target::Int
+end
+
+struct FixedTargetContextStrategy <: AbstractContextStrategy
+    target::Int
+end
+
+function RDE_Env.initialize_cache(cs::FixedTargetContextStrategy, ::Int, ::Type{T}) where {T}
+    return TargetContext(cs.target)
+end
+
+function RDE_Env.on_reset!(cache::TargetContext, cs::FixedTargetContextStrategy, ::AbstractRDEEnv)
+    cache.target = cs.target
+    return nothing
+end
+```
+
+### Custom observation strategy
+
+```julia
+using RDE
+using RDE_Env
+
+struct USpanAndTargetObservation <: AbstractObservationStrategy end
+
+function RDE_Env.get_init_observation(::USpanAndTargetObservation, ::Int, ::Type{T}) where {T <: AbstractFloat}
+    return Vector{T}(undef, 2)
+end
+
+function RDE_Env.compute_observation!(
+        obs,
+        env::RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C},
+        ::USpanAndTargetObservation,
+        context::AbstractCache,
+    ) where {T, A, O, RW, CS, V, OBS, M, RS, C}
+    N = env.prob.params.N
+    u = @view env.state[1:N]
+    u_min, u_max = RDE.turbo_extrema(u)
+    obs[1] = u_max - u_min
+    obs[2] = context isa TargetContext ? T(context.target) : zero(T)
+    return obs
+end
+```
+
+### Custom action strategy
+
+```julia
+using RDE_Env
+using DRiL: Box
+struct TargetOffsetPressureAction <: AbstractScalarActionStrategy end
+
+RDE_Env._action_space(::RDEEnv, ::TargetOffsetPressureAction) = Box([-1.0], [1.0])
+
+function RDE_Env.apply_action!(
+        env::RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C},
+        action::T,
+        context::AbstractCache,
+    ) where {T <: AbstractFloat, A <: TargetOffsetPressureAction, O, RW, CS, V, OBS, M, RS, C}
+    offset = context isa TargetContext ? T(context.target) * T(0.01) : zero(T)
+    u_p = clamp(action + offset, zero(T), env.u_pmax)
+    method_cache = env.prob.method.cache
+    copyto!(method_cache.u_p_previous, method_cache.u_p_current)
+    method_cache.u_p_current .= u_p
+    copyto!(method_cache.s_previous, method_cache.s_current)
+    return nothing
+end
+```
+
+### Custom reward strategy
+
+```julia
+using RDE
+using RDE_Env
+
+struct TargetScaledUSpanReward <: AbstractScalarRewardStrategy end
+
+function RDE_Env._compute_reward(
+        env::RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C},
+        ::TargetScaledUSpanReward,
+        ::NoCache,
+        context::AbstractCache,
+    ) where {T, A, O, RW, CS, V, OBS, M, RS, C}
+    N = env.prob.params.N
+    u = @view env.state[1:N]
+    u_min, u_max = RDE.turbo_extrema(u)
+    scale = context isa TargetContext ? max(one(T), T(context.target)) : one(T)
+    return (u_max - u_min) / scale
+end
+```
+
+### Custom policy (DRiL)
+`run_policy` collects a trajectory from the environment using actions from the supplied policy at every step. It accepts any `policy::DRiL.AbstractPolicy` and calls it as `policy(obs; deterministic = true)`.
+
+```julia
+using DRiL
+
+struct ConstantBoxPolicy{T} <: DRiL.AbstractPolicy
+    action::T
+end
+
+function (π::ConstantBoxPolicy)(obs; deterministic::Bool = true)
+    return [π.action]
+end
+
+policy = ConstantBoxPolicy([0.65f0])
+env = RDEEnv()
+data = run_policy(policy, env)
+
+fig = plot_shifted_history(data, env.prob.x)
+```
+
+## Training with DRiL
+
+```julia
+using DRiL
+using RDE_Env
+
+function make_env()
+    return RDEEnv(;
+        dt = 1.0f0,
+        action_strat = DirectScalarPressureAction(),
+        observation_strat = FullStateObservation(),
+        reward_strat = USpanReward(),
+    )
+end
+
+env = BroadcastedParallelEnv([make_env() for _ in 1:16])
+env = MonitorWrapperEnv(env)
+
+alg = DRiL.PPO()
 policy = ActorCriticPolicy(observation_space(env), action_space(env))
-alg = PPO(n_steps=2048, batch_size=64, epochs=10)
-agent = ActorCriticAgent(policy, alg; verbose=2)
+agent = ActorCriticAgent(policy; verbose = 2)
 
-# Train
-max_steps = 200_000
-learn_stats, to = learn!(agent, parallel_env, alg, max_steps)
+learn_stats, to = learn!(agent, env, alg, 100_000)
 ```
 
+## Evaluation with `run_policy`
 
-### Interactive Control
-For debugging and exploration:
 ```julia
-interactive_control(env)  # Opens interactive control GUI (requires GLMakie or WGLMakie)
+using DRiL
+using RDE_Env
+
+env = RDEEnv()
+policy = DRiL.RandomPolicy(env)
+data = run_policy(policy, env; saves_per_action = 10)
 ```
 
-## Visualization
+## Plotting (Makie)
+Several plotting functions are available:
 
-The module provides several visualization tools:
+- `plot_policy_data(data, env; kwargs...)`: interactive figure for a recorded rollout (`PolicyRunData`) with a time scrubber and optional panels (rewards, controls, observations, etc.). This is the main entry point.
+- `plot_shifted_history(data, env.prob.x; kwargs...)`: Static plot of the trajectory. Optionally includes a moving reference frame (useful for wave/shock visualization).
+- `plot_policy(policy, env)`: convenience wrapper that runs `run_policy(policy, env)` and then calls `plot_policy_data`.
+- `animate_policy(policy, env)`: convenience wrapper that runs a policy and animates it.
+- `animate_policy_data(env, data)`: animate an already-recorded rollout.
+
+For full details, use Julia help mode in the REPL:
+`?plot_policy_data`, `?plot_shifted_history`, `?plot_policy`, `?animate_policy`, `?animate_policy_data`.
+
+
 ```julia
-# Basic trajectory plot (requires GLMakie or WGLMakie)
-plot_policy_data(data, env)
+using RDE_Env
 
-# plot the whole simulation in a moving referance frame
-plot_shifted_history(data, env.prob.x)
+env = RDEEnv()
+policy = DRiL.RandomPolicy(env)
+data = run_policy(policy, env; saves_per_action = 10)
 
-# Animated visualization
-animate_policy_data(env, data)
+fig = plot_policy_data(data, env)
+
+# Other helpers:
+# - plot_shifted_history(data, env.prob.x)
+# - plot_policy(policy, env)
+# - animate_policy(policy, env)
+# - animate_policy_data(env, data)
+```
+
+## Interactive control
+
+```julia
+using GLMakie
+using RDE_Env
+
+env = RDEEnv()
+interactive_control(env)
 ```
