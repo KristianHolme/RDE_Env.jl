@@ -4,7 +4,7 @@ function set_reward!(env::AbstractRDEEnv, rew_strat::AbstractRewardStrategy, con
 end
 
 """
-    compute_reward(env::RDEEnv, rew_strat::AbstractRewardStrategy, cache::AbstractCache, context::AbstractCache)
+    compute_reward(env::RDEEnv, rew_strat::AbstractRewardStrategy, reward_cache::AbstractCache, context::AbstractCache)
 
 Compute the reward from the environment.
 """
