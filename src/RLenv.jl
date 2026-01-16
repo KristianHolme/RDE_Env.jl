@@ -53,13 +53,13 @@ function RDEEnv(;
         action_strat::A = DirectScalarPressureAction(),
         observation_strat::O = FullStateObservation(),
         reward_strat::RW = USpanReward(),
-        goal_strat::G = NoGoal(),
+        context_strat::CS = NoContextStrategy(),
         verbose::Bool = false,
         kwargs...
     ) where {
         T <: AbstractFloat, A <: AbstractActionStrategy,
         O <: AbstractObservationStrategy, RW <: AbstractRewardStrategy,
-        G <: AbstractGoalStrategy,
+        CS <: AbstractContextStrategy,
     }
 
     if τ_smooth > dt
@@ -75,9 +75,9 @@ function RDEEnv(;
     reward_cache = initialize_cache(reward_strat, params.N, T)
     action_cache = initialize_cache(action_strat, params.N, T)
     observation_cache = initialize_cache(observation_strat, params.N, T)
-    goal_cache = initialize_cache(goal_strat, params.N, T)
-    cache = RDEEnvCache{T, typeof(reward_cache), typeof(action_cache), typeof(observation_cache), typeof(goal_cache)}(
-        params.N; reward_cache, action_cache, observation_cache, goal_cache
+    context = initialize_cache(context_strat, params.N, T)
+    cache = RDEEnvCache{T, typeof(reward_cache), typeof(action_cache), typeof(observation_cache), typeof(context)}(
+        params.N; reward_cache, action_cache, observation_cache, context
     )
 
     #TODO should do this somewhere else
@@ -114,14 +114,14 @@ function RDEEnv(;
     RS = typeof(prob.reset_strategy)
     CS = typeof(prob.control_shift_strategy)
 
-    env = RDEEnv{T, A, O, RW, G, V, OBS, M, RS, CS}(
+    env = RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C}(
         prob, initial_state, init_observation,
         dt, T(0.0), false, false, false, initial_reward, smax, u_pmax,
         τ_smooth, cache,
         action_strat, observation_strat,
-        reward_strat, goal_strat, verbose, Dict{String, Any}(), 0, ode_problem
+        reward_strat, context_strat, verbose, Dict{String, Any}(), 0, ode_problem
     )
-    compute_observation!(env.observation, env, observation_strat)
+    compute_observation!(env.observation, env, observation_strat, env.cache.context)
     RDE.RDE_RHS!(zeros(T, 2 * params.N), initial_state, prob, T(0.0)) #to update caches
     return env
 end
@@ -133,7 +133,7 @@ _observe(env::RDEEnv) = copy(env.observation)
 
 @inline get_saveat(env::RDEEnv{T}, saves_per_action::Int) where {T <: AbstractFloat} = saves_per_action == 0 ? nothing : (env.dt / saves_per_action)
 
-function solve_step(env::RDEEnv{T, A, O, R, G, V, OBS}; saves_per_action::Int = 10) where {T <: AbstractFloat, A, O, R, G, V, OBS}
+function solve_step(env::RDEEnv{T, A, O, R, CS, V, OBS}; saves_per_action::Int = 10) where {T <: AbstractFloat, A, O, R, CS, V, OBS}
     t0, t1 = env.ode_problem.tspan::Tuple{T, T}
     saveat = collect(range(t0, t1; length = saves_per_action + 1))
     sol = RDE.solve_pde_step(env.prob, env.ode_problem; saveat = saveat)
@@ -166,8 +166,9 @@ function _act_postprocessing!(env::RDEEnv{T}, sol::SciMLBase.ODESolution) where 
 
         env.steps_taken += 1
 
-        set_reward!(env, env.reward_strat)
-        compute_observation!(env.observation, env, env.observation_strat)
+        on_step!(env.cache.context, env.context_strat, env)
+        set_reward!(env, env.reward_strat, env.cache.context)
+        compute_observation!(env.observation, env, env.observation_strat, env.cache.context)
         if env.terminated #maybe reward caused termination
             # set_termination_reward!(env, -2.0)
             env.done = true
@@ -206,7 +207,7 @@ Take an action in the environment.
 - Handles smooth control transitions
 - Supports multiple action types
 """
-function _act!(env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}, action; saves_per_action::Int = 10) where {T <: AbstractFloat, A, O, RW, G, V, OBS, M, RS, C}
+function _act!(env::RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C}, action; saves_per_action::Int = 10) where {T <: AbstractFloat, A, O, RW, CS, V, OBS, M, RS, C}
     params = env.prob.params::RDEParam{T}
     prob = env.prob::RDEProblem{T}
     tmax = params.tmax
@@ -223,7 +224,7 @@ function _act!(env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}, action; saves_per_
 
     method_cache.control_time::T = t
 
-    apply_action!(env, action)
+    apply_action!(env, action, env.cache.context)
     dt = env.dt
     t_span = (t, t + dt)::Tuple{T, T}
 
@@ -258,7 +259,7 @@ Reset the environment to its initial state.
 - Resets control parameters to initial values
 - Initializes previous state tracking
 """
-function _reset!(env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}) where {T, A, O, RW, G, V, OBS, M, RS, C}
+function _reset!(env::RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C}) where {T, A, O, RW, CS, V, OBS, M, RS, C}
     N = env.prob.params.N
     env.t = 0 #reset current time
     RDE.reset_state_and_pressure!(env.prob, env.prob.reset_strategy)
@@ -273,17 +274,17 @@ function _reset!(env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}) where {T, A, O, 
     env.terminated = false
 
     #TODO: is this necessary?
-    set_reward!(env, env.reward_strat)
+    set_reward!(env, env.reward_strat, env.cache.context)
 
     # update observation to initial conditions
-    compute_observation!(env.observation, env, env.observation_strat)
+    compute_observation!(env.observation, env, env.observation_strat, env.cache.context)
     env.info = Dict{String, Any}()
 
     #reset method cache
     RDE.reset_cache!(env.prob.method.cache, τ_smooth = env.τ_smooth, params = env.prob.params)
     #reset caches
     reset_cache!(env.cache)
-    on_reset!(env.cache.goal_cache, env.goal_strat, env)
+    on_reset!(env.cache.context, env.context_strat, env)
     env.prob.sol = nothing
     # Initialize previous state
     N = env.prob.params.N
@@ -292,15 +293,15 @@ function _reset!(env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}) where {T, A, O, 
 
     RDE.RDE_RHS!(zeros(T, 2 * env.prob.params.N), env.state, env.prob, T(0.0)) #to update caches
     #update observation to initial conditions
-    compute_observation!(env.observation, env, env.observation_strat)
+    compute_observation!(env.observation, env, env.observation_strat, env.cache.context)
 
     return nothing
 end
 
 #TODO: purpose? candidate for removal
-function set_termination_reward!(env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}, value::Real) where {T, A, O, RW, G, V <: Vector, OBS, M, RS, C}
+function set_termination_reward!(env::RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C}, value::Real) where {T, A, O, RW, CS, V <: Vector, OBS, M, RS, C}
     return fill!(env.reward, T(value))
 end
-function set_termination_reward!(env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}, value::Real) where {T, A, O, RW, G, V <: Real, OBS, M, RS, C}
+function set_termination_reward!(env::RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C}, value::Real) where {T, A, O, RW, CS, V <: Real, OBS, M, RS, C}
     return env.reward = T(value)
 end

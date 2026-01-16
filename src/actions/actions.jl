@@ -27,13 +27,13 @@ function momentum_target(control_target::T, previous_target::T, momentum::T) whe
     return momentum * previous_target + (one(T) - momentum) * control_target
 end
 
-function apply_action!(env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}, action::Vector{T}) where {T <: AbstractFloat, A <: DirectScalarPressureAction, O, RW, G, V, OBS, M, RS, C}
+function apply_action!(env::RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C}, action::Vector{T}, context::AbstractCache) where {T <: AbstractFloat, A <: DirectScalarPressureAction, O, RW, CS, V, OBS, M, RS, C}
     @assert length(action) == 1 "DirectScalarPressureAction expects a single action"
-    apply_action!(env, action[1])
+    apply_action!(env, action[1], context)
     return nothing
 end
 
-function apply_action!(env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}, action::T) where {T <: AbstractFloat, A <: DirectScalarPressureAction, O, RW, G, V, OBS, M, RS, C}
+function apply_action!(env::RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C}, action::T, ::AbstractCache) where {T <: AbstractFloat, A <: DirectScalarPressureAction, O, RW, CS, V, OBS, M, RS, C}
     method_cache = env.prob.method.cache
 
     copyto!(method_cache.u_p_previous, method_cache.u_p_current)
@@ -51,7 +51,7 @@ function apply_action!(env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}, action::T)
     return nothing
 end
 
-function apply_action!(env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}, action::AbstractVector{T}) where {T <: AbstractFloat, A <: DirectVectorPressureAction, O, RW, G, V, OBS, M, RS, C}
+function apply_action!(env::RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C}, action::AbstractVector{T}, ::AbstractCache) where {T <: AbstractFloat, A <: DirectVectorPressureAction, O, RW, CS, V, OBS, M, RS, C}
     action_strat = env.action_strat
     N = env.prob.params.N
     @assert N > 0 "Action type N not set"

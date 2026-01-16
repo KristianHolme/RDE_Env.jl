@@ -2,7 +2,7 @@ struct FullStateObservation <: AbstractObservationStrategy end
 
 initialize_cache(::FullStateObservation, N::Int, ::Type{T}) where {T} = NoCache()
 
-function compute_observation!(obs, env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}, ::FullStateObservation) where {T, A, O, RW, G, V, OBS, M, RS, C}
+function compute_observation!(obs, env::RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C}, ::FullStateObservation, ::AbstractCache) where {T, A, O, RW, CS, V, OBS, M, RS, C}
     N = length(env.state) ÷ 2
     obs_u = @view obs[1:N]
     obs_λ = @view obs[(N + 1):(2 * N)]
@@ -32,7 +32,7 @@ function Base.show(io::IO, ::MIME"text/plain", obs_strategy::FullStateCenteredOb
     return println(io, "  n_sections: $(obs_strategy.n_sections)")
 end
 
-function compute_observation!(obs, env::RDEEnv{T, A, O, R, G, V, OBS}, obs_strategy::FullStateCenteredObservation) where {T, A, O, R, G, V, OBS}
+function compute_observation!(obs, env::RDEEnv{T, A, O, R, CS, V, OBS}, obs_strategy::FullStateCenteredObservation, ::AbstractCache) where {T, A, O, R, CS, V, OBS}
     n_sections = obs_strategy.n_sections
     N = env.prob.params.N
     points_per_section = N ÷ n_sections

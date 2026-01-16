@@ -18,7 +18,7 @@ abstract type AbstractObservationStrategy end
 abstract type AbstractMultiAgentObservationStrategy <: AbstractObservationStrategy end
 
 """
-    compute_observation!(obs, env::RDEEnv, observation_strat::AbstractObservationStrategy)
+    compute_observation!(obs, env::RDEEnv, observation_strat::AbstractObservationStrategy, context::AbstractCache)
 
 Compute the observation from the environment and store it in obs.
 """
@@ -54,7 +54,7 @@ reward_value_type(::Type{T}, ::AbstractScalarRewardStrategy) where {T} = T
 reward_value_type(::Type{T}, ::AbstractVectorRewardStrategy) where {T} = Vector{T}
 
 """
-    set_reward!(env::AbstractRDEEnv, rt::AbstractRewardStrategy)
+    set_reward!(env::AbstractRDEEnv, rt::AbstractRewardStrategy, context::AbstractCache)
 
 Set the reward for the environment in env.reward.
 """
@@ -87,15 +87,24 @@ Initialize the cache for the given cache type.
 """
 initialize_cache(::Any, ::Int, ::Type{T}) where {T} = NoCache()
 
-# goals
-abstract type AbstractGoalStrategy end
+# Context
+abstract type AbstractContextStrategy end
 
 """
-    on_reset!(cache::AbstractCache, goal::AbstractGoalStrategy, env::AbstractRDEEnv)
+    on_reset!(cache::AbstractCache, context::AbstractContextStrategy, env::AbstractRDEEnv)
 
-Update the goal cache. Called when environment is reset.
+Update the context cache. Called when environment is reset.
 """
 function on_reset! end
+
+"""
+    on_step!(cache::AbstractCache, context::AbstractContextStrategy, env::AbstractRDEEnv)
+
+Update the context cache after each environment step.
+"""
+function on_step! end
+
+on_step!(::AbstractCache, ::AbstractContextStrategy, ::AbstractRDEEnv) = nothing
 
 ## env
 """
@@ -109,20 +118,20 @@ Cache for RDE environment computations and state tracking.
 - `prev_u::Vector{T}`: Previous velocity field
 - `prev_λ::Vector{T}`: Previous reaction progress
 """
-struct RDEEnvCache{T <: AbstractFloat, RC <: AbstractCache, AC <: AbstractCache, OC <: AbstractCache, GC <: AbstractCache} <: AbstractCache
+struct RDEEnvCache{T <: AbstractFloat, RC <: AbstractCache, AC <: AbstractCache, OC <: AbstractCache, CC <: AbstractCache} <: AbstractCache
     prev_u::Vector{T}  # Previous step's u values
     prev_λ::Vector{T}  # Previous step's λ values
     # New subcaches
     reward_cache::RC
     action_cache::AC
     observation_cache::OC
-    goal_cache::GC
-    function RDEEnvCache{T, RC, AC, OC, GC}(N::Int; reward_cache, action_cache, observation_cache, goal_cache) where {T <: AbstractFloat, RC <: AbstractCache, AC <: AbstractCache, OC <: AbstractCache, GC <: AbstractCache}
+    context::CC
+    function RDEEnvCache{T, RC, AC, OC, CC}(N::Int; reward_cache, action_cache, observation_cache, context) where {T <: AbstractFloat, RC <: AbstractCache, AC <: AbstractCache, OC <: AbstractCache, CC <: AbstractCache}
         # Initialize all arrays with zeros instead of undefined values
         prev_u = zeros(T, N)
         prev_λ = zeros(T, N)
         # Default subcaches are NoCache()
-        return new{T, RC, AC, OC, GC}(prev_u, prev_λ, reward_cache, action_cache, observation_cache, goal_cache)
+        return new{T, RC, AC, OC, CC}(prev_u, prev_λ, reward_cache, action_cache, observation_cache, context)
     end
 end
 
@@ -130,19 +139,19 @@ function reset_cache!(cache::RDEEnvCache{T}) where {T}
     reset_cache!(cache.reward_cache)
     reset_cache!(cache.action_cache)
     reset_cache!(cache.observation_cache)
-    reset_cache!(cache.goal_cache)
+    reset_cache!(cache.context)
     cache.prev_u .= zero(T)
     cache.prev_λ .= zero(T)
     return nothing
 end
 
 #TODO:is it necessary to parametrize by all these?
-mutable struct RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C} <: AbstractRDEEnv where {
+mutable struct RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C} <: AbstractRDEEnv where {
         T <: AbstractFloat,
         A <: AbstractActionStrategy,
         O <: AbstractObservationStrategy,
         RW <: AbstractRewardStrategy,
-        G <: AbstractGoalStrategy,
+        CS <: AbstractContextStrategy,
         V <: Union{T, Vector{T}},
         OBS <: AbstractArray{T},
         M <: AbstractMethod,
@@ -165,7 +174,7 @@ mutable struct RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C} <: AbstractRDEEnv where 
     action_strat::A
     observation_strat::O
     reward_strat::RW
-    goal_strat::G
+    context_strat::CS
     verbose::Bool               # Control solver output
     info::Dict{String, Any} #TODO:move this to cache?
     steps_taken::Int #TODO:move this to cache?

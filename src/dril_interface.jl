@@ -37,12 +37,12 @@ function _multi_agent_action_space(env::RDEEnv, ::DirectVectorPressureAction)
     return DRiL.Box([0.0f0], [Float32(env.u_pmax)])
 end
 
-struct MultiAgentRDEEnv{T, A, O, RW, G, V, OBS, M, RS, C} <: DRiL.AbstractParallelEnv
-    core_env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}
+struct MultiAgentRDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C} <: DRiL.AbstractParallelEnv
+    core_env::RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C}
     observation_space::DRiL.Box
     action_space::DRiL.Box
     n_envs::Int
-    function MultiAgentRDEEnv(core_env::RDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}) where {T, A, O, RW, G, V, OBS, M, RS, C}
+    function MultiAgentRDEEnv(core_env::RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C}) where {T, A, O, RW, CS, V, OBS, M, RS, C}
         obs_strategy = core_env.observation_strat
         @assert obs_strategy isa AbstractMultiAgentObservationStrategy
         @assert core_env.action_strat isa AbstractVectorActionStrategy
@@ -51,7 +51,7 @@ struct MultiAgentRDEEnv{T, A, O, RW, G, V, OBS, M, RS, C} <: DRiL.AbstractParall
         action_space = _multi_agent_action_space(core_env, action_strat)
         n_envs = obs_strategy.n_sections
         @assert n_envs == action_strat.n_sections
-        return new{T, A, O, RW, G, V, OBS, M, RS, C}(core_env, observation_space, action_space, n_envs)
+        return new{T, A, O, RW, CS, V, OBS, M, RS, C}(core_env, observation_space, action_space, n_envs)
     end
 end
 
@@ -64,7 +64,7 @@ function DRiL.observe(env::MultiAgentRDEEnv)
     return collect.(eachslice(observation_matrix, dims = ndims(observation_matrix)))
 end
 
-function DRiL.act!(env::MultiAgentRDEEnv{T, A, O, RW, G, V, OBS, M, RS, C}, actions::AbstractVector{<:AbstractVector}) where {T, A, O, RW, G, V, OBS, M, RS, C}
+function DRiL.act!(env::MultiAgentRDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C}, actions::AbstractVector{<:AbstractVector}) where {T, A, O, RW, CS, V, OBS, M, RS, C}
     combined_action = vcat(actions...)::Vector{T}
     rewards = _act!(env.core_env, combined_action)::V
     info = env.core_env.info

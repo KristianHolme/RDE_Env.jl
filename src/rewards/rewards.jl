@@ -1,10 +1,10 @@
-function set_reward!(env::AbstractRDEEnv, rew_strat::AbstractRewardStrategy)
-    env.reward = compute_reward(env, rew_strat)
+function set_reward!(env::AbstractRDEEnv, rew_strat::AbstractRewardStrategy, context::AbstractCache)
+    env.reward = compute_reward(env, rew_strat, context)
     return nothing
 end
 
-compute_reward(env::AbstractRDEEnv, rew_strat::AbstractRewardStrategy) =
-    _compute_reward(env, rew_strat, env.cache.reward_cache)
+compute_reward(env::AbstractRDEEnv, rew_strat::AbstractRewardStrategy, context::AbstractCache) =
+    _compute_reward(env, rew_strat, env.cache.reward_cache, context)
 
 struct WrappedRewardCache{IC <: AbstractCache} <: AbstractCache
     inner_cache::IC
@@ -17,7 +17,7 @@ end
 
 struct USpanReward <: AbstractScalarRewardStrategy end
 
-function _compute_reward(env::RDEEnv{T, A, O, R, G, V, OBS}, ::USpanReward, ::NoCache) where {T, A, O, R, G, V, OBS}
+function _compute_reward(env::RDEEnv{T, A, O, R, CS, V, OBS}, ::USpanReward, ::NoCache, ::AbstractCache) where {T, A, O, R, CS, V, OBS}
     N = env.prob.params.N
     u = @view env.state[1:N]
     u_min, u_max = RDE.turbo_extrema(u)
@@ -32,7 +32,7 @@ end
 initialize_cache(rew_strat::ScalarToVectorReward, N::Int, ::Type{T}) where {T} =
     WrappedRewardCache(initialize_cache(rew_strat.wrapped_reward, N, T))
 
-function _compute_reward(env::RDEEnv{T, A, O, R, G, V, OBS}, rew_strat::ScalarToVectorReward, cache::WrappedRewardCache) where {T, A, O, R, G, V, OBS}
-    reward = _compute_reward(env, rew_strat.wrapped_reward, cache.inner_cache)
+function _compute_reward(env::RDEEnv{T, A, O, R, CS, V, OBS}, rew_strat::ScalarToVectorReward, cache::WrappedRewardCache, context::AbstractCache) where {T, A, O, R, CS, V, OBS}
+    reward = _compute_reward(env, rew_strat.wrapped_reward, cache.inner_cache, context)
     return fill(reward, rew_strat.n)
 end

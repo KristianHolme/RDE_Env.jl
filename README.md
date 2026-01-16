@@ -4,13 +4,13 @@
 [![Aqua](https://raw.githubusercontent.com/JuliaTesting/Aqua.jl/master/badge.svg)](https://github.com/JuliaTesting/Aqua.jl)
 [![JET](https://img.shields.io/badge/JET.jl-enabled-blue)](https://github.com/aviatesk/JET.jl)
 
-A Julia module providing a reinforcement learning environment interface for the Rotating Detonation Engine (RDE) simulation.
+A Julia module providing a reinforcement learning environment interface for the Rotating Detonation Engine (RDE) simulator from [RDE.jl](https://github.com/KristianHolme/RDE.jl).
 
 ## Overview
 
-RDE_Env wraps the RDE simulation in a reinforcement learning environment built for DRiL.jl. It provides:
-- Various action spaces for controlling RDE parameters
-- Multiple observation strategies
+RDE_Env wraps the RDE simulator in a reinforcement learning environment built for [DRiL.jl](https://github.com/KristianHolme/DRiL.jl). It provides:
+- Customizable action spaces for controlling RDE parameters
+- Customizable observation strategiesq
 - Customizable reward functions
 - Single-agent and multi-agent environment support
 - Policy implementations and evaluation tools

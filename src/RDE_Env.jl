@@ -23,13 +23,13 @@ export compute_observation!, get_init_observation
 export set_reward!
 export RDEEnv, RDEEnvCache
 export AbstractCache, NoCache, initialize_cache, reset_cache!
-export AbstractGoalStrategy
+export AbstractContextStrategy
 include("utils.jl")
 export get_plotting_speed_adjustments
 
-# goals
-include("goals.jl")
-export NoGoal
+# Context
+include("contexts.jl")
+export NoContextStrategy
 
 # Actions
 include("actions/actions.jl")
