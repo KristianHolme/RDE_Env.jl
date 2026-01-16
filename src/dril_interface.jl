@@ -7,6 +7,14 @@ DRiL.get_info(env::AbstractRDEEnv) = env.info
 DRiL.action_space(env::AbstractRDEEnv) = _action_space(env, env.action_strat)
 DRiL.observation_space(env::AbstractRDEEnv) = _observation_space(env, env.observation_strat)
 
+
+"""
+    _action_space(env::AbstractRDEEnv, action_strat::AbstractActionStrategy)
+
+Get the action space for the environment and the action strategy.
+"""
+function _action_space end
+
 function _action_space(env::RDEEnv, ::DirectScalarPressureAction)
     return DRiL.Box([0.0f0], [Float32(env.u_pmax)])
 end
@@ -37,6 +45,12 @@ function _multi_agent_action_space(env::RDEEnv, ::DirectVectorPressureAction)
     return DRiL.Box([0.0f0], [Float32(env.u_pmax)])
 end
 
+
+"""
+    MultiAgentRDEEnv <: DRiL.AbstractParallelEnv
+
+Multi-agent wrapper for the RDEEnv. Implements the DRiL.AbstractParallelEnv interface.
+"""
 struct MultiAgentRDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C} <: DRiL.AbstractParallelEnv
     core_env::RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C}
     observation_space::DRiL.Box

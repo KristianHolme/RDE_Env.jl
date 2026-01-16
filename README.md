@@ -99,7 +99,7 @@ Optional:
 Subtype `AbstractScalarRewardStrategy` or `AbstractVectorRewardStrategy`.
 
 Implement:
-- `RDE_Env._compute_reward(env, rew_strat, reward_cache, context::AbstractCache)`
+- `RDE_Env.compute_reward(env, rew_strat, reward_cache, context::AbstractCache)`
 
 Require:
 - Subtype either `AbstractScalarRewardStrategy` or `AbstractVectorRewardStrategy`.
@@ -201,7 +201,7 @@ using RDE_Env
 
 struct TargetScaledUSpanReward <: AbstractScalarRewardStrategy end
 
-function RDE_Env._compute_reward(
+function RDE_Env.compute_reward(
         env::RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C},
         ::TargetScaledUSpanReward,
         ::NoCache,
