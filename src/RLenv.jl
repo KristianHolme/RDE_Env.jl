@@ -112,7 +112,7 @@ function RDEEnv(;
 
     M = typeof(prob.method)
     RS = typeof(prob.reset_strategy)
-    CS = typeof(prob.control_shift_strategy)
+    C = typeof(prob.control_shift_strategy)
 
     env = RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C}(
         prob, initial_state, init_observation,
