@@ -25,6 +25,6 @@ function Base.show(io::IO, ::MIME"text/plain", env::RDEEnv{T}) where {T <: Abstr
     println(io, "  action strategy: $(env.action_strat)")
     println(io, "  observation strategy: $(env.observation_strat)")
     println(io, "  reward type: $(env.reward_strat)")
-    println(io, "  goal strategy: $(env.goal_strat)")
+    println(io, "  context strategy: $(env.context_strat)")
     return println(io, "  steps taken: $(env.steps_taken)")
 end

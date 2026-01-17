@@ -9,6 +9,8 @@ function _predict_action(policy::DRiL.AbstractPolicy, observation)
     return policy(observation; deterministic = true)
 end
 
+
+# for multi-agent observations, make matrix into vector of observations
 function _predict_action(policy::DRiL.AbstractPolicy, observation::Matrix)
     obs_batch = collect(eachcol(observation))
     return policy(obs_batch; deterministic = true)
