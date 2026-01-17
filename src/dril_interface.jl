@@ -25,6 +25,10 @@ function _action_space(env::RDEEnv, action_strat::DirectVectorPressureAction)
     )
 end
 
+function _multi_agent_observation_space(obs_space::DRiL.Box)
+    return DRiL.Box(obs_space.low[:, 1], obs_space.high[:, 1])
+end
+
 function _multi_agent_action_space(params::RDEParam, ::DirectVectorPressureAction)
     return DRiL.Box([0.0f0], [Float32(params.u_pmax)])
 end
@@ -45,7 +49,9 @@ struct MultiAgentRDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C} <: DRiL.AbstractParal
         @assert obs_strategy isa AbstractMultiAgentObservationStrategy
         @assert core_env.action_strat isa AbstractVectorActionStrategy
         action_strat = core_env.action_strat
-        observation_space = _observation_space(core_env.prob.params, obs_strategy)
+        observation_space = _multi_agent_observation_space(
+            _observation_space(core_env.prob.params, obs_strategy)
+        )
         action_space = _multi_agent_action_space(core_env.prob.params, action_strat)
         n_envs = obs_strategy.n_sections
         @assert n_envs == action_strat.n_sections

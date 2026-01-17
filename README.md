@@ -89,6 +89,12 @@ Implement:
 - `RDE_Env.compute_observation!(obs, env, strategy, observation_cache::AbstractCache, context::AbstractCache)`
 - `RDE_Env._observation_space(params::RDEParam{T}, strategy) where {T}`
 
+Multi-agent note:
+- Implement only `_observation_space` for the full observation space. For multi-agent strategies, this
+  should be a matrix-valued `Box` where each column is an agent’s observation. The multi-agent wrapper
+  derives its per-agent observation space via `_multi_agent_observation_space(full_space)` which takes
+  a single column: `Box(full_space.low[:, 1], full_space.high[:, 1])`.
+
 Optional:
 - `initialize_cache(strategy, N, T)`, `reset_cache!`
 
