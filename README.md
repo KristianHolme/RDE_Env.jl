@@ -76,7 +76,7 @@ Strategies are regular Julia types that specialize a few methods. Most hooks rec
 Subtype `AbstractScalarActionStrategy` or `AbstractVectorActionStrategy`.
 
 Implement:
-- `RDE_Env.apply_action!(env, action, context::AbstractCache)`
+- `RDE_Env.apply_action!(env, action, action_strat, action_strat_cache, context::AbstractCache)`
 - `RDE_Env._action_space(env, action_strat)`
 
 Optional:
@@ -181,6 +181,8 @@ RDE_Env._action_space(::RDEEnv, ::TargetOffsetPressureAction) = Box([-1.0], [1.0
 function RDE_Env.apply_action!(
         env::RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C},
         action::T,
+        ::TargetOffsetPressureAction,
+        ::AbstractCache,
         context::AbstractCache,
     ) where {T <: AbstractFloat, A <: TargetOffsetPressureAction, O, RW, CS, V, OBS, M, RS, C}
     offset = context isa TargetContext ? T(context.target) * T(0.01) : zero(T)

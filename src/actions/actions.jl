@@ -19,13 +19,25 @@ function momentum_target(control_target::T, previous_target::T, momentum::T) whe
     return momentum * previous_target + (one(T) - momentum) * control_target
 end
 
-function apply_action!(env::RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C}, action::Vector{T}, context::AbstractCache) where {T <: AbstractFloat, A <: DirectScalarPressureAction, O, RW, CS, V, OBS, M, RS, C}
+function apply_action!(
+        env::RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C},
+        action::Vector{T},
+        action_strat::DirectScalarPressureAction,
+        action_cache::AbstractCache,
+        context::AbstractCache,
+    ) where {T <: AbstractFloat, A <: DirectScalarPressureAction, O, RW, CS, V, OBS, M, RS, C}
     @assert length(action) == 1 "DirectScalarPressureAction expects a single action"
-    apply_action!(env, action[1], context)
+    apply_action!(env, action[1], action_strat, action_cache, context)
     return nothing
 end
 
-function apply_action!(env::RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C}, action::T, ::AbstractCache) where {T <: AbstractFloat, A <: DirectScalarPressureAction, O, RW, CS, V, OBS, M, RS, C}
+function apply_action!(
+        env::RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C},
+        action::T,
+        action_strat::DirectScalarPressureAction,
+        ::AbstractCache,
+        ::AbstractCache,
+    ) where {T <: AbstractFloat, A <: DirectScalarPressureAction, O, RW, CS, V, OBS, M, RS, C}
     method_cache = env.prob.method.cache
 
     copyto!(method_cache.u_p_previous, method_cache.u_p_current)
@@ -37,14 +49,19 @@ function apply_action!(env::RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C}, action::T
     method_cache.u_p_current .= momentum_target(
         clamped_action,
         method_cache.u_p_current[1],
-        momentum(env.action_strat)
+        momentum(action_strat)
     )
     copyto!(method_cache.s_previous, method_cache.s_current)
     return nothing
 end
 
-function apply_action!(env::RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C}, action::AbstractVector{T}, ::AbstractCache) where {T <: AbstractFloat, A <: DirectVectorPressureAction, O, RW, CS, V, OBS, M, RS, C}
-    action_strat = env.action_strat
+function apply_action!(
+        env::RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C},
+        action::AbstractVector{T},
+        action_strat::DirectVectorPressureAction,
+        action_cache::VectorActionCache{T},
+        ::AbstractCache,
+    ) where {T <: AbstractFloat, A <: DirectVectorPressureAction, O, RW, CS, V, OBS, M, RS, C}
     N = env.prob.params.N
     @assert N > 0 "Action type N not set"
     @assert length(action) == action_strat.n_sections "Action length ($(length(action))) must match n_sections ($(action_strat.n_sections))"
@@ -60,8 +77,7 @@ function apply_action!(env::RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C}, action::A
 
     points_per_section = N ÷ action_strat.n_sections
     current_section_controls = @view method_cache.u_p_current[1:points_per_section:end]
-    @assert env.cache.action_cache isa VectorActionCache{T}
-    section_controls = env.cache.action_cache.section_controls
+    section_controls = action_cache.section_controls
     clamped_action = clamp.(action, zero(T), env.u_pmax)
     section_controls .= momentum_target.(clamped_action, current_section_controls, momentum(env.action_strat))
     for i in 1:action_strat.n_sections

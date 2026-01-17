@@ -229,7 +229,7 @@ function _act!(env::RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C}, action; saves_per
         @assert length(action) == 1 "Expected scalar action as length-1 vector"
         action_to_apply = action[1]
     end
-    apply_action!(env, action_to_apply, env.cache.context)
+    apply_action!(env, action_to_apply, env.action_strat, env.cache.action_cache, env.cache.context)
     dt = env.dt
     t_span = (t, t + dt)::Tuple{T, T}
 

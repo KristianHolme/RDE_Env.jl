@@ -4,6 +4,19 @@ abstract type AbstractRDEEnv <: DRiL.AbstractEnv end
 abstract type AbstractActionStrategy end
 abstract type AbstractVectorActionStrategy <: AbstractActionStrategy end
 abstract type AbstractScalarActionStrategy <: AbstractActionStrategy end
+
+"""
+    apply_action!(
+        env::RDEEnv,
+        action,
+        action_strat::AbstractActionStrategy,
+        action_cache::AbstractCache,
+        context::AbstractCache,
+    )
+
+Apply an action to the environment using the provided action strategy and caches.
+"""
+function apply_action! end
 # Constructors
 #Observations
 abstract type AbstractObservationStrategy end
