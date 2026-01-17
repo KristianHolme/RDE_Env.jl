@@ -5,7 +5,7 @@ DRiL.terminated(env::AbstractRDEEnv) = env.terminated
 DRiL.truncated(env::AbstractRDEEnv) = env.truncated
 DRiL.get_info(env::AbstractRDEEnv) = env.info
 DRiL.action_space(env::AbstractRDEEnv) = _action_space(env, env.action_strat)
-DRiL.observation_space(env::AbstractRDEEnv) = _observation_space(env, env.observation_strat)
+DRiL.observation_space(env::AbstractRDEEnv) = _observation_space(env.prob.params, env.observation_strat)
 
 
 """
@@ -25,24 +25,8 @@ function _action_space(env::RDEEnv, action_strat::DirectVectorPressureAction)
     )
 end
 
-function _observation_space(core_env::RDEEnv, ::FullStateObservation)
-    N = length(core_env.state) ÷ 2
-    bound = 1.0f6
-    low = [fill(-bound, N); fill(-bound, N)]
-    high = [fill(bound, N); fill(bound, N)]
-    return DRiL.Box(low, high)
-end
-
-function _observation_space(core_env::RDEEnv, ::FullStateCenteredObservation)
-    N = length(core_env.state) ÷ 2
-    bound = 1.0f6
-    low = [fill(-bound, N); fill(-bound, N)]
-    high = [fill(bound, N); fill(bound, N)]
-    return DRiL.Box(low, high)
-end
-
-function _multi_agent_action_space(env::RDEEnv, ::DirectVectorPressureAction)
-    return DRiL.Box([0.0f0], [Float32(env.u_pmax)])
+function _multi_agent_action_space(params::RDEParam, ::DirectVectorPressureAction)
+    return DRiL.Box([0.0f0], [Float32(params.u_pmax)])
 end
 
 
@@ -61,8 +45,8 @@ struct MultiAgentRDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C} <: DRiL.AbstractParal
         @assert obs_strategy isa AbstractMultiAgentObservationStrategy
         @assert core_env.action_strat isa AbstractVectorActionStrategy
         action_strat = core_env.action_strat
-        observation_space = _observation_space(core_env, obs_strategy)
-        action_space = _multi_agent_action_space(core_env, action_strat)
+        observation_space = _observation_space(core_env.prob.params, obs_strategy)
+        action_space = _multi_agent_action_space(core_env.prob.params, action_strat)
         n_envs = obs_strategy.n_sections
         @assert n_envs == action_strat.n_sections
         return new{T, A, O, RW, CS, V, OBS, M, RS, C}(core_env, observation_space, action_space, n_envs)

@@ -86,11 +86,8 @@ Optional:
 Subtype `AbstractObservationStrategy` (or `AbstractMultiAgentObservationStrategy`).
 
 Implement:
-- `RDE_Env.get_init_observation(strategy, N, T)`
-- `RDE_Env.compute_observation!(obs, env, strategy, context::AbstractCache)`
-
-If using custom cache, implement:
-- `RDE_Env._observation_space(env, strategy)`
+- `RDE_Env.compute_observation!(obs, env, strategy, observation_cache::AbstractCache, context::AbstractCache)`
+- `RDE_Env._observation_space(params::RDEParam{T}, strategy) where {T}`
 
 Optional:
 - `initialize_cache(strategy, N, T)`, `reset_cache!`
@@ -147,17 +144,21 @@ end
 ```julia
 using RDE
 using RDE_Env
+using DRiL: Box
 
 struct USpanAndTargetObservation <: AbstractObservationStrategy end
 
-function RDE_Env.get_init_observation(::USpanAndTargetObservation, ::Int, ::Type{T}) where {T <: AbstractFloat}
-    return Vector{T}(undef, 2)
+function RDE_Env._observation_space(::RDEParam{T}, ::USpanAndTargetObservation) where {T}
+    low = T[-1.0f0, -1.0f0]
+    high = T[1.0f0, 1.0f0]
+    return Box(low, high)
 end
 
 function RDE_Env.compute_observation!(
         obs,
         env::RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C},
         ::USpanAndTargetObservation,
+        ::AbstractCache,
         context::AbstractCache,
     ) where {T, A, O, RW, CS, V, OBS, M, RS, C}
     N = env.prob.params.N

@@ -28,7 +28,7 @@ RDEEnv{T}(;
     smax=4.0,
     u_pmax=1.2,
     params::RDEParam{T}=RDEParam{T}(),
-    
+
     τ_smooth=1.25,
     fft_terms::Int=32,
     observation_strat::AbstractObservationStrategy=FullStateObservation(),
@@ -93,7 +93,8 @@ function RDEEnv(;
 
     is_vector_reward = reward_strat isa AbstractVectorRewardStrategy
     V = is_vector_reward ? Vector{T} : T
-    init_observation = get_init_observation(observation_strat, params.N, T)
+    obs_space = _observation_space(params, observation_strat)
+    init_observation = rand(obs_space)
     OBS = typeof(init_observation)
 
     # Initialize reward with correct type
@@ -121,7 +122,7 @@ function RDEEnv(;
         action_strat, observation_strat,
         reward_strat, context_strat, verbose, Dict{String, Any}(), 0, ode_problem
     )
-    compute_observation!(env.observation, env, observation_strat, env.cache.context)
+    compute_observation!(env.observation, env, observation_strat, env.cache.observation_cache, env.cache.context)
     RDE.RDE_RHS!(zeros(T, 2 * params.N), initial_state, prob, T(0.0)) #to update caches
     return env
 end
@@ -167,8 +168,8 @@ function _act_postprocessing!(env::RDEEnv{T}, sol::SciMLBase.ODESolution) where 
         env.steps_taken += 1
 
         on_step!(env.cache.context, env.context_strat, env)
-        set_reward!(env, env.reward_strat, env.cache.context)
-        compute_observation!(env.observation, env, env.observation_strat, env.cache.context)
+        set_reward!(env, env.reward_strat)
+        compute_observation!(env.observation, env, env.observation_strat, env.cache.observation_cache, env.cache.context)
         if env.terminated #maybe reward caused termination
             # set_termination_reward!(env, -2.0)
             env.done = true
@@ -279,10 +280,10 @@ function _reset!(env::RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C}) where {T, A, O,
     env.terminated = false
 
     #TODO: is this necessary?
-    set_reward!(env, env.reward_strat, env.cache.context)
+    set_reward!(env, env.reward_strat)
 
     # update observation to initial conditions
-    compute_observation!(env.observation, env, env.observation_strat, env.cache.context)
+    compute_observation!(env.observation, env, env.observation_strat, env.cache.observation_cache, env.cache.context)
     env.info = Dict{String, Any}()
 
     #reset method cache
@@ -298,7 +299,7 @@ function _reset!(env::RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C}) where {T, A, O,
 
     RDE.RDE_RHS!(zeros(T, 2 * env.prob.params.N), env.state, env.prob, T(0.0)) #to update caches
     #update observation to initial conditions
-    compute_observation!(env.observation, env, env.observation_strat, env.cache.context)
+    compute_observation!(env.observation, env, env.observation_strat, env.cache.observation_cache, env.cache.context)
 
     return nothing
 end

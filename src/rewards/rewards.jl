@@ -1,5 +1,5 @@
-function set_reward!(env::AbstractRDEEnv, rew_strat::AbstractRewardStrategy, context::AbstractCache)
-    env.reward = compute_reward(env, rew_strat, env.cache.reward_cache, context)
+function set_reward!(env::AbstractRDEEnv, rew_strat::AbstractRewardStrategy)
+    env.reward = compute_reward(env, rew_strat, env.cache.reward_cache, env.cache.context)
     return env
 end
 

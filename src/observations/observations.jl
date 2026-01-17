@@ -2,7 +2,13 @@ struct FullStateObservation <: AbstractObservationStrategy end
 
 initialize_cache(::FullStateObservation, N::Int, ::Type{T}) where {T} = NoCache()
 
-function compute_observation!(obs, env::RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C}, ::FullStateObservation, ::AbstractCache) where {T, A, O, RW, CS, V, OBS, M, RS, C}
+function compute_observation!(
+        obs,
+        env::RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C},
+        ::FullStateObservation,
+        ::AbstractCache,
+        ::AbstractCache,
+    ) where {T, A, O, RW, CS, V, OBS, M, RS, C}
     N = length(env.state) ÷ 2
     obs_u = @view obs[1:N]
     obs_λ = @view obs[(N + 1):(2 * N)]
@@ -13,8 +19,12 @@ function compute_observation!(obs, env::RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C
     return obs
 end
 
-function get_init_observation(::FullStateObservation, N::Int, ::Type{T}) where {T <: AbstractFloat}
-    return Vector{T}(undef, 2N)
+function _observation_space(params::RDEParam{T}, ::FullStateObservation) where {T}
+    N = params.N
+    bound = T(1.0f6)
+    low = fill(-bound, 2N)
+    high = fill(bound, 2N)
+    return DRiL.Box(low, high)
 end
 
 @kwdef struct FullStateCenteredObservation <: AbstractMultiAgentObservationStrategy
@@ -32,7 +42,13 @@ function Base.show(io::IO, ::MIME"text/plain", obs_strategy::FullStateCenteredOb
     return println(io, "  n_sections: $(obs_strategy.n_sections)")
 end
 
-function compute_observation!(obs, env::RDEEnv{T, A, O, R, CS, V, OBS}, obs_strategy::FullStateCenteredObservation, ::AbstractCache) where {T, A, O, R, CS, V, OBS}
+function compute_observation!(
+        obs,
+        env::RDEEnv{T, A, O, R, CS, V, OBS},
+        obs_strategy::FullStateCenteredObservation,
+        ::AbstractCache,
+        ::AbstractCache,
+    ) where {T, A, O, R, CS, V, OBS}
     n_sections = obs_strategy.n_sections
     N = env.prob.params.N
     points_per_section = N ÷ n_sections
@@ -56,6 +72,11 @@ function compute_observation!(obs, env::RDEEnv{T, A, O, R, CS, V, OBS}, obs_stra
     return obs
 end
 
-function get_init_observation(obs_strategy::FullStateCenteredObservation, N::Int, ::Type{T}) where {T <: AbstractFloat}
-    return Matrix{T}(undef, 2 * N, obs_strategy.n_sections)
+function _observation_space(params::RDEParam{T}, obs_strategy::FullStateCenteredObservation) where {T}
+    N = params.N
+    n_sections = obs_strategy.n_sections
+    bound = T(1.0f6)
+    low = fill(-bound, 2N, n_sections)
+    high = fill(bound, 2N, n_sections)
+    return DRiL.Box(low, high)
 end

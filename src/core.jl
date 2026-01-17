@@ -23,18 +23,25 @@ abstract type AbstractObservationStrategy end
 abstract type AbstractMultiAgentObservationStrategy <: AbstractObservationStrategy end
 
 """
-    compute_observation!(obs, env::RDEEnv, observation_strat::AbstractObservationStrategy, context::AbstractCache)
+    _observation_space(params::RDEParam{T}, observation_strat::AbstractObservationStrategy) where {T}
+
+Return the observation space for a given strategy using only `RDEParam` so it is callable in the
+environment constructor.
+"""
+function _observation_space end
+
+"""
+    compute_observation!(
+        obs,
+        env::RDEEnv,
+        observation_strat::AbstractObservationStrategy,
+        observation_cache::AbstractCache,
+        context::AbstractCache,
+    )
 
 Compute the observation from the environment and store it in obs.
 """
 function compute_observation! end
-
-"""
-    get_init_observation(observation_strat::AbstractObservationStrategy, N::Int, T::Type{<:AbstractFloat})
-
-Returns an array of the correct size and type for the observation. Called at env construction.
-"""
-function get_init_observation end
 
 # Rewards
 
@@ -43,7 +50,7 @@ abstract type AbstractVectorRewardStrategy <: AbstractRewardStrategy end
 abstract type AbstractScalarRewardStrategy <: AbstractRewardStrategy end
 
 """
-    set_reward!(env::AbstractRDEEnv, rt::AbstractRewardStrategy, context::AbstractCache)
+    set_reward!(env::AbstractRDEEnv, rew_strat::AbstractRewardStrategy)
 
 Set the reward for the environment in env.reward.
 """
