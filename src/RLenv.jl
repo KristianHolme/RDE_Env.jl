@@ -287,7 +287,7 @@ function _reset!(env::RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C}) where {T, A, O,
     env.info = Dict{String, Any}()
 
     #reset method cache
-    RDE.reset_cache!(env.prob.method.cache, τ_smooth = env.τ_smooth, params = env.prob.params)
+    RDE._reset_cache!(env.prob.method.cache, τ_smooth = env.τ_smooth, params = env.prob.params)
     #reset caches
     reset_cache!(env.cache)
     on_reset!(env.cache.context, env.context_strat, env)
