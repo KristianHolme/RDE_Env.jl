@@ -82,6 +82,22 @@ Implement:
 Optional:
 - `initialize_cache(action_strat, N, T)`, `reset_cache!`
 
+#### Control interface (`u_p` and `s`)
+Action strategies are intended to control the underlying RDE solver by updating the control
+signals `u_p` and/or `s`. These live in the method cache at `env.prob.method.cache` as
+**length-`N` vectors over the spatial grid**:
+
+- `u_p_current::Vector{T}`, `u_p_previous::Vector{T}`
+- `s_current::Vector{T}`, `s_previous::Vector{T}`
+
+Smoothing uses `*_previous` and `*_current` together with `control_time` and `τ_smooth`, so a
+typical action strategy should **copy current to previous before updating current**, e.g.:
+
+- `copyto!(method_cache.u_p_previous, method_cache.u_p_current)`
+- write new targets into `method_cache.u_p_current` (scalar or piecewise-constant over sections)
+
+See [`src/actions/actions.jl`](src/actions/actions.jl) for the canonical implementations.
+
 ### Observation strategies
 Subtype `AbstractObservationStrategy` (or `AbstractMultiAgentObservationStrategy`).
 
@@ -119,6 +135,43 @@ If using custom cache, implement:
 - `initialize_cache(context_strat, N, T)` (default `NoCache()`)
 - `on_reset!(context_cache, context_strat, env)`
 - `on_step!(context_cache, context_strat, env)` (default no-op)
+
+### Internal structure: `RDEEnv`, `RDEProblem`, and caches
+When implementing custom strategies, the most frequently used internals are:
+
+- `env.state`: the simulator state vector (layout is `u` then `λ`, each length `N`)
+- `env.cache`: environment cache, including strategy caches and `prev_u/prev_λ`
+- `env.prob.method.cache`: solver method cache, including the control buffers (`u_p_current`, `s_current`, etc.)
+- `env.info`: dictionary for diagnostics (rewards may set termination/truncation and store reasons here)
+
+```mermaid
+flowchart TD
+  RDEEnv --> prob
+  RDEEnv --> state
+  RDEEnv --> observation
+  RDEEnv --> info
+  RDEEnv --> RDEEnvCache
+
+  prob --> params
+  prob --> method
+  prob --> reset_strategy
+  prob --> control_shift_strategy
+  prob --> sol
+
+  method --> method_cache
+  method_cache --> u_p_current
+  method_cache --> u_p_previous
+  method_cache --> s_current
+  method_cache --> s_previous
+  method_cache --> control_time
+
+  RDEEnvCache --> prev_u
+  RDEEnvCache --> prev_lambda
+  RDEEnvCache --> action_cache
+  RDEEnvCache --> observation_cache
+  RDEEnvCache --> reward_cache
+  RDEEnvCache --> context_cache
+```
 
 ## Custom implementations
 

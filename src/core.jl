@@ -15,6 +15,28 @@ abstract type AbstractScalarActionStrategy <: AbstractActionStrategy end
     )
 
 Apply an action to the environment using the provided action strategy and caches.
+
+## Control interface contract
+
+In `RDE_Env`, actions are intended to update the simulator control signals `u_p` and/or `s`
+by mutating the method cache stored at `env.prob.method.cache`.
+
+For the default finite-volume solver, these controls are stored as **vectors over the spatial
+grid** (length `N = env.prob.params.N`):
+
+- `method_cache.u_p_current::Vector{T}` and `method_cache.u_p_previous::Vector{T}`
+- `method_cache.s_current::Vector{T}` and `method_cache.s_previous::Vector{T}`
+
+Smoothing/interpolation uses the `*_previous` and `*_current` buffers together with
+`method_cache.control_time` and `method_cache.τ_smooth`. Therefore, action strategies should
+generally **copy current to previous before updating current**, e.g.:
+
+- `copyto!(method_cache.u_p_previous, method_cache.u_p_current)`
+- update `method_cache.u_p_current` (scalar or piecewise-constant over sections)
+- `copyto!(method_cache.s_previous, method_cache.s_current)`
+- update `method_cache.s_current` (if the strategy controls `s`)
+
+See `src/actions/actions.jl` for reference implementations.
 """
 function apply_action! end
 # Constructors
