@@ -17,14 +17,15 @@ using ProgressMeter
 
 include("core.jl")
 export AbstractRDEEnv, AbstractActionStrategy, AbstractObservationStrategy, AbstractMultiAgentObservationStrategy,
-    AbstractRewardStrategy
+    AbstractRewardStrategy, AbstractScalarActionStrategy, AbstractVectorActionStrategy,
+    AbstractScalarRewardStrategy, AbstractVectorRewardStrategy
 export compute_observation!
-export set_reward!
+export set_reward!, apply_action!, on_reset!, _observation_space
 export RDEEnv, RDEEnvCache
 export AbstractCache, NoCache, initialize_cache, reset_cache!
 export AbstractContextStrategy
 include("utils.jl")
-export get_plotting_speed_adjustments
+export get_plotting_speed_adjustments, get_avg_wave_speed
 
 # Context
 include("contexts.jl")
@@ -32,7 +33,7 @@ export NoContextStrategy
 
 # Actions
 include("actions/actions.jl")
-export DirectScalarPressureAction, DirectVectorPressureAction
+export DirectScalarPressureAction, DirectVectorPressureAction, momentum
 
 # Control shift strategies
 include("control_shift.jl")
@@ -54,7 +55,7 @@ include("RLenv.jl")
 export _reset!, _act!, _observe, terminated
 
 include("dril_interface.jl")
-export MultiAgentRDEEnv
+export MultiAgentRDEEnv, _action_space, _multi_agent_action_space
 
 include("policies.jl")
 export AbstractRDEPolicy, get_env
