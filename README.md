@@ -317,10 +317,10 @@ env = BroadcastedParallelEnv([make_env() for _ in 1:16])
 env = MonitorWrapperEnv(env)
 
 alg = DRiL.PPO()
-policy = ActorCriticPolicy(observation_space(env), action_space(env))
+policy = ActorCriticLayer(observation_space(env), action_space(env))
 agent = ActorCriticAgent(policy; verbose = 2)
 
-learn_stats, to = learn!(agent, env, alg, 100_000)
+learn_stats, to = train!(agent, env, alg, 100_000)
 ```
 
 ## Evaluation with `run_policy`
