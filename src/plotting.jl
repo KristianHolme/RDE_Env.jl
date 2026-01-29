@@ -53,6 +53,25 @@ The plot includes:
 function plot_policy_data(
         data::PolicyRunData,
         env::RDEEnv;
+        fig_size = (1000, 900),
+        kwargs...
+    )
+    fig = Figure(; size = fig_size)
+    layout = fig[1, 1] = GridLayout()
+    plot_policy_data!(
+        layout,
+        data,
+        env;
+        kwargs...
+    )
+    resize_to_layout!(fig)
+    return fig
+end
+
+function plot_policy_data!(
+        layout::GridLayout,
+        data::PolicyRunData,
+        env::RDEEnv;
         time_idx = Observable(1),
         player_controls = true,
         rewards_and_shocks = true,
@@ -60,7 +79,6 @@ function plot_policy_data(
         control_history = true,
         observations = false,
         live_control = false,
-        fig_size = (1000, 900),
         max_jump_speed = 4.6f0,
         initial_moving_frame = true,
         kwargs...
@@ -129,17 +147,16 @@ function plot_policy_data(
     # s = @lift(ss[sparse_to_dense_ind(state_ts, action_ts, $time_idx)])
     # u_p = @lift(u_ps[sparse_to_dense_ind(state_ts, action_ts, $time_idx)])
 
-    fig = Figure(; size = fig_size)
-    main_layout = fig[1, 1] = GridLayout()
+    main_layout = layout[1, 1] = GridLayout()
     upper_area = main_layout[1, 1] = GridLayout() #title, time
     system_plot_layout = main_layout[2, 1] = GridLayout()
     metrics_action_layout = nothing
     if control_history || energy_and_chamber_pressure || rewards_and_shocks
-        metrics_action_layout = fig[1, 2] = GridLayout()
+        metrics_action_layout = layout[1, 2] = GridLayout()
     end
 
     if control_history || energy_and_chamber_pressure || rewards_and_shocks
-        colsize!(fig.layout, 1, Relative(0.66))
+        colsize!(layout, 1, Relative(0.66))
     end
 
 
@@ -326,17 +343,16 @@ function plot_policy_data(
         observation = @lift(data.observations[$sparse_time_idx])
         # @show observation[]
         if typeof(data.observations[1]) <: AbstractVector
-            ax_obs = Axis(fig[end + 1, 1], title = "Observations")
+            ax_obs = Axis(layout[end + 1, 1], title = "Observations")
             barplot!(ax_obs, observation)
         else
-            ax_obs = Axis(fig[end + 1, 1], title = "Observations", xlabel = "index", ylabel = "Agent")
+            ax_obs = Axis(layout[end + 1, 1], title = "Observations", xlabel = "index", ylabel = "Agent")
             xs = 1:size(observation[], 1)
             ys = 1:size(observation[], 2)
             heatmap!(ax_obs, xs, ys, observation)
         end
     end
-    resize_to_layout!(fig)
-    return fig
+    return nothing
 end
 
 """
@@ -361,13 +377,30 @@ Create a space-time plot of the solution in a moving reference frame.
 """
 function plot_shifted_history(
         us::AbstractArray, x::AbstractArray,
-        ts::AbstractArray, c::Union{Real, AbstractArray} = 1.65;
+        ts::AbstractArray, c::Union{Real, AbstractArray} = 1.71
+    )
+    fig = Figure(size = size)
+    layout = fig[1, 1] = GridLayout()
+    plot_shifted_history!(
+        layout,
+        us,
+        x,
+        ts,
+        c
+    )
+    resize_to_layout!(fig)
+    return fig
+end
+
+function plot_shifted_history!(
+        layout::GridLayout,
+        us::AbstractArray, x::AbstractArray,
+        ts::AbstractArray, c::Union{Real, AbstractArray} = 1.71;
         u_ps = nothing, rewards = nothing,
         target_shock_count = nothing,
         action_ts = ts,
         plot_shocks = true,
         title = nothing,
-        size = (1200, 600),
         u_hm_kwargs = (),
         u_ax_kwargs = (),
         control_shifts = nothing,
@@ -380,19 +413,18 @@ function plot_shifted_history(
     pre_check_ts!(action_ts)
     shifted_us = Array.(RDE.shift_inds(us, x, ts, c))
 
-    fig = Figure(size = size)
     ax = Axis(
-        fig[1, 1]; title = "u(ψ, t)", xlabel = "t",
+        layout[1, 1]; title = "u(ψ, t)", xlabel = "t",
         ylabel = "ψ", yzoomlock = true, ypanlock = true,
         limits = (extrema(ts), extrema(x)), xautolimitmargin = (0.0, 0.0),
         u_ax_kwargs...
     )
     hm = heatmap!(ax, ts, x, stack(shifted_us)', colorscale = identity, u_hm_kwargs...)
-    Colorbar(fig[1, 2], hm)
+    Colorbar(layout[1, 2], hm)
     if plot_shocks
         counts = RDE.count_shocks.(us, dx)
         ax2 = Axis(
-            fig[end + 1, 1], xlabel = "t", ylabel = "Number of shocks",
+            layout[end + 1, 1], xlabel = "t", ylabel = "Number of shocks",
             limits = (nothing, (-0.05, maximum(counts) * 1.05)),
             xautolimitmargin = (0.0, 0.0)
         )
@@ -412,7 +444,7 @@ function plot_shifted_history(
             #TODO: factor out some utils here?
             # u_ps is a vector field - plot on same spatial grid as u
             ax3 = Axis(
-                fig[end + 1, 1]; xlabel = "t", ylabel = "ψ",
+                layout[end + 1, 1]; xlabel = "t", ylabel = "ψ",
                 yzoomlock = true, ypanlock = true,
                 limits = (extrema(ts), extrema(x)),
                 xautolimitmargin = (0.0, 0.0),
@@ -469,12 +501,12 @@ function plot_shifted_history(
                 shifted_u_ps = copy(static_ref_u_ps)
             end
             hm_u_ps = heatmap!(ax3, ts, x, stack(shifted_u_ps)')
-            Colorbar(fig[end, 2], hm_u_ps)
+            Colorbar(layout[end, 2], hm_u_ps)
             # lines!.(Ref(ax3), Ref(action_ts), eachrow(stack(u_ps)), color = :royalblue)
             linkyaxes!(ax, ax3)
         else
             ax3 = Axis(
-                fig[end + 1, 1], xlabel = "t", ylabel = "uₚ",
+                layout[end + 1, 1], xlabel = "t", ylabel = "uₚ",
                 limits = (nothing, (0.0, max(u_p_maximum * 1.05, 1.2))),
                 xautolimitmargin = (0.0, 0.0),
             )
@@ -496,7 +528,7 @@ function plot_shifted_history(
         rewards_minimum = minimum(minimum.(rewards))
         rewards_maximum = maximum(maximum.(rewards))
         ax4 = Axis(
-            fig[end + 1, 1], xlabel = "t", ylabel = "Reward",
+            layout[end + 1, 1], xlabel = "t", ylabel = "Reward",
             limits = (nothing, (rewards_minimum - 0.05, rewards_maximum + 0.05)),
             xautolimitmargin = (0.0, 0.0)
         )
@@ -509,9 +541,9 @@ function plot_shifted_history(
     end
     autolimits!(ax)
     if title !== nothing
-        Label(fig[0, 1], title, fontsize = 20, tellwidth = false)
+        Label(layout[0, 1], title, fontsize = 20, tellwidth = false)
     end
-    return fig
+    return nothing
 end
 
 function plot_shifted_history(
@@ -520,6 +552,7 @@ function plot_shifted_history(
         c = :auto;
         use_rewards = true,
         max_jump_speed = 4.6f0,
+        size = (1200, 600),
         kwargs...
     )
     us, = RDE.split_sol(data.states)
@@ -539,10 +572,22 @@ function plot_shifted_history(
         speeds = RDE.predict_speed.(u_ps, counts)
         c = speeds[1:(end - 1)]
     end
-    return plot_shifted_history(
-        us, x, data.state_ts, c;
-        u_ps = data.u_ps, rewards = use_rewards ? data.rewards : nothing, action_ts = data.action_ts, control_shifts = data.control_shifts, kwargs...
+    fig = Figure(size = size)
+    layout = fig[1, 1] = GridLayout()
+    plot_shifted_history!(
+        layout,
+        us,
+        x,
+        data.state_ts,
+        c;
+        u_ps = data.u_ps,
+        rewards = use_rewards ? data.rewards : nothing,
+        action_ts = data.action_ts,
+        control_shifts = data.control_shifts,
+        kwargs...
     )
+    resize_to_layout!(fig)
+    return fig
 end
 
 function animate_policy(π::P, env::RDEEnv; kwargs...) where {P <: AbstractRDEPolicy}
