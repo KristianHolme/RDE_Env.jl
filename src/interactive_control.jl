@@ -1,4 +1,4 @@
-using Colors: distinguishable_colors
+using Colors: RGB, distinguishable_colors
 """
     interactive_control(env::RDEEnv; callback=nothing, show_observations=false)
 
@@ -310,7 +310,7 @@ function interactive_control(
     reward_start_xmax = 0.5
     ax_reward = Axis(energy_area[1, 1], title = "Reward", xlabel = "t", limits = (0, reward_start_xmax, nothing, nothing))
     if reward_is_vector
-        bg_color = Makie.Colors.RGB(ax_reward.scene.backgroundcolor[])
+        bg_color = RGB(ax_reward.scene.backgroundcolor[])
         colors = distinguishable_colors(reward_length, [bg_color]; dropseed = true)
         labels = reward_value isa NamedTuple ? collect(keys(reward_value)) : ["r$(i)" for i in 1:reward_length]
         for i in 1:reward_length

@@ -1,19 +1,57 @@
 module RDE_Env
-using RDE
-using CircularArrays
-using DomainSets
-using LinearAlgebra
-using Statistics
-using Random
-using Logging
-using SciMLBase
-using OrdinaryDiffEq
-using DRiL
-using Makie
-using Observables
+using CircularArrays: CircularArrays
+using DRiL: DRiL, AbstractPolicy, terminated
+using DomainSets: DomainSets
+using LinearAlgebra: LinearAlgebra, norm
+using Logging: Logging, @logmsg, LogLevel
+using Makie:
+    Makie,
+    @lift,
+    Auto,
+    Axis,
+    Button,
+    Colorbar,
+    Figure,
+    GridLayout,
+    Keyboard,
+    Label,
+    Point2f,
+    Relative,
+    SliderGrid,
+    Toggle,
+    autolimits!,
+    axislegend,
+    barplot!,
+    colsize!,
+    events,
+    heatmap!,
+    hidespines!,
+    hidexdecorations!,
+    hideydecorations!,
+    hlines!,
+    ispressed,
+    lift,
+    lines!,
+    linkxaxes!,
+    linkyaxes!,
+    record,
+    resize_to_layout!,
+    rowsize!,
+    scatter!,
+    scatterlines!,
+    set_close_to!,
+    stairs!,
+    to_value,
+    xlims!,
+    ylims!
+using Observables: Observables, Observable, connect!, on
+using OrdinaryDiffEq: OrdinaryDiffEq, ODEProblem, ReturnCode, SciMLBase
+using PrecompileTools: PrecompileTools, @compile_workload
+using ProgressMeter: ProgressMeter, Progress, next!
+using RDE: RDE, AbstractControlShift, AbstractMethod, AbstractReset, RDEParam, RDEProblem, RDE_RHS!
+using Random: Random
+using Statistics: Statistics, mean
 # using Polyester
-using PrecompileTools
-using ProgressMeter
 
 include("core.jl")
 export AbstractRDEEnv, AbstractActionStrategy, AbstractObservationStrategy, AbstractMultiAgentObservationStrategy,

@@ -1,4 +1,3 @@
-import DiffEqCallbacks: StepsizeLimiter
 """
     RDEEnv{T<:AbstractFloat} <: AbstractRDEEnv
 
