@@ -138,7 +138,7 @@ function solve_step(env::RDEEnv{T, A, O, R, CS, V, OBS}; saves_per_action::Int =
     t0, t1 = env.ode_problem.tspan::Tuple{T, T}
     saveat = collect(range(t0, t1; length = saves_per_action + 1))
     sol = RDE.solve_pde_step(env.prob, env.ode_problem; saveat = saveat)
-    if sol.retcode != :Success
+    if sol.retcode != ReturnCode.Success
         @warn "Failed to solve PDE step (retcode: $(sol.retcode)) for $(typeof(env.prob.method))"
     end
     return sol
