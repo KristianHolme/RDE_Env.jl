@@ -1,8 +1,5 @@
-using Test
-using RDE
-using RDE_Env
-
 @testitem "RDEEnv applies spatial kernel width" begin
+    using RDE
     params = RDEParam(N = 32, tmax = 0.1f0)
     env = RDEEnv(; params, spatial_kernel_width = 8)
     cache = env.prob.method.cache
@@ -11,6 +8,7 @@ using RDE_Env
 end
 
 @testitem "RDEEnv RDE_RHS! uses smoothed controls" begin
+    using RDE
     params = RDEParam{Float32}(N = 64, tmax = 1.0f0)
     env = RDEEnv(; params, spatial_kernel_width = 9, τ_smooth = 1.0f0)
     cache = env.prob.method.cache
