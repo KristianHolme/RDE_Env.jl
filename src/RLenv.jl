@@ -89,7 +89,8 @@ function RDEEnv(;
     #TODO: remember to supply control shift strategy in kwargs if applicable
     prob = RDEProblem(params; kwargs...)
     if !isnothing(prob.method.cache)
-        RDE.set_spatial_control_smoothing!(prob.method.cache, spatial_kernel_width)
+        method_cache = prob.method.cache::RDE.FVCache{T}
+        RDE.set_spatial_control_smoothing!(method_cache, spatial_kernel_width)
     end
     initial_state = vcat(prob.u0, prob.λ0)
     ode_problem = ODEProblem{true, SciMLBase.FullSpecialize}(RDE_RHS!, initial_state, (zero(T), dt), prob)

@@ -48,7 +48,8 @@ using Observables: Observables, Observable, connect!, on
 using OrdinaryDiffEq: OrdinaryDiffEq, ODEProblem, ReturnCode, SciMLBase
 using PrecompileTools: PrecompileTools, @compile_workload
 using ProgressMeter: ProgressMeter, Progress, next!
-using RDE: RDE, AbstractControlShift, AbstractMethod, AbstractReset, RDEParam, RDEProblem, RDE_RHS!
+using RDE: RDE, AbstractControlShift, AbstractMethod, AbstractReset, RDEParam, RDEProblem,
+    RDE_RHS!, set_spatial_control_smoothing!
 using Random: Random
 using Statistics: Statistics, mean
 # using Polyester
