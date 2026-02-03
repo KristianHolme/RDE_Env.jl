@@ -49,6 +49,7 @@ function RDEEnv(;
         u_pmax = 1.2f0,
         params::RDEParam{T} = RDEParam(),
         τ_smooth = 0.1f0,
+        spatial_kernel_width::Int = 0,
         action_strat::A = DirectScalarPressureAction(),
         observation_strat::O = FullStateObservation(),
         reward_strat::RW = USpanReward(),
@@ -87,6 +88,9 @@ function RDEEnv(;
     # end
     #TODO: remember to supply control shift strategy in kwargs if applicable
     prob = RDEProblem(params; kwargs...)
+    if !isnothing(prob.method.cache)
+        RDE.set_spatial_control_smoothing!(prob.method.cache, spatial_kernel_width)
+    end
     initial_state = vcat(prob.u0, prob.λ0)
     ode_problem = ODEProblem{true, SciMLBase.FullSpecialize}(RDE_RHS!, initial_state, (zero(T), dt), prob)
 
