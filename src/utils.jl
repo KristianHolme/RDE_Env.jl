@@ -60,7 +60,7 @@ end
     get_avg_wave_speed(us::Vector{Vector{T}}, ts, dx::T) -> T
 
 Get the average wave speed from the solution data. Computes block speeds. If there is data, average speed for each shock,
-then average the speeds of all shocks to get average speed for the block. Then average again to get average speed over all the blocks. 
+then average the speeds of all shocks to get average speed for the block. Then average again to get average speed over all the blocks.
 
 # Arguments
 - `us::Vector{Vector{T}}`: Solution data
@@ -187,9 +187,9 @@ end
     adjust_for_jumps!(plot_speeds, max_speed; fallback_speed = 1.71f0)
 Sometimes speed blocks fail, e.g. if a single shock is dissappearing in the same frame as another is appearing.
 Then it will appear as if there is a single shock that jumps to a new position.
-Here we try to detect these jumps and adjust the entries with high speed. 
+Here we try to detect these jumps and adjust the entries with high speed.
 Adjustment is done by finding the nearby non-jump entries and averaging them.
-If this fails, we set speed to `fallback_speed`.     
+If this fails, we set speed to `fallback_speed`.
 """
 function adjust_for_jumps!(plot_speeds, max_speed; fallback_speed = 1.71f0)
     all_indices = eachindex(plot_speeds)
