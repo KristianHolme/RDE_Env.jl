@@ -596,7 +596,8 @@ end
 
 function animate_policy_data(
         data::PolicyRunData, env::RDEEnv;
-        dir = "./videos/", fname = "policy", format = ".mp4", fps = 25, kwargs...
+        dir = "./videos/", fname = "policy", format = ".mp4", fps = 25,
+        record_kwargs = (;), kwargs...
     )
     time_idx = Observable(1)
     time_steps = length(data.state_ts)
@@ -608,7 +609,7 @@ function animate_policy_data(
 
     path = joinpath(dir, fname * format)
     p = Progress(time_steps, desc = "Recording animation...")
-    return record(fig, path, 1:time_steps, framerate = fps) do i
+    return record(fig, path, 1:time_steps, framerate = fps, record_kwargs...) do i
         time_idx[] = i
         next!(p)
     end
