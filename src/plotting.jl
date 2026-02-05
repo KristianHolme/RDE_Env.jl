@@ -601,7 +601,8 @@ function animate_policy_data(
         record_kwargs = (;), kwargs...
     )
     time_idx = Observable(1)
-    iter = 1:skip:length(data.state_ts)
+    time_steps = length(data.state_ts)
+    iter = 1:skip:time_steps
     fig = plot_policy_data(data, env; time_idx, player_controls = false, show_mouse_vlines = false, kwargs...)
 
     if !isdir(dir)
