@@ -610,7 +610,7 @@ function animate_policy_data(
     end
 
     path = joinpath(dir, fname * format)
-    p = Progress(time_steps, desc = "Recording animation...")
+    p = Progress(length(iter), desc = "Recording animation...")
     return record(fig, path, iter; framerate = fps, record_kwargs...) do i
         time_idx[] = i
         next!(p)
