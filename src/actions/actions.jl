@@ -76,7 +76,7 @@ function apply_action!(
     copyto!(method_cache.u_p_previous, method_cache.u_p_current)
 
     points_per_section = N ÷ action_strat.n_sections
-    current_section_controls = @view method_cache.u_p_current[1:points_per_section:end]
+    current_section_controls = method_cache.u_p_current[section_midpoint_indices(N, action_strat.n_sections)]
     section_controls = action_cache.section_controls
     clamped_action = clamp.(action, zero(T), env.u_pmax)
     section_controls .= momentum_target.(clamped_action, current_section_controls, momentum(env.action_strat))

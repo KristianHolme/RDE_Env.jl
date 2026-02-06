@@ -166,13 +166,13 @@ function run_policy(policy::AbstractPolicy, env::RDEEnv{T}; saves_per_action = 1
         # Record control summaries. This is the controls during the action step.
         if eltype(ss) <: AbstractVector
             sections = env.action_strat.n_sections
-            ss[step] = section_reduction(env.prob.method.cache.s_current, sections)
+            ss[step] = section_midpoint_values(env.prob.method.cache.s_current, sections)
         elseif eltype(ss) <: Number
             ss[step] = mean(env.prob.method.cache.s_current)
         end
         if eltype(u_ps) <: AbstractVector
             sections = env.action_strat.n_sections
-            u_ps[step] = section_reduction(env.prob.method.cache.u_p_current, sections)
+            u_ps[step] = section_midpoint_values(env.prob.method.cache.u_p_current, sections)
         elseif eltype(u_ps) <: Number
             u_ps[step] = mean(env.prob.method.cache.u_p_current)
         end
@@ -278,6 +278,15 @@ function section_reduction(v::Vector{T}, sections::Int) where {T}
     section_length = Int(round(N // sections))
     m = reshape(v, section_length, :)
     return vec(mean(m, dims = 1))
+end
+
+function section_midpoint_indices(N::Int, n_sections::Int)
+    points_per_section = N ÷ n_sections
+    return [(i - 1) * points_per_section + (points_per_section + 1) ÷ 2 for i in 1:n_sections]
+end
+
+function section_midpoint_values(v::AbstractVector{T}, n_sections::Int) where {T}
+    return v[section_midpoint_indices(length(v), n_sections)]
 end
 
 function get_env(π::AbstractRDEPolicy)

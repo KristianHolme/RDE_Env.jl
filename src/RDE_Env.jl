@@ -100,6 +100,7 @@ include("policies.jl")
 export AbstractRDEPolicy, get_env
 export PolicyRunData, run_policy
 export _predict_action
+export section_midpoint_indices, section_midpoint_values
 
 # Plotting
 include("plotting.jl")
