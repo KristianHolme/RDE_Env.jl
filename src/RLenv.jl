@@ -235,6 +235,8 @@ function _act!(env::RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C}, action; saves_per
         action_to_apply = action[1]
     end
     apply_action!(env, action_to_apply, env.action_strat, env.cache.action_cache, env.cache.context)
+    RDE.apply_spatial_smoothing!(method_cache.u_p_current, method_cache)
+    RDE.apply_spatial_smoothing!(method_cache.s_current, method_cache)
     dt = env.dt
     t_span = (t, t + dt)::Tuple{T, T}
 
@@ -292,6 +294,8 @@ function _reset!(env::RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C}) where {T, A, O,
 
     #reset method cache
     RDE._reset_cache!(env.prob.method.cache, τ_smooth = env.τ_smooth, params = env.prob.params)
+    RDE.apply_spatial_smoothing!(env.prob.method.cache.u_p_current, env.prob.method.cache)
+    RDE.apply_spatial_smoothing!(env.prob.method.cache.s_current, env.prob.method.cache)
     #reset caches
     reset_cache!(env.cache)
     on_reset!(env.cache.context, env.context_strat, env)

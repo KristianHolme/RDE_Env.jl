@@ -19,12 +19,16 @@ end
     cache.s_current .= 1.0f0
     cache.s_previous .= cache.s_current
 
+    boundary_index = params.N ÷ 2 + 1
+    jump_raw = abs(cache.u_p_current[boundary_index] - cache.u_p_current[boundary_index - 1])
+
+    RDE.apply_spatial_smoothing!(cache.u_p_current, cache)
+    RDE.apply_spatial_smoothing!(cache.s_current, cache)
+
     uλ = vcat(env.prob.u0, env.prob.λ0)
     duλ = zeros(Float32, length(uλ))
     RDE.RDE_RHS!(duλ, uλ, env.prob, 1.0f0)
 
-    boundary_index = params.N ÷ 2 + 1
-    jump_raw = abs(cache.u_p_current[boundary_index] - cache.u_p_current[boundary_index - 1])
     jump_smoothed = abs(cache.u_p_t_shifted[boundary_index] - cache.u_p_t_shifted[boundary_index - 1])
     @test jump_smoothed < jump_raw
 end
