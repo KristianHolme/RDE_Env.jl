@@ -43,7 +43,8 @@ using Makie:
     stairs!,
     to_value,
     xlims!,
-    ylims!
+    ylims!,
+    @L_str
 using Observables: Observables, Observable, connect!, on
 using OrdinaryDiffEq: OrdinaryDiffEq, ODEProblem, ReturnCode, SciMLBase
 using PrecompileTools: PrecompileTools, @compile_workload
