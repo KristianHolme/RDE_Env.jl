@@ -183,21 +183,6 @@ function plot_policy_data!(
 
     metrics_action_layout_plots = 0
 
-    # energy_and_chamber_pressure keyword kept for backwards compatibility but ignored
-    # energy_bal and chamber_p removed from PolicyRunData
-    #     if energy_and_chamber_pressure
-    #         metrics_action_Area_plots += 1
-    #         ax_eb = Axis(metrics_action_area[1, metrics_action_Area_plots], title = "Energy balance", ylabel = "Ė")
-    #         hidexdecorations!(ax_eb, grid = false)
-    #         lines!(ax_eb, state_ts, energy_bal)
-    #         vlines!(ax_eb, fine_time, color = :green, alpha = 0.5)
-    #
-    #         # Add chamber pressure
-    #         ax_cp = Axis(metrics_action_area[2, metrics_action_Area_plots], title = "Chamber pressure", xlabel = "t", ylabel = "̄u²")
-    #         lines!(ax_cp, state_ts, chamber_p)
-    #         vlines!(ax_cp, fine_time, color = :green, alpha = 0.5)
-    #     end
-
     if rewards_and_shocks
         metrics_action_layout_plots += 1
         # Add rewards and shocks
@@ -251,7 +236,7 @@ function plot_policy_data!(
         plot_s = !(norm(diff(ss)) ≈ 0)
 
         layout = metrics_action_layout::GridLayout
-        ax_u_p = Axis(layout[metrics_action_layout_plots, 1], ylabel = "uₚ", yticklabelcolor = :royalblue)
+        ax_u_p = Axis(layout[metrics_action_layout_plots, 1], ylabel = L"u_p", yticklabelcolor = :royalblue)
         ylims!(ax_u_p, (0, env.u_pmax * 1.05))
 
         ax_s = nothing
@@ -415,8 +400,8 @@ function plot_shifted_history!(
     shifted_us = Array.(RDE.shift_inds(us, x, ts, c))
 
     ax = Axis(
-        layout[1, 1]; title = "u(ψ, t)", xlabel = "t",
-        ylabel = "ψ", yzoomlock = true, ypanlock = true,
+        layout[1, 1]; title = L"u(\psi, t)", xlabel = "t",
+        ylabel = L"\psi", yzoomlock = true, ypanlock = true,
         limits = (extrema(ts), extrema(x)), xautolimitmargin = (0.0, 0.0),
         u_ax_kwargs...
     )
@@ -445,11 +430,11 @@ function plot_shifted_history!(
             #TODO: factor out some utils here?
             # u_ps is a vector field - plot on same spatial grid as u
             ax3 = Axis(
-                layout[end + 1, 1]; xlabel = "t", ylabel = "ψ",
+                layout[end + 1, 1]; xlabel = "t", ylabel = L"\psi",
                 yzoomlock = true, ypanlock = true,
                 limits = (extrema(ts), extrema(x)),
                 xautolimitmargin = (0.0, 0.0),
-                title = "uₚ(ψ, t)",
+                title = L"u_p(\psi, t)",
                 u_ax_kwargs...
             )
             points_per_section = length(x) ÷ length(u_ps[1])
@@ -507,7 +492,7 @@ function plot_shifted_history!(
             linkyaxes!(ax, ax3)
         else
             ax3 = Axis(
-                layout[end + 1, 1], xlabel = "t", ylabel = "uₚ",
+                layout[end + 1, 1], xlabel = "t", ylabel = L"u_p",
                 limits = (nothing, (0.0, max(u_p_maximum * 1.05, 1.2))),
                 xautolimitmargin = (0.0, 0.0),
             )
