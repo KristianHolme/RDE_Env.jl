@@ -219,7 +219,7 @@ function plot_policy_data!(
         # vlines!(ax_rewards, fine_time, color=:green, alpha=0.5)
         metrics_action_layout_plots += 1
         layout = metrics_action_layout::GridLayout
-        ax_shocks = Axis(layout[metrics_action_layout_plots, 1], title = "Shocks", xlabel = "t")
+        ax_shocks = Axis(layout[metrics_action_layout_plots, 1], title = "Shocks", xlabel = "Time")
         dx = env.prob.x[2] - env.prob.x[1]
         us, = RDE.split_sol(states)
         shocks = RDE.count_shocks.(us, dx)
@@ -242,7 +242,7 @@ function plot_policy_data!(
         ax_s = nothing
         if plot_s
             metrics_action_layout_plots += 1
-            ax_s = Axis(layout[metrics_action_layout_plots, 1], xlabel = "t", ylabel = "s", yticklabelcolor = :forestgreen, yaxisposition = :right)
+            ax_s = Axis(layout[metrics_action_layout_plots, 1], xlabel = "Time", ylabel = "s", yticklabelcolor = :forestgreen, yaxisposition = :right)
             hidespines!(ax_s)
             hidexdecorations!(ax_s)
             hideydecorations!(ax_s, ticklabels = false, ticks = false, label = false)
@@ -400,7 +400,7 @@ function plot_shifted_history!(
     shifted_us = Array.(RDE.shift_inds(us, x, ts, c))
 
     ax = Axis(
-        layout[1, 1]; title = L"u(\psi, t)", xlabel = "t",
+        layout[1, 1]; title = L"u(\psi, t)", xlabel = "Time",
         ylabel = L"\psi", yzoomlock = true, ypanlock = true,
         limits = (extrema(ts), extrema(x)), xautolimitmargin = (0.0, 0.0),
         u_ax_kwargs...
@@ -410,7 +410,7 @@ function plot_shifted_history!(
     if plot_shocks
         counts = RDE.count_shocks.(us, dx)
         ax2 = Axis(
-            layout[end + 1, 1], xlabel = "t", ylabel = "Number of shocks",
+            layout[end + 1, 1], xlabel = "Time", ylabel = "Number of shocks",
             limits = (nothing, (-0.05, maximum(counts) * 1.05)),
             xautolimitmargin = (0.0, 0.0)
         )
@@ -430,7 +430,7 @@ function plot_shifted_history!(
             #TODO: factor out some utils here?
             # u_ps is a vector field - plot on same spatial grid as u
             ax3 = Axis(
-                layout[end + 1, 1]; xlabel = "t", ylabel = L"\psi",
+                layout[end + 1, 1]; xlabel = "Time", ylabel = L"\psi",
                 yzoomlock = true, ypanlock = true,
                 limits = (extrema(ts), extrema(x)),
                 xautolimitmargin = (0.0, 0.0),
@@ -492,7 +492,7 @@ function plot_shifted_history!(
             linkyaxes!(ax, ax3)
         else
             ax3 = Axis(
-                layout[end + 1, 1], xlabel = "t", ylabel = L"u_p",
+                layout[end + 1, 1], xlabel = "Time", ylabel = L"u_p",
                 limits = (nothing, (0.0, max(u_p_maximum * 1.05, 1.2))),
                 xautolimitmargin = (0.0, 0.0),
             )
@@ -514,7 +514,7 @@ function plot_shifted_history!(
         rewards_minimum = minimum(minimum.(rewards))
         rewards_maximum = maximum(maximum.(rewards))
         ax4 = Axis(
-            layout[end + 1, 1], xlabel = "t", ylabel = "Reward",
+            layout[end + 1, 1], xlabel = "Time", ylabel = "Reward",
             limits = (nothing, (rewards_minimum - 0.05, rewards_maximum + 0.05)),
             xautolimitmargin = (0.0, 0.0)
         )
