@@ -366,7 +366,8 @@ Create a space-time plot of the solution in a moving reference frame.
 - `c::Union{Real, AbstractArray}`: Frame velocity (scalar or array)
 
 # Keywords
-- `u_ps=nothing`: Optional array of pressure values to plot
+- `size::Tuple{Int,Int}=(1200, 600)`: Figure size in pixels
+- `u_ps=nothing`: Optional array of pressure values to plot (for the mutating `plot_shifted_history!`)
 
 # Returns
 - `Figure`: Makie figure containing:
@@ -376,7 +377,8 @@ Create a space-time plot of the solution in a moving reference frame.
 """
 function plot_shifted_history(
         us::AbstractArray, x::AbstractArray,
-        ts::AbstractArray, c::Union{Real, AbstractArray} = 1.71
+        ts::AbstractArray, c::Union{Real, AbstractArray} = 1.71;
+        size = (1200, 600)
     )
     fig = Figure(size = size)
     layout = fig[1, 1] = GridLayout()
@@ -540,7 +542,7 @@ function plot_shifted_history!(
     end
     autolimits!(ax)
     if title !== nothing
-        Label(layout[0, 1], title, fontsize = 20, tellwidth = false)
+        Label(layout[0, 1], title, tellwidth = false)
     end
     return nothing
 end
