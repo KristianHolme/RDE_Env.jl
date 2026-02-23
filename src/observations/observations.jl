@@ -24,7 +24,7 @@ function _observation_space(params::RDEParam{T}, ::FullStateObservation) where {
     bound = T(1.0f6)
     low = fill(-bound, 2N)
     high = fill(bound, 2N)
-    return DRiL.Box(low, high)
+    return Drill.Box(low, high)
 end
 
 @kwdef struct FullStateCenteredObservation <: AbstractMultiAgentObservationStrategy
@@ -78,5 +78,5 @@ function _observation_space(params::RDEParam{T}, obs_strategy::FullStateCentered
     bound = T(1.0f6)
     low = fill(-bound, 2N, n_sections)
     high = fill(bound, 2N, n_sections)
-    return DRiL.Box(low, high)
+    return Drill.Box(low, high)
 end

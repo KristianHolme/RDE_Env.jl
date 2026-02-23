@@ -1,7 +1,7 @@
 [deps]
 Accessors = "7d9f7c33-5ae7-4f3b-8dc6-eff91059b697"
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
-DRiL = "49b37b9d-a8e6-4364-9144-4677bcb8a7f0"
+Drill = "49b37b9d-a8e6-4364-9144-4677bcb8a7f0"
 JET = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
 RDE = "1d57ab14-0807-4ee5-93aa-665821a12dfd"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
@@ -9,5 +9,5 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 TestItemRunner = "f8b46487-2199-4994-9208-9a1283c18c0a"
 
 [sources]
-DRiL = {rev = "main", url = "https://github.com/KristianHolme/DRiL.jl"}
+Drill = {rev = "main", url = "https://github.com/KristianHolme/Drill.jl"}
 RDE = {rev = "main", url = "https://github.com/KristianHolme/RDE.jl"}

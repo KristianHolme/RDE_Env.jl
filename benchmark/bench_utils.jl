@@ -1,6 +1,6 @@
 module BenchUtils
 
-using RDE_Env.DRiL
+using RDE_Env.Drill
 using Random
 using RDE_Env.RDE: RDEParam, split_sol
 using RDE_Env
@@ -31,12 +31,12 @@ function setup_env(;
         action_strat = DirectScalarPressureAction(),
         verbose = false,
     )
-    DRiL.reset!(env)
+    Drill.reset!(env)
     return env, rng
 end
 
 function setup_action(env::RDEEnv, rng::AbstractRNG)
-    action_space = DRiL.action_space(env)
+    action_space = Drill.action_space(env)
     action = rand(rng, action_space)
     return action
 end
@@ -50,7 +50,7 @@ function setup_policy_data(;
         saves_per_action::Int = DEFAULT_SAVES_PER_ACTION,
     )
     env, _ = setup_env(; seed = seed, N = N, tmax = tmax, dt = dt, τ_smooth = τ_smooth)
-    policy = DRiL.RandomPolicy(env)
+    policy = Drill.RandomPolicy(env)
     data = run_policy(policy, env; saves_per_action = saves_per_action)
     us, _ = split_sol(data.states)
     ts = data.state_ts

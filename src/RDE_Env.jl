@@ -1,6 +1,6 @@
 module RDE_Env
 using CircularArrays: CircularArrays
-using DRiL: DRiL, AbstractPolicy, terminated
+using Drill: Drill, AbstractPolicy, terminated
 using DomainSets: DomainSets
 using LinearAlgebra: LinearAlgebra, norm
 using Logging: Logging, @logmsg, LogLevel
@@ -123,7 +123,7 @@ include("displaying.jl")
             action_strat = DirectScalarPressureAction()
         )
 
-        policy = DRiL.RandomPolicy(env)
+        policy = Drill.RandomPolicy(env)
         data = run_policy(policy, env)
     catch e
         rethrow(e)

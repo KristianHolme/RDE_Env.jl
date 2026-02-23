@@ -4,12 +4,12 @@
 [![Aqua](https://raw.githubusercontent.com/JuliaTesting/Aqua.jl/master/badge.svg)](https://github.com/JuliaTesting/Aqua.jl)
 [![JET](https://img.shields.io/badge/JET.jl-enabled-blue)](https://github.com/aviatesk/JET.jl)
 
-RDE_Env wraps the Rotating Detonation Engine (RDE) simulator from [RDE.jl](https://github.com/KristianHolme/RDE.jl) as a reinforcement learning environment built for [DRiL.jl](https://github.com/KristianHolme/DRiL.jl).
+RDE_Env wraps the Rotating Detonation Engine (RDE) simulator from [RDE.jl](https://github.com/KristianHolme/RDE.jl) as a reinforcement learning environment built for [Drill.jl](https://github.com/KristianHolme/Drill.jl).
 
 It provides:
-- `RDEEnv` implementing the DRiL environment interface
+- `RDEEnv` implementing the Drill environment interface
 - Swappable strategies (action/observation/reward/context) with optional caching
-- `run_policy` for evaluating any `DRiL.AbstractPolicy`
+- `run_policy` for evaluating any `Drill.AbstractPolicy`
 - Makie-based plotting and animation utilities
 - And more...
 
@@ -27,7 +27,7 @@ Pkg.add(url="https://github.com/KristianHolme/RDE_Env.jl")
 ## Quickstart (single-agent)
 
 ```julia
-using DRiL
+using Drill
 using RDE_Env
 
 env = RDEEnv(;
@@ -39,10 +39,10 @@ env = RDEEnv(;
     context_strat = NoContextStrategy(),
 )
 
-DRiL.reset!(env)
-obs = DRiL.observe(env)
-action = rand(DRiL.action_space(env))
-reward = DRiL.act!(env, action)
+Drill.reset!(env)
+obs = Drill.observe(env)
+action = rand(Drill.action_space(env))
+reward = Drill.act!(env, action)
 ```
 
 ### Multi-agent wrapper
@@ -203,7 +203,7 @@ end
 ```julia
 using RDE
 using RDE_Env
-using DRiL: Box
+using Drill: Box
 
 struct USpanAndTargetObservation <: AbstractObservationStrategy end
 
@@ -233,7 +233,7 @@ end
 
 ```julia
 using RDE_Env
-using DRiL: Box
+using Drill: Box
 struct TargetOffsetPressureAction <: AbstractScalarActionStrategy end
 
 RDE_Env._action_space(::RDEEnv, ::TargetOffsetPressureAction) = Box([-1.0], [1.0])
@@ -277,13 +277,13 @@ function RDE_Env.compute_reward(
 end
 ```
 
-### Custom policy (DRiL)
-`run_policy` collects a trajectory from the environment using actions from the supplied policy at every step. It accepts any `policy::DRiL.AbstractPolicy` and calls it as `policy(obs; deterministic = true)`.
+### Custom policy (Drill)
+`run_policy` collects a trajectory from the environment using actions from the supplied policy at every step. It accepts any `policy::Drill.AbstractPolicy` and calls it as `policy(obs; deterministic = true)`.
 
 ```julia
-using DRiL
+using Drill
 
-struct ConstantBoxPolicy{T} <: DRiL.AbstractPolicy
+struct ConstantBoxPolicy{T} <: Drill.AbstractPolicy
     action::T
 end
 
@@ -298,10 +298,10 @@ data = run_policy(policy, env)
 fig = plot_shifted_history(data, env.prob.x)
 ```
 
-## Training with DRiL
+## Training with Drill
 
 ```julia
-using DRiL
+using Drill
 using RDE_Env
 
 function make_env()
@@ -316,7 +316,7 @@ end
 env = BroadcastedParallelEnv([make_env() for _ in 1:16])
 env = MonitorWrapperEnv(env)
 
-alg = DRiL.PPO()
+alg = Drill.PPO()
 policy = ActorCriticLayer(observation_space(env), action_space(env))
 agent = ActorCriticAgent(policy; verbose = 2)
 
@@ -326,11 +326,11 @@ learn_stats, to = train!(agent, env, alg, 100_000)
 ## Evaluation with `run_policy`
 
 ```julia
-using DRiL
+using Drill
 using RDE_Env
 
 env = RDEEnv()
-policy = DRiL.RandomPolicy(env)
+policy = Drill.RandomPolicy(env)
 data = run_policy(policy, env; saves_per_action = 10)
 ```
 
@@ -351,7 +351,7 @@ For full details, use Julia help mode in the REPL:
 using RDE_Env
 
 env = RDEEnv()
-policy = DRiL.RandomPolicy(env)
+policy = Drill.RandomPolicy(env)
 data = run_policy(policy, env; saves_per_action = 10)
 
 fig = plot_policy_data(data, env)

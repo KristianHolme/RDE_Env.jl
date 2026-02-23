@@ -1,17 +1,17 @@
-abstract type AbstractRDEPolicy <: DRiL.AbstractPolicy end
+abstract type AbstractRDEPolicy <: Drill.AbstractPolicy end
 
 """
     _predict_action(policy::AbstractRDEPolicy, obs)
 """
 function _predict_action end
 
-function _predict_action(policy::DRiL.AbstractPolicy, observation)
+function _predict_action(policy::Drill.AbstractPolicy, observation)
     return policy(observation; deterministic = true)
 end
 
 
 # for multi-agent observations, make matrix into vector of observations
-function _predict_action(policy::DRiL.AbstractPolicy, observation::Matrix)
+function _predict_action(policy::Drill.AbstractPolicy, observation::Matrix)
     obs_batch = collect(eachcol(observation))
     return policy(obs_batch; deterministic = true)
 end
@@ -109,7 +109,7 @@ function run_policy(policy::AbstractPolicy, env::RDEEnv{T}; saves_per_action = 1
     ss, u_ps = get_init_control_data(env, env.action_strat, max_actions)
     rewards = get_init_rewards(env, env.reward_strat, max_actions)
     control_shifts = Vector{typeof(env.prob.control_shift_strategy)}(undef, max_actions)
-    action_space = DRiL.action_space(env)
+    action_space = Drill.action_space(env)
     is_scalar_action = size(action_space) == (1,)
     actions = if is_scalar_action
         Vector{T}(undef, max_actions)
@@ -259,7 +259,7 @@ function get_init_rewards(env::RDEEnv{T}, reward_strat::AbstractVectorRewardStra
 end
 
 function get_init_control_data(env::RDEEnv{T}, action_strat::AbstractActionStrategy, max_steps::Int) where {T}
-    a_space = DRiL.action_space(env)
+    a_space = Drill.action_space(env)
     rand_action = rand(a_space)
     if rand_action isa AbstractVector && length(rand_action) == 1
         A = T

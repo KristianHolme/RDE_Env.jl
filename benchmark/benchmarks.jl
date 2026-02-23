@@ -1,6 +1,6 @@
 using BenchmarkTools
 using RDE_Env
-using RDE_Env.DRiL
+using RDE_Env.Drill
 
 include("bench_utils.jl")
 using .BenchUtils
@@ -11,20 +11,20 @@ env_api = BenchmarkGroup()
 SUITE["env_api"] = env_api
 
 env_api["act!"] = @benchmarkable begin
-    DRiL.act!(env, action)
+    Drill.act!(env, action)
 end setup = begin
     env, rng = BenchUtils.setup_env()
     action = BenchUtils.setup_action(env, rng)
 end evals = 1 samples = BenchUtils.DEFAULT_SAMPLES
 
 env_api["observe"] = @benchmarkable begin
-    DRiL.observe(env)
+    Drill.observe(env)
 end setup = begin
     env, rng = BenchUtils.setup_env()
 end evals = 1 samples = BenchUtils.DEFAULT_SAMPLES
 
 env_api["reset!"] = @benchmarkable begin
-    DRiL.reset!(env)
+    Drill.reset!(env)
 end setup = begin
     env, rng = BenchUtils.setup_env()
 end evals = 1 samples = BenchUtils.DEFAULT_SAMPLES

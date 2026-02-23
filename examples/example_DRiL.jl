@@ -1,4 +1,4 @@
-using DRiL
+using Drill
 using RDE_Env
 using Zygote
 ##
@@ -17,7 +17,7 @@ end
 ##
 env = BroadcastedParallelEnv([make_RDE_Env(60.0f0, 3) for _ in 1:16])
 
-alg = DRiL.PPO()
+alg = Drill.PPO()
 env = MonitorWrapperEnv(env)
 # env = NormalizeWrapperEnv(env, gamma=alg.gamma)
 
