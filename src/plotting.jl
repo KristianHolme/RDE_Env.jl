@@ -532,7 +532,8 @@ function plot_shifted_history!(
     return nothing
 end
 
-function plot_shifted_history(
+function plot_shifted_history!(
+        layout::GridLayout,
         data::PolicyRunData,
         x::AbstractArray,
         c = :auto;
@@ -559,8 +560,6 @@ function plot_shifted_history(
         speeds = RDE.predict_speed.(u_ps, counts)
         c = speeds[1:(end - 1)]
     end
-    fig = Figure(size = size)
-    layout = fig[1, 1] = GridLayout()
     plot_shifted_history!(
         layout,
         us,
@@ -573,6 +572,13 @@ function plot_shifted_history(
         control_shifts = data.control_shifts,
         kwargs...
     )
+    return layout
+end
+
+function plot_shifted_history(data::PolicyRunData, x::AbstractArray, c = :auto; kwargs...)
+    fig = Figure(size = size)
+    layout = fig[1, 1] = GridLayout()
+    plot_shifted_history!(layout, data, x, c; kwargs...)
     resize_to_layout!(fig)
     return fig
 end
