@@ -539,6 +539,7 @@ function plot_shifted_history(
         use_rewards = true,
         max_jump_speed = 4.6f0,
         size = (1200, 600),
+        show_u_p = true,
         kwargs...
     )
     us, = RDE.split_sol(data.states)
@@ -566,7 +567,7 @@ function plot_shifted_history(
         x,
         data.state_ts,
         c;
-        u_ps = data.u_ps,
+        u_ps = show_u_p ? data.u_ps : nothing,
         rewards = use_rewards ? data.rewards : nothing,
         action_ts = data.action_ts,
         control_shifts = data.control_shifts,
