@@ -105,7 +105,7 @@ export section_midpoint_indices, section_midpoint_values
 
 # Plotting
 include("plotting.jl")
-export plot_policy_data, plot_shifted_history, plot_policy, animate_policy, animate_policy_data
+export plot_policy_data, plot_shifted_history, plot_shifted_history!, plot_policy, animate_policy, animate_policy_data
 
 include("interactive_control.jl")
 export interactive_control
