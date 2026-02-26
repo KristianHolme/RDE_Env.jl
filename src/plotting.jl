@@ -575,7 +575,7 @@ function plot_shifted_history!(
     return layout
 end
 
-function plot_shifted_history(data::PolicyRunData, x::AbstractArray, c = :auto, size = (1200, 600); kwargs...)
+function plot_shifted_history(data::PolicyRunData, x::AbstractArray, c = :auto; size = (1200, 600), kwargs...)
     fig = Figure(size = size)
     layout = fig[1, 1] = GridLayout()
     plot_shifted_history!(layout, data, x, c; kwargs...)
