@@ -79,7 +79,7 @@ function plot_policy_data!(
         observations = false,
         live_control = false,
         max_jump_speed = 4.6f0,
-        initial_moving_frame = true,
+        moving_frame = true,
         kwargs...
     )
     action_ts = data.action_ts
@@ -130,7 +130,7 @@ function plot_policy_data!(
     lab_to_plot_shift = @lift(Int(round(plot_frame_pos[$time_idx] / dx)))
 
     # Toggle for moving frame visualization
-    moving_frame_toggle = Observable(initial_moving_frame)
+    moving_frame_toggle = moving_frame isa Observable ? moving_frame : Observable(moving_frame)
 
     # Combined shift: 0 if toggle off, lab_to_plot_shift if toggle on
     plot_shift = @lift($moving_frame_toggle ? $lab_to_plot_shift : 0)
