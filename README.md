@@ -318,7 +318,7 @@ env = MonitorWrapperEnv(env)
 
 alg = Drill.PPO()
 policy = ActorCriticLayer(observation_space(env), action_space(env))
-agent = ActorCriticAgent(policy; verbose = 2)
+agent = Agent(policy, alg; verbose = 2)
 
 learn_stats, to = train!(agent, env, alg, 100_000)
 ```
