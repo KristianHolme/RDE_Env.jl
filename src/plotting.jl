@@ -388,7 +388,11 @@ function plot_shifted_history!(
         plot_shocks = true,
         title = nothing,
         u_hm_kwargs = (),
-        u_ax_kwargs = (),
+        u_ax_kwargs = (;
+            title = L"u(\psi, t)", xlabel = "Time", ylabel = L"\psi",
+            yzoomlock = true, ypanlock = true,
+            limits = (extrema(ts), extrema(x)), xautolimitmargin = (0.0, 0.0),
+        ),
         control_shifts = nothing,
         u_p_follow_u = true,
         movingframe = true,
@@ -402,9 +406,7 @@ function plot_shifted_history!(
     shifted_us = Array.(RDE.shift_inds(us, x, ts, c))
 
     ax = Axis(
-        layout[1, 1]; title = show_title ? L"u(\psi, t)" : "", xlabel = "Time",
-        ylabel = L"\psi", yzoomlock = true, ypanlock = true,
-        limits = (extrema(ts), extrema(x)), xautolimitmargin = (0.0, 0.0),
+        layout[1, 1];
         u_ax_kwargs...
     )
     hm = heatmap!(ax, ts, x, stack(shifted_us)', colorscale = identity, u_hm_kwargs...)
