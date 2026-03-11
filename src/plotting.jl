@@ -363,9 +363,9 @@ Create a space-time plot of the solution in a moving reference frame.
 function plot_shifted_history(
         us::AbstractArray, x::AbstractArray,
         ts::AbstractArray, c::Union{Real, AbstractArray} = 1.71;
-        size = (1200, 600)
+        fig_kwargs = (; size = (1200, 600))
     )
-    fig = Figure(size = size)
+    fig = Figure(fig_kwargs...)
     layout = fig[1, 1] = GridLayout()
     plot_shifted_history!(
         layout,
@@ -389,14 +389,14 @@ function plot_shifted_history!(
         title = nothing,
         u_hm_kwargs = (),
         u_ax_kwargs = (;
-            title = L"u(\psi, t)", xlabel = "Time", ylabel = L"\psi",
+            xlabel = "Time", ylabel = L"\psi",
             yzoomlock = true, ypanlock = true,
-            limits = (extrema(ts), extrema(x)), xautolimitmargin = (0.0, 0.0),
+            xautolimitmargin = (0.0, 0.0),
         ),
         control_shifts = nothing,
         u_p_follow_u = true,
         movingframe = true,
-        colorbar_label = false,
+        colorbar_label = true,
         show_title = true,
     )
 
@@ -530,6 +530,10 @@ function plot_shifted_history!(
         linkxaxes!(ax, ax4)
     end
     autolimits!(ax)
+    if haskey(u_ax_kwargs, :limits)
+        xlims!(ax, u_ax_kwargs[:limits][1])
+        ylims!(ax, u_ax_kwargs[:limits][2])
+    end
     if title !== nothing
         Label(layout[0, 1], title, tellwidth = false)
     end
