@@ -365,7 +365,7 @@ function plot_shifted_history(
         ts::AbstractArray, c::Union{Real, AbstractArray} = 1.71;
         fig_kwargs = (; size = (1200, 600))
     )
-    fig = Figure(fig_kwargs...)
+    fig = Figure(; fig_kwargs...)
     layout = fig[1, 1] = GridLayout()
     plot_shifted_history!(
         layout,
@@ -589,7 +589,7 @@ function plot_shifted_history(
         data::PolicyRunData, x::AbstractArray, c = :auto;
         fig_kwargs = (; size = (1200, 600)), kwargs...
     )
-    fig = Figure(fig_kwargs...)
+    fig = Figure(; fig_kwargs...)
     layout = fig[1, 1] = GridLayout()
     plot_shifted_history!(layout, data, x, c; kwargs...)
     resize_to_layout!(fig)
