@@ -531,8 +531,10 @@ function plot_shifted_history!(
     end
     autolimits!(ax)
     if haskey(u_ax_kwargs, :limits)
-        xlims!(ax, u_ax_kwargs[:limits][1])
-        ylims!(ax, u_ax_kwargs[:limits][2])
+        xlims = u_ax_kwargs[:limits][1]
+        ylims = u_ax_kwargs[:limits][2]
+        !isnothing(xlims) && xlims!(ax, xlims)
+        !isnothing(ylims) && ylims!(ax, ylims)
     end
     if title !== nothing
         Label(layout[0, 1], title, tellwidth = false)
