@@ -1,6 +1,6 @@
 module RDE_Env
 using CircularArrays: CircularArrays
-using DrillInterface: DrillInterface, AbstractEnv, AbstractParallelEnv, terminated, truncated, Box
+using DrillInterface: DrillInterface
 using DomainSets: DomainSets
 using LinearAlgebra: LinearAlgebra, norm
 using Logging: Logging, @logmsg, LogLevel
@@ -45,27 +45,28 @@ using Makie:
     xlims!,
     ylims!,
     @L_str
-using Observables: Observables, Observable, connect!, on
-using OrdinaryDiffEq: OrdinaryDiffEq, ODEProblem, ReturnCode, SciMLBase
-using PrecompileTools: PrecompileTools, @compile_workload
-using ProgressMeter: ProgressMeter, Progress, next!
-using RDE: RDE, AbstractControlShift, AbstractMethod, AbstractReset, RDEParam, RDEProblem,
+using Observables: Observable, Observables, connect!, on
+using OrdinaryDiffEq: ODEProblem, OrdinaryDiffEq, ReturnCode, SciMLBase
+using PrecompileTools: @compile_workload, PrecompileTools
+using ProgressMeter: Progress, next!
+using RDE: AbstractControlShift, AbstractMethod, AbstractReset, RDE, RDEParam, RDEProblem,
     RDE_RHS!, set_spatial_control_smoothing!
 using Random: Random
 using Statistics: Statistics, mean
 # using Polyester
 
 include("core.jl")
-export AbstractRDEEnv, AbstractActionStrategy, AbstractObservationStrategy, AbstractMultiAgentObservationStrategy,
-    AbstractRewardStrategy, AbstractScalarActionStrategy, AbstractVectorActionStrategy,
-    AbstractScalarRewardStrategy, AbstractVectorRewardStrategy
+export AbstractActionStrategy, AbstractMultiAgentObservationStrategy,
+    AbstractObservationStrategy, AbstractRDEEnv, AbstractRewardStrategy,
+    AbstractScalarActionStrategy, AbstractScalarRewardStrategy,
+    AbstractVectorActionStrategy, AbstractVectorRewardStrategy
 export compute_observation!
-export set_reward!, apply_action!, on_reset!, _observation_space
+export _observation_space, apply_action!, on_reset!, set_reward!
 export RDEEnv, RDEEnvCache
 export AbstractCache, NoCache, initialize_cache, reset_cache!
 export AbstractContextStrategy
 include("utils.jl")
-export get_plotting_speed_adjustments, get_avg_wave_speed
+export get_avg_wave_speed, get_plotting_speed_adjustments
 
 # Context
 include("contexts.jl")
@@ -81,31 +82,31 @@ export MovingFrameControlShift
 
 # Observation strategies
 include("observations/observations.jl")
-export
-    FullStateObservation, FullStateCenteredObservation
+export FullStateCenteredObservation, FullStateObservation
 
 # Rewards
 include("rewards/rewards.jl")
 export USpanReward
-export set_reward!, set_termination_reward!, compute_reward
+export compute_reward, set_reward!, set_termination_reward!
 export ScalarToVectorReward
 
 # Environment
 include("RLenv.jl")
-export _reset!, _act!, _observe, terminated
+export _act!, _observe, _reset!
 
 include("dril_interface.jl")
 export MultiAgentRDEEnv, _action_space, _multi_agent_action_space
 
 include("policies.jl")
-export AbstractPolicy, RandomPolicy, AbstractRDEPolicy, get_env
+export AbstractPolicy, AbstractRDEPolicy, RandomPolicy, get_env
 export PolicyRunData, run_policy
 export _predict_action
 export section_midpoint_indices, section_midpoint_values
 
 # Plotting
 include("plotting.jl")
-export plot_policy_data, plot_shifted_history, plot_shifted_history!, plot_policy, animate_policy, animate_policy_data
+export animate_policy, animate_policy_data, plot_policy, plot_policy_data,
+    plot_shifted_history, plot_shifted_history!
 
 include("interactive_control.jl")
 export interactive_control
