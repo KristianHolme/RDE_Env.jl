@@ -41,7 +41,7 @@ Multi-agent wrapper for the RDEEnv. Implements the DrillInterface.AbstractParall
 """
 struct MultiAgentRDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C} <: DrillInterface.AbstractParallelEnv
     core_env::RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C}
-    observation_space::DrillInterface.Box
+    observation_space::DrillInterface.Box #TODO abstract type?
     action_space::DrillInterface.Box
     n_envs::Int
     function MultiAgentRDEEnv(core_env::RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C}) where {T, A, O, RW, CS, V, OBS, M, RS, C}

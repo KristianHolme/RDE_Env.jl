@@ -1,4 +1,3 @@
-abstract type _AbstractEnv end
 abstract type AbstractRDEEnv <: DrillInterface.AbstractEnv end
 # Actions
 abstract type AbstractActionStrategy end

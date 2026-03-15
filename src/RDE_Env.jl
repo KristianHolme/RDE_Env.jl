@@ -124,7 +124,7 @@ include("displaying.jl")
             action_strat = DirectScalarPressureAction()
         )
 
-        policy = RandomPolicy(env)
+        policy = DrillInterface.RandomPolicy(env)
         data = run_policy(policy, env)
     catch e
         rethrow(e)

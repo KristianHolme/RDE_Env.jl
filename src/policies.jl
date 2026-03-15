@@ -1,5 +1,5 @@
 function DrillInterface.RandomPolicy(env::AbstractRDEEnv)
-    return RandomPolicy(DrillInterface.action_space(env))
+    return DrillInterface.RandomPolicy(DrillInterface.action_space(env))
 end
 
 abstract type AbstractRDEPolicy <: DrillInterface.AbstractPolicy end
