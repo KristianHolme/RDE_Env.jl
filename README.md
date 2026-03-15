@@ -7,6 +7,7 @@
 RDE_Env wraps the Rotating Detonation Engine (RDE) simulator from [RDE.jl](https://github.com/KristianHolme/RDE.jl) as a reinforcement learning environment built for [Drill.jl](https://github.com/KristianHolme/Drill.jl).
 
 It provides:
+
 - `RDEEnv` implementing the Drill environment interface
 - Swappable strategies (action/observation/reward/context) with optional caching
 - `run_policy` for evaluating any `Drill.AbstractPolicy`
@@ -18,7 +19,9 @@ It provides:
 ```julia
 ] add https://github.com/KristianHolme/RDE_Env.jl
 ```
+
 or
+
 ```julia
 using Pkg
 Pkg.add(url="https://github.com/KristianHolme/RDE_Env.jl")
@@ -46,6 +49,7 @@ reward = Drill.act!(env, action)
 ```
 
 ### Multi-agent wrapper
+
 To use a multi-agent interface, build a base `RDEEnv` with a multi-agent observation strategy and a vector action strategy, then wrap it in `MultiAgentRDEEnv`:
 
 ```julia
@@ -64,6 +68,7 @@ ma_env = MultiAgentRDEEnv(base_env)
 Strategies are regular Julia types that specialize a few methods. Most hooks receive a `context::AbstractCache` argument, which lets action/observation/reward share state.
 
 ### Caching model
+
 - `initialize_cache(strategy, N, T) -> cache::AbstractCache` (default returns `NoCache()`).
 - `reset_cache!(cache)` (default is no-op).
 - Caches live in `env.cache.*`:
@@ -73,16 +78,20 @@ Strategies are regular Julia types that specialize a few methods. Most hooks rec
   - `env.cache.context`
 
 ### Action strategies
+
 Subtype `AbstractScalarActionStrategy` or `AbstractVectorActionStrategy`.
 
 Implement:
+
 - `RDE_Env.apply_action!(env, action, action_strat, action_strat_cache, context::AbstractCache)`
 - `RDE_Env._action_space(env, action_strat)`
 
 Optional:
+
 - `initialize_cache(action_strat, N, T)`, `reset_cache!`
 
 #### Control interface (`u_p` and `s`)
+
 Action strategies are intended to control the underlying RDE solver by updating the control
 signals `u_p` and/or `s`. These live in the method cache at `env.prob.method.cache` as
 **length-`N` vectors over the spatial grid**:
@@ -99,44 +108,55 @@ typical action strategy should **copy current to previous before updating curren
 See [`src/actions/actions.jl`](src/actions/actions.jl) for the canonical implementations.
 
 ### Observation strategies
+
 Subtype `AbstractObservationStrategy` (or `AbstractMultiAgentObservationStrategy`).
 
 Implement:
+
 - `RDE_Env.compute_observation!(obs, env, strategy, observation_cache::AbstractCache, context::AbstractCache)`
 - `RDE_Env._observation_space(params::RDEParam{T}, strategy) where {T}`
 
 Multi-agent note:
+
 - Implement only `_observation_space` for the full observation space. For multi-agent strategies, this
   should be a matrix-valued `Box` where each column is an agent’s observation. The multi-agent wrapper
   derives its per-agent observation space via `_multi_agent_observation_space(full_space)` which takes
   a single column: `Box(full_space.low[:, 1], full_space.high[:, 1])`.
 
 Optional:
+
 - `initialize_cache(strategy, N, T)`, `reset_cache!`
 
 ### Reward strategies
+
 Subtype `AbstractScalarRewardStrategy` or `AbstractVectorRewardStrategy`.
 
 Implement:
+
 - `RDE_Env.compute_reward(env, rew_strat, reward_cache, context::AbstractCache)`
 
 Require:
+
 - Subtype either `AbstractScalarRewardStrategy` or `AbstractVectorRewardStrategy`.
 
 If using custom cache, implement:
+
 - `initialize_cache(rew_strat, N, T)`, `reset_cache!`
 
 Rewards may also set termination/truncation flags and store diagnostics in `env.info`.
 
 ### Context strategies (shared state)
+
 Subtype `AbstractContextStrategy`.
 
 If using custom cache, implement:
+
 - `initialize_cache(context_strat, N, T)` (default `NoCache()`)
 - `on_reset!(context_cache, context_strat, env)`
 - `on_step!(context_cache, context_strat, env)` (default no-op)
 
 ### Internal structure: `RDEEnv`, `RDEProblem`, and caches
+
 When implementing custom strategies, the most frequently used internals are:
 
 - `env.state`: the simulator state vector (layout is `u` then `λ`, each length `N`)
@@ -278,6 +298,7 @@ end
 ```
 
 ### Custom policy (Drill)
+
 `run_policy` collects a trajectory from the environment using actions from the supplied policy at every step. It accepts any `policy::Drill.AbstractPolicy` and calls it as `policy(obs; deterministic = true)`.
 
 ```julia
@@ -330,11 +351,12 @@ using Drill
 using RDE_Env
 
 env = RDEEnv()
-policy = Drill.RandomPolicy(env)
+policy = DrillInterface.RandomPolicy(env)
 data = run_policy(policy, env; saves_per_action = 10)
 ```
 
 ## Plotting (Makie)
+
 Several plotting functions are available:
 
 - `plot_policy_data(data, env; kwargs...)`: interactive figure for a recorded rollout (`PolicyRunData`) with a time scrubber and optional panels (rewards, controls, observations, etc.). This is the main entry point.
@@ -346,12 +368,11 @@ Several plotting functions are available:
 For full details, use Julia help mode in the REPL:
 `?plot_policy_data`, `?plot_shifted_history`, `?plot_policy`, `?animate_policy`, `?animate_policy_data`.
 
-
 ```julia
 using RDE_Env
 
 env = RDEEnv()
-policy = Drill.RandomPolicy(env)
+policy = DrillInterface.RandomPolicy(env)
 data = run_policy(policy, env; saves_per_action = 10)
 
 fig = plot_policy_data(data, env)

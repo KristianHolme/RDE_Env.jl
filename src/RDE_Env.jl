@@ -98,7 +98,7 @@ include("dril_interface.jl")
 export MultiAgentRDEEnv, _action_space, _multi_agent_action_space
 
 include("policies.jl")
-export AbstractPolicy, AbstractRDEPolicy, RandomPolicy, get_env
+export AbstractRDEPolicy, get_env
 export PolicyRunData, run_policy
 export _predict_action
 export section_midpoint_indices, section_midpoint_values

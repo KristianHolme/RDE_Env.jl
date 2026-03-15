@@ -1,40 +1,21 @@
-"""
-Minimal policy abstract type so RDE_Env does not depend on DrillInterface
-exporting AbstractPolicy. Compatible with the same call convention:
-`(policy)(obs; deterministic = true, rng = Random.default_rng())`.
-"""
-abstract type AbstractPolicy end
-
-"""
-Policy that samples random actions from the environment's action space.
-Use when DrillInterface does not provide RandomPolicy (e.g. older versions).
-"""
-struct RandomPolicy{S} <: AbstractPolicy
-    action_space::S
-end
-
-function RandomPolicy(env::AbstractRDEEnv)
+function DrillInterface.RandomPolicy(env::AbstractRDEEnv)
     return RandomPolicy(DrillInterface.action_space(env))
 end
 
-function (rp::RandomPolicy)(obs; deterministic::Bool = true, rng::Random.AbstractRNG = Random.default_rng())
-    return rand(rng, rp.action_space)
-end
-
-abstract type AbstractRDEPolicy <: AbstractPolicy end
+abstract type AbstractRDEPolicy <: DrillInterface.AbstractPolicy end
 
 """
     _predict_action(policy::AbstractRDEPolicy, obs)
 """
 function _predict_action end
 
-function _predict_action(policy::AbstractPolicy, observation)
+function _predict_action(policy::DrillInterface.AbstractPolicy, observation)
     return policy(observation; deterministic = true)
 end
 
 
 # for multi-agent observations, make matrix into vector of observations
-function _predict_action(policy::AbstractPolicy, observation::Matrix)
+function _predict_action(policy::DrillInterface.AbstractPolicy, observation::Matrix)
     obs_batch = collect(eachcol(observation))
     return policy(obs_batch; deterministic = true)
 end
@@ -118,7 +99,7 @@ policy = ConstantRDEPolicy(env)
 data = run_policy(policy, env, saves_per_action=10)
 ```
 """
-function run_policy(policy::AbstractPolicy, env::RDEEnv{T}; saves_per_action = 10) where {T}
+function run_policy(policy::DrillInterface.AbstractPolicy, env::RDEEnv{T}; saves_per_action = 10) where {T}
     _reset!(env)
     @assert saves_per_action ≥ 1 "saves_per_action must be at least 1"
 
