@@ -1,6 +1,6 @@
 module RDE_Env
 using CircularArrays: CircularArrays
-using Drill: Drill, AbstractPolicy, terminated
+using DrillInterface: DrillInterface, AbstractEnv, AbstractParallelEnv, terminated, truncated, Box
 using DomainSets: DomainSets
 using LinearAlgebra: LinearAlgebra, norm
 using Logging: Logging, @logmsg, LogLevel
@@ -98,7 +98,7 @@ include("dril_interface.jl")
 export MultiAgentRDEEnv, _action_space, _multi_agent_action_space
 
 include("policies.jl")
-export AbstractRDEPolicy, get_env
+export AbstractPolicy, RandomPolicy, AbstractRDEPolicy, get_env
 export PolicyRunData, run_policy
 export _predict_action
 export section_midpoint_indices, section_midpoint_values
@@ -123,7 +123,7 @@ include("displaying.jl")
             action_strat = DirectScalarPressureAction()
         )
 
-        policy = Drill.RandomPolicy(env)
+        policy = RandomPolicy(env)
         data = run_policy(policy, env)
     catch e
         rethrow(e)

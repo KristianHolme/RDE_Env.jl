@@ -1,11 +1,11 @@
-Drill.reset!(env::AbstractRDEEnv) = _reset!(env)
-Drill.act!(env::AbstractRDEEnv, action) = _act!(env, action)
-Drill.observe(env::AbstractRDEEnv) = _observe(env)
-Drill.terminated(env::AbstractRDEEnv) = env.terminated
-Drill.truncated(env::AbstractRDEEnv) = env.truncated
-Drill.get_info(env::AbstractRDEEnv) = env.info
-Drill.action_space(env::AbstractRDEEnv) = _action_space(env, env.action_strat)
-Drill.observation_space(env::AbstractRDEEnv) = _observation_space(env.prob.params, env.observation_strat)
+DrillInterface.reset!(env::AbstractRDEEnv) = _reset!(env)
+DrillInterface.act!(env::AbstractRDEEnv, action) = _act!(env, action)
+DrillInterface.observe(env::AbstractRDEEnv) = _observe(env)
+DrillInterface.terminated(env::AbstractRDEEnv) = env.terminated
+DrillInterface.truncated(env::AbstractRDEEnv) = env.truncated
+DrillInterface.get_info(env::AbstractRDEEnv) = env.info
+DrillInterface.action_space(env::AbstractRDEEnv) = _action_space(env, env.action_strat)
+DrillInterface.observation_space(env::AbstractRDEEnv) = _observation_space(env.prob.params, env.observation_strat)
 
 
 """
@@ -16,33 +16,33 @@ Get the action space for the environment and the action strategy.
 function _action_space end
 
 function _action_space(env::RDEEnv, ::DirectScalarPressureAction)
-    return Drill.Box([0.0f0], [Float32(env.u_pmax)])
+    return DrillInterface.Box([0.0f0], [Float32(env.u_pmax)])
 end
 function _action_space(env::RDEEnv, action_strat::DirectVectorPressureAction)
-    return Drill.Box(
+    return DrillInterface.Box(
         [0.0f0 for _ in 1:action_strat.n_sections],
         [Float32(env.u_pmax) for _ in 1:action_strat.n_sections]
     )
 end
 
-function _multi_agent_observation_space(obs_space::Drill.Box)
-    return Drill.Box(obs_space.low[:, 1], obs_space.high[:, 1])
+function _multi_agent_observation_space(obs_space::DrillInterface.Box)
+    return DrillInterface.Box(obs_space.low[:, 1], obs_space.high[:, 1])
 end
 
 function _multi_agent_action_space(env::RDEEnv, ::DirectVectorPressureAction)
-    return Drill.Box([0.0f0], [Float32(env.u_pmax)])
+    return DrillInterface.Box([0.0f0], [Float32(env.u_pmax)])
 end
 
 
 """
-    MultiAgentRDEEnv <: Drill.AbstractParallelEnv
+    MultiAgentRDEEnv <: DrillInterface.AbstractParallelEnv
 
-Multi-agent wrapper for the RDEEnv. Implements the Drill.AbstractParallelEnv interface.
+Multi-agent wrapper for the RDEEnv. Implements the DrillInterface.AbstractParallelEnv interface.
 """
-struct MultiAgentRDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C} <: Drill.AbstractParallelEnv
+struct MultiAgentRDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C} <: DrillInterface.AbstractParallelEnv
     core_env::RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C}
-    observation_space::Drill.Box
-    action_space::Drill.Box
+    observation_space::DrillInterface.Box
+    action_space::DrillInterface.Box
     n_envs::Int
     function MultiAgentRDEEnv(core_env::RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C}) where {T, A, O, RW, CS, V, OBS, M, RS, C}
         obs_strategy = core_env.observation_strat
@@ -59,16 +59,16 @@ struct MultiAgentRDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C} <: Drill.AbstractPara
     end
 end
 
-function Drill.reset!(env::MultiAgentRDEEnv)
+function DrillInterface.reset!(env::MultiAgentRDEEnv)
     return _reset!(env.core_env)
 end
 
-function Drill.observe(env::MultiAgentRDEEnv)
+function DrillInterface.observe(env::MultiAgentRDEEnv)
     observation_matrix = _observe(env.core_env)
     return collect.(eachslice(observation_matrix, dims = ndims(observation_matrix)))
 end
 
-function Drill.act!(env::MultiAgentRDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C}, actions::AbstractVector{<:AbstractVector}) where {T, A, O, RW, CS, V, OBS, M, RS, C}
+function DrillInterface.act!(env::MultiAgentRDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C}, actions::AbstractVector{<:AbstractVector}) where {T, A, O, RW, CS, V, OBS, M, RS, C}
     combined_action = vcat(actions...)::Vector{T}
     rewards = _act!(env.core_env, combined_action)::V
     info = env.core_env.info
@@ -89,9 +89,9 @@ end
 
 Random.seed!(env::MultiAgentRDEEnv, seed::Int) = Random.seed!(env.core_env, seed)
 
-Drill.observation_space(env::MultiAgentRDEEnv) = env.observation_space
-Drill.action_space(env::MultiAgentRDEEnv) = env.action_space
-Drill.number_of_envs(env::MultiAgentRDEEnv) = env.n_envs
-Drill.terminated(env::MultiAgentRDEEnv) = fill(env.core_env.terminated, env.n_envs)
-Drill.truncated(env::MultiAgentRDEEnv) = fill(env.core_env.truncated, env.n_envs)
-Drill.get_info(env::MultiAgentRDEEnv) = [copy(env.core_env.info) for _ in 1:env.n_envs]
+DrillInterface.observation_space(env::MultiAgentRDEEnv) = env.observation_space
+DrillInterface.action_space(env::MultiAgentRDEEnv) = env.action_space
+DrillInterface.number_of_envs(env::MultiAgentRDEEnv) = env.n_envs
+DrillInterface.terminated(env::MultiAgentRDEEnv) = fill(env.core_env.terminated, env.n_envs)
+DrillInterface.truncated(env::MultiAgentRDEEnv) = fill(env.core_env.truncated, env.n_envs)
+DrillInterface.get_info(env::MultiAgentRDEEnv) = [copy(env.core_env.info) for _ in 1:env.n_envs]

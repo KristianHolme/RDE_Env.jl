@@ -1,7 +1,7 @@
 using RDE_Env
 
 @testitem "Drill Single env methods" begin
-    using Drill
+    using DrillInterface
     using RDE
 
     function get_env()
@@ -26,19 +26,20 @@ using RDE_Env
     end
 
     env = get_env()
-    @test hasmethod(Drill.observation_space, (typeof(env),))
-    @test hasmethod(Drill.act!, (typeof(env), Any))
-    @test hasmethod(Drill.observe, (typeof(env),))
-    @test hasmethod(Drill.terminated, (typeof(env),))
-    @test hasmethod(Drill.truncated, (typeof(env),))
-    @test hasmethod(Drill.reset!, (typeof(env),))
-    @test hasmethod(Drill.action_space, (typeof(env),))
+    @test hasmethod(DrillInterface.observation_space, (typeof(env),))
+    @test hasmethod(DrillInterface.act!, (typeof(env), Any))
+    @test hasmethod(DrillInterface.observe, (typeof(env),))
+    @test hasmethod(DrillInterface.terminated, (typeof(env),))
+    @test hasmethod(DrillInterface.truncated, (typeof(env),))
+    @test hasmethod(DrillInterface.reset!, (typeof(env),))
+    @test hasmethod(DrillInterface.action_space, (typeof(env),))
 
     @test test_single_env_usage(env)
 end
 
 @testitem "Drill single env usage" begin
     using Drill
+    using DrillInterface
     using RDE
 
     function get_env()
@@ -66,14 +67,14 @@ end
 
     envs = [get_env() for _ in 1:4]
     env = BroadcastedParallelEnv(envs)
-    @test hasmethod(Drill.observation_space, (typeof(env),))
-    @test hasmethod(Drill.action_space, (typeof(env),))
-    @test hasmethod(Drill.number_of_envs, (typeof(env),))
-    @test hasmethod(Drill.reset!, (typeof(env),))
+    @test hasmethod(DrillInterface.observation_space, (typeof(env),))
+    @test hasmethod(DrillInterface.action_space, (typeof(env),))
+    @test hasmethod(DrillInterface.number_of_envs, (typeof(env),))
+    @test hasmethod(DrillInterface.reset!, (typeof(env),))
     # For parallel envs, act! takes a vector of actions
-    @test hasmethod(Drill.observe, (typeof(env),))
-    @test hasmethod(Drill.terminated, (typeof(env),))
-    @test hasmethod(Drill.truncated, (typeof(env),))
+    @test hasmethod(DrillInterface.observe, (typeof(env),))
+    @test hasmethod(DrillInterface.terminated, (typeof(env),))
+    @test hasmethod(DrillInterface.truncated, (typeof(env),))
 
     @test test_parallel_env_usage(env)
     monitored_env = MonitorWrapperEnv(env)
@@ -83,7 +84,7 @@ end
 end
 
 @testitem "Drill multi-agent env" begin
-    using Drill
+    using DrillInterface
     using RDE
 
     function get_multi_agent_env()
@@ -112,19 +113,20 @@ end
     end
 
     env = get_multi_agent_env()
-    @test hasmethod(Drill.observation_space, (typeof(env),))
-    @test hasmethod(Drill.action_space, (typeof(env),))
-    @test hasmethod(Drill.number_of_envs, (typeof(env),))
-    @test hasmethod(Drill.reset!, (typeof(env),))
+    @test hasmethod(DrillInterface.observation_space, (typeof(env),))
+    @test hasmethod(DrillInterface.action_space, (typeof(env),))
+    @test hasmethod(DrillInterface.number_of_envs, (typeof(env),))
+    @test hasmethod(DrillInterface.reset!, (typeof(env),))
     # Multi-agent envs act like parallel envs
-    @test hasmethod(Drill.observe, (typeof(env),))
-    @test hasmethod(Drill.terminated, (typeof(env),))
-    @test hasmethod(Drill.truncated, (typeof(env),))
+    @test hasmethod(DrillInterface.observe, (typeof(env),))
+    @test hasmethod(DrillInterface.terminated, (typeof(env),))
+    @test hasmethod(DrillInterface.truncated, (typeof(env),))
 
     @test test_parallel_env_usage(env)
 end
 
 @testitem "Drill multi-agent env usage" begin
+    using DrillInterface
     using Drill
     using RDE
 
@@ -163,7 +165,7 @@ end
 end
 
 @testitem "Drill SAVA env" begin
-    using Drill
+    using DrillInterface
     using RDE
 
     function get_SAVA_env()
@@ -178,18 +180,19 @@ end
     end
 
     env = get_SAVA_env()
-    @test hasmethod(Drill.observation_space, (typeof(env),))
-    @test hasmethod(Drill.action_space, (typeof(env),))
+    @test hasmethod(DrillInterface.observation_space, (typeof(env),))
+    @test hasmethod(DrillInterface.action_space, (typeof(env),))
     # Single envs don't have number_of_envs method
-    @test hasmethod(Drill.reset!, (typeof(env),))
-    @test hasmethod(Drill.act!, (typeof(env), typeof(rand(action_space(env)))))
-    @test hasmethod(Drill.observe, (typeof(env),))
-    @test hasmethod(Drill.terminated, (typeof(env),))
-    @test hasmethod(Drill.truncated, (typeof(env),))
+    @test hasmethod(DrillInterface.reset!, (typeof(env),))
+    @test hasmethod(DrillInterface.act!, (typeof(env), typeof(rand(action_space(env)))))
+    @test hasmethod(DrillInterface.observe, (typeof(env),))
+    @test hasmethod(DrillInterface.terminated, (typeof(env),))
+    @test hasmethod(DrillInterface.truncated, (typeof(env),))
 end
 
 @testitem "Drill SAVA env usage" begin
     using Drill
+    using DrillInterface
     using RDE
 
     function get_SAVA_env()

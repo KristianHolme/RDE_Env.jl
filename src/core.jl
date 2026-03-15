@@ -1,5 +1,5 @@
 abstract type _AbstractEnv end
-abstract type AbstractRDEEnv <: Drill.AbstractEnv end
+abstract type AbstractRDEEnv <: DrillInterface.AbstractEnv end
 # Actions
 abstract type AbstractActionStrategy end
 abstract type AbstractVectorActionStrategy <: AbstractActionStrategy end
