@@ -396,7 +396,7 @@ function plot_shifted_history!(
         control_shifts = nothing,
         u_p_follow_u = true,
         movingframe = true,
-        colorbar_label = true,
+        colorbar_label = L"u(\psi, t)",
         colorrange = nothing,
         show_title = true,
     )
@@ -411,7 +411,7 @@ function plot_shifted_history!(
         u_ax_kwargs...
     )
     hm = heatmap!(ax, ts, x, stack(shifted_us)', colorscale = identity, colorrange, u_hm_kwargs...)
-    Colorbar(layout[1, 2], hm, label = colorbar_label ? L"u(\psi, t)" : "")
+    Colorbar(layout[1, 2], hm, label = colorbar_label)
     if plot_shocks
         counts = RDE.count_shocks.(us, dx)
         ax2 = Axis(
