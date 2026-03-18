@@ -397,7 +397,7 @@ function plot_shifted_history!(
         u_p_follow_u = true,
         movingframe = true,
         colorbar_label = L"u(\psi, t)",
-        colorrange = nothing,
+        colorrange = Makie.Automatic(),
         show_title = true,
     )
 
