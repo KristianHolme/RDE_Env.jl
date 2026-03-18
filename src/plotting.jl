@@ -389,7 +389,7 @@ function plot_shifted_history!(
         title = nothing,
         u_hm_kwargs = (),
         u_ax_kwargs = (;
-            xlabel = "Time", ylabel = L"\psi",
+            xlabel = "Time", ylabel = L"x - \psi(t)",
             yzoomlock = true, ypanlock = true,
             xautolimitmargin = (0.0, 0.0),
         ),
@@ -397,7 +397,7 @@ function plot_shifted_history!(
         control_shifts = nothing,
         u_p_follow_u = true,
         movingframe = true,
-        colorbar_label = L"u(\psi, t)",
+        colorbar_label = L"u(x, t)",
         colorrange = Makie.Automatic(),
         show_title = true,
     )
