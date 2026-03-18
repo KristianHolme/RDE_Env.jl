@@ -498,7 +498,7 @@ function plot_shifted_history!(
             linkyaxes!(ax, ax3)
         else
             ax3 = Axis(
-                layout[end + 1, 1], xlabel = "Time", ylabel = L"u_p",
+                layout[end + 1, 1]; xlabel = "Time", ylabel = L"u_p",
                 limits = (nothing, (0.0, max(u_p_maximum * 1.05, 1.2))),
                 xautolimitmargin = (0.0, 0.0), u_p_ax_kwargs...
             )
