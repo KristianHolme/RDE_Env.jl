@@ -500,7 +500,7 @@ function plot_shifted_history!(
             ax3 = Axis(
                 layout[end + 1, 1], xlabel = "Time", ylabel = L"u_p",
                 limits = (nothing, (0.0, max(u_p_maximum * 1.05, 1.2))),
-                xautolimitmargin = (0.0, 0.0), up_ax_kwargs...
+                xautolimitmargin = (0.0, 0.0), u_p_ax_kwargs...
             )
             if !isempty(u_ax_kwargs) && haskey(u_ax_kwargs, :xticks)
                 ax3.xticks = u_ax_kwargs[:xticks]
