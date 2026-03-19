@@ -389,7 +389,7 @@ function plot_shifted_history!(
         title = nothing,
         u_hm_kwargs = (),
         u_ax_kwargs = (;
-            xlabel = "Time", ylabel = L"x - \psi(t)",
+            xlabel = "Time", ylabel = L"x - \psi(t) \,\mathrm{mod}\, 2\pi",
             yzoomlock = true, ypanlock = true,
             xautolimitmargin = (0.0, 0.0),
         ),
