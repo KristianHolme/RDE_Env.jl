@@ -3,6 +3,7 @@
 [![Build Status](https://github.com/KristianHolme/RDE_Env.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/KristianHolme/RDE_Env.jl/actions/workflows/CI.yml?query=branch%3Amain)
 [![Aqua](https://raw.githubusercontent.com/JuliaTesting/Aqua.jl/master/badge.svg)](https://github.com/JuliaTesting/Aqua.jl)
 [![JET](https://img.shields.io/badge/JET.jl-enabled-blue)](https://github.com/aviatesk/JET.jl)
+[![DOI](https://zenodo.org/badge/920515192.svg)](https://doi.org/10.5281/zenodo.19494743)
 
 RDE_Env wraps the Rotating Detonation Engine (RDE) simulator from [RDE.jl](https://github.com/KristianHolme/RDE.jl) as a reinforcement learning environment built for [Drill.jl](https://github.com/KristianHolme/Drill.jl).
 
