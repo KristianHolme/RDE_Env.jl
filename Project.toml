@@ -1,6 +1,6 @@
 name = "RDE_Env"
 uuid = "6fae0b71-e89e-4561-9656-794937ecd499"
-version = "0.0.1"
+version = "0.1.0"
 authors = ["Kristian Holme"]
 
 [deps]
