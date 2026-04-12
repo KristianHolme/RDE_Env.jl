@@ -17,15 +17,23 @@ It provides:
 
 ## Installation
 
+The package is registered in a custom package registry, `KristianHolmeRegistry`. To install the package through the registry, first add the registry.
+From the Julia REPL, type `]` to enter the Pkg REPL mode and run:
+
 ```julia
-] add https://github.com/KristianHolme/RDE_Env.jl
+pkg> registry add https://github.com/KristianHolme/KristianHolmeRegistry
 ```
 
-or
+and then install with
 
 ```julia
-using Pkg
-Pkg.add(url="https://github.com/KristianHolme/RDE_Env.jl")
+pkg> add RDE_Env
+```
+
+If you don't want to add the custom registry, you can install RDE.jl directly from github.
+
+```julia
+pkg> add https://github.com/KristianHolme/RDE_Env.jl
 ```
 
 ## Quickstart (single-agent)
