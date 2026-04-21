@@ -19,7 +19,7 @@ jobs:
         run: |
           import Pkg
           ENV["JULIA_PKG_SERVER"] = ""
-          Pkg.Registry.add("https://github.com/KristianHolme/KristianHolmeRegistry")
+          Pkg.Registry.add(url = "https://github.com/KristianHolme/KristianHolmeRegistry")
         shell: julia --color=yes {0}
       - uses: MilesCranmer/AirspeedVelocity.jl@action-v1
         with:
