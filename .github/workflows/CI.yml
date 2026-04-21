@@ -23,7 +23,6 @@ jobs:
       fail-fast: false
       matrix:
         version:
-          # - '1.10'# doesnt support [sources] in project.toml
           - '1'
           - 'pre'
         os:
@@ -37,5 +36,11 @@ jobs:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
       - uses: julia-actions/cache@v3
+      - name: Add KristianHolmeRegistry
+        run: |
+          import Pkg
+          ENV["JULIA_PKG_SERVER"] = ""
+          Pkg.Registry.add("https://github.com/KristianHolme/KristianHolmeRegistry")
+        shell: julia --color=yes {0}
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1

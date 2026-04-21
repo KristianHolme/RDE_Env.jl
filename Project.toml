@@ -21,10 +21,6 @@ Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 SciMLBase = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 
-[sources]
-DrillInterface = { url = "https://github.com/KristianHolme/Drill.jl", subdir = "DrillInterface", rev = "main" }
-RDE = { rev = "main", url = "https://github.com/KristianHolme/RDE.jl" }
-
 [compat]
 CircularArrays = "1"
 Colors = "0.13"
