@@ -394,6 +394,8 @@ function plot_shifted_history!(
             xautolimitmargin = (0.0, 0.0),
         ),
         u_p_ax_kwargs = (;),
+        u_p_color = :royalblue,
+        u_p_hm_kwargs = (),
         control_shifts = nothing,
         u_p_follow_u = true,
         movingframe = true,
@@ -492,7 +494,7 @@ function plot_shifted_history!(
             else
                 shifted_u_ps = copy(static_ref_u_ps)
             end
-            hm_u_ps = heatmap!(ax3, ts, x, stack(shifted_u_ps)')
+            hm_u_ps = heatmap!(ax3, ts, x, stack(shifted_u_ps)'; u_p_hm_kwargs...)
             Colorbar(layout[end, 2], hm_u_ps)
             # lines!.(Ref(ax3), Ref(action_ts), eachrow(stack(u_ps)), color = :royalblue)
             linkyaxes!(ax, ax3)
@@ -505,9 +507,9 @@ function plot_shifted_history!(
             if !isempty(u_ax_kwargs) && haskey(u_ax_kwargs, :xticks)
                 ax3.xticks = u_ax_kwargs[:xticks]
             end
-            stairs!(ax3, action_ts, u_ps, color = :royalblue, step = :post)
+            stairs!(ax3, action_ts, u_ps, color = u_p_color, step = :post)
 
-            lines!(ax3, [action_ts[end], ts[end]], [u_ps[end], u_ps[end]], color = :royalblue)
+            lines!(ax3, [action_ts[end], ts[end]], [u_ps[end], u_ps[end]], color = u_p_color)
         end
         linkxaxes!(ax, ax3)
     end
