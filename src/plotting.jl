@@ -300,9 +300,9 @@ function plot_policy_data!(
             sections = env.action_strat.n_sections
             section_size = N ÷ sections
 
-            # Raw u_p upsampled to full grid
+            # Raw u_p upsampled to full grid (same action index as control-history scatter)
             raw_u_p_upsampled = @lift begin
-                raw_u_p = u_ps[min(length(u_ps), $sparse_time_idx + 1)]
+                raw_u_p = u_ps[min(length(u_ps), $sparse_time_idx)]
                 reduce(vcat, [fill(raw_u_p[i], section_size) for i in 1:length(raw_u_p)])
             end
 
