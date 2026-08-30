@@ -27,8 +27,8 @@ Container for data collected during policy execution.
 
 # Fields
 - `action_ts::Vector{T}`: Time points for actions
-- `ss::Union{Vector{T}, Vector{Vector{T}}}`: Control parameter s at each action
-- `u_ps::Union{Vector{T}, Vector{Vector{T}}}`: Control parameter u_p at each action
+- `ss::Union{Vector{T}, Vector{Vector{T}}}`: Live `s` at each `state_ts` (scalar if uniform)
+- `u_ps::Union{Vector{T}, Vector{Vector{T}}}`: Live `u_p` at each `state_ts` (scalar if uniform)
 - `rewards::Union{Vector{T}, Vector{Vector{T}}}`: Rewards at each action
 - `actions::Union{Vector{T}, Vector{Vector{T}}}`: Raw actions at each step
 - `state_ts::Vector{T}`: Time points for states
@@ -110,9 +110,12 @@ function run_policy(policy::DrillInterface.AbstractPolicy, env::RDEEnv{T}; saves
 
     # Preallocate action-aligned arrays
     action_ts = Vector{T}(undef, max_actions)
-    ss, u_ps = get_init_control_data(env, env.action_strat, max_actions)
     rewards = get_init_rewards(env, env.reward_strat, max_actions)
-    control_shifts = Vector{typeof(env.prob.control_shift_strategy)}(undef, max_actions)
+    ShiftT = typeof(control_shift(env.prob))
+    control_shifts = Vector{ShiftT}(undef, max_actions)
+    uniform = is_uniform_injection(env.prob)
+    u_p_buf = zeros(T, N)
+    s_buf = zeros(T, N)
     action_space = DrillInterface.action_space(env)
     is_scalar_action = size(action_space) == (1,)
     actions = if is_scalar_action
@@ -133,9 +136,21 @@ function run_policy(policy::DrillInterface.AbstractPolicy, env::RDEEnv{T}; saves
     states = Vector{Vector{T}}(undef, max_state_points)
     state_ts = Vector{T}(undef, max_state_points)
 
-    # Save initial state
+    # Save initial state and live injection
     states[1] = copy(env.state)
     state_ts[1] = env.t
+    update_injection!(u_p_buf, s_buf, env.prob.injection, T(env.t))
+    if uniform
+        u_ps = Vector{T}(undef, max_state_points)
+        ss = Vector{T}(undef, max_state_points)
+        u_ps[1] = u_p_buf[1]
+        ss[1] = s_buf[1]
+    else
+        u_ps = Vector{Vector{T}}(undef, max_state_points)
+        ss = Vector{Vector{T}}(undef, max_state_points)
+        u_ps[1] = copy(u_p_buf)
+        ss[1] = copy(s_buf)
+    end
     total_state_steps = 1
 
     step = 0
@@ -145,7 +160,7 @@ function run_policy(policy::DrillInterface.AbstractPolicy, env::RDEEnv{T}; saves
         # Pre-action logging
         action_ts[step] = env.t
         observations[step] = _observe(env)
-        control_shifts[step] = deepcopy(env.prob.control_shift_strategy)
+        control_shifts[step] = deepcopy(control_shift(env.prob))
 
         # Compute action
         action = _predict_action(policy, copy(observations[step]))
@@ -166,20 +181,6 @@ function run_policy(policy::DrillInterface.AbstractPolicy, env::RDEEnv{T}; saves
 
         # Step environment
         _act!(env, action; saves_per_action)
-
-        # Record control summaries. This is the controls during the action step.
-        if eltype(ss) <: AbstractVector
-            sections = env.action_strat.n_sections
-            ss[step] = section_midpoint_values(env.prob.method.cache.s_current, sections)
-        elseif eltype(ss) <: Number
-            ss[step] = mean(env.prob.method.cache.s_current)
-        end
-        if eltype(u_ps) <: AbstractVector
-            sections = env.action_strat.n_sections
-            u_ps[step] = section_midpoint_values(env.prob.method.cache.u_p_current, sections)
-        elseif eltype(u_ps) <: Number
-            u_ps[step] = mean(env.prob.method.cache.u_p_current)
-        end
 
         # Collect solver states (drop first which is pre-action state)
         if typeof(env.prob.sol) == Nothing
@@ -212,12 +213,23 @@ function run_policy(policy::DrillInterface.AbstractPolicy, env::RDEEnv{T}; saves
             new_size = end_idx + max_actions * saves_per_action
             resize!(states, new_size)
             resize!(state_ts, new_size)
+            resize!(u_ps, new_size)
+            resize!(ss, new_size)
             max_state_points = new_size
         end
 
-        # Append copies of states
+        # Append copies of states and live injection at the same times
         for i in 1:n_states
             states[start_idx + i - 1] = copy(step_states[i])
+            t_i = T(step_ts[i])
+            update_injection!(u_p_buf, s_buf, env.prob.injection, t_i)
+            if uniform
+                u_ps[start_idx + i - 1] = u_p_buf[1]
+                ss[start_idx + i - 1] = s_buf[1]
+            else
+                u_ps[start_idx + i - 1] = copy(u_p_buf)
+                ss[start_idx + i - 1] = copy(s_buf)
+            end
         end
         state_ts[start_idx:end_idx] = step_ts
         total_state_steps += n_states
@@ -242,8 +254,8 @@ function run_policy(policy::DrillInterface.AbstractPolicy, env::RDEEnv{T}; saves
 
     # Trim arrays to actual size
     action_ts = action_ts[1:n_actions]
-    ss = ss[1:n_actions]
-    u_ps = u_ps[1:n_actions]
+    ss = ss[1:total_state_steps]
+    u_ps = u_ps[1:total_state_steps]
     rewards = rewards[1:n_actions]
     actions = actions[1:n_actions]
     observations = observations[1:n_actions]

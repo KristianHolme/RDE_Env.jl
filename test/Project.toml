@@ -12,4 +12,4 @@ TestItemRunner = "f8b46487-2199-4994-9208-9a1283c18c0a"
 [sources]
 Drill = { rev = "main", url = "https://github.com/KristianHolme/Drill.jl" }
 DrillInterface = { rev = "main", url = "https://github.com/KristianHolme/Drill.jl", subdir = "DrillInterface" }
-RDE = { rev = "main", url = "https://github.com/KristianHolme/RDE.jl" }
+RDE = { path = "/home/kristian/.julia/dev/RDE.jl" }

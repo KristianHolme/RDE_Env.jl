@@ -24,6 +24,13 @@ function _action_space(env::RDEEnv, action_strat::DirectVectorPressureAction)
         [Float32(env.u_pmax) for _ in 1:action_strat.n_sections]
     )
 end
+function _action_space(env::RDEEnv, action_strat::MultiStepPressureAction)
+    n = action_strat.n_sections * action_strat.n_steps
+    return DrillInterface.Box(
+        [0.0f0 for _ in 1:n],
+        [Float32(env.u_pmax) for _ in 1:n]
+    )
+end
 
 function _multi_agent_observation_space(obs_space::DrillInterface.Box)
     return DrillInterface.Box(obs_space.low[:, 1], obs_space.high[:, 1])

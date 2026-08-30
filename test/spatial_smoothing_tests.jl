@@ -1,34 +1,30 @@
 @testitem "RDEEnv applies spatial kernel width" begin
     using RDE
     params = RDEParam(N = 32, tmax = 0.1f0)
-    env = RDEEnv(; params, spatial_kernel_width = 8)
-    cache = env.prob.method.cache
-    @test cache.spatial_kernel_width == 9
-    @test length(cache.spatial_kernel) == 9
+    env = RDEEnv(;
+        params,
+        spatial_kernel_width = 8,
+        action_strat = DirectVectorPressureAction(; n_sections = 4),
+    )
+    profile = RDE.inner_profile(env.prob.injection)
+    @test profile isa SpatialMultiStepPressureProfile
+    @test length(profile.kernel) == 9
 end
 
-@testitem "RDEEnv RDE_RHS! uses smoothed controls" begin
+@testitem "RDEEnv commit-time spatial smoothing reduces jump" begin
     using RDE
     params = RDEParam{Float32}(N = 64, tmax = 1.0f0)
-    env = RDEEnv(; params, spatial_kernel_width = 9, τ_smooth = 1.0f0)
-    cache = env.prob.method.cache
-
-    cache.control_time = 0.0f0
-    cache.u_p_current .= vcat(fill(0.0f0, params.N ÷ 2), fill(1.0f0, params.N ÷ 2))
-    cache.u_p_previous .= cache.u_p_current
-    cache.s_current .= 1.0f0
-    cache.s_previous .= cache.s_current
-
+    env = RDEEnv(;
+        params,
+        spatial_kernel_width = 9,
+        τ_smooth = 0.1f0,
+        action_strat = DirectVectorPressureAction(; n_sections = 4),
+    )
+    target = vcat(fill(0.0f0, params.N ÷ 2), fill(1.0f0, params.N ÷ 2))
+    commit_schedule!(env.prob.injection, 0.0f0, 1.0f0, target)
+    committed = current_u_p(env.prob.injection)
     boundary_index = params.N ÷ 2 + 1
-    jump_raw = abs(cache.u_p_current[boundary_index] - cache.u_p_current[boundary_index - 1])
-
-    RDE.apply_spatial_smoothing!(cache.u_p_current, cache)
-    RDE.apply_spatial_smoothing!(cache.s_current, cache)
-
-    uλ = vcat(env.prob.u0, env.prob.λ0)
-    duλ = zeros(Float32, length(uλ))
-    RDE.RDE_RHS!(duλ, uλ, env.prob, 1.0f0)
-
-    jump_smoothed = abs(cache.u_p_t_shifted[boundary_index] - cache.u_p_t_shifted[boundary_index - 1])
+    jump_raw = abs(target[boundary_index] - target[boundary_index - 1])
+    jump_smoothed = abs(committed[boundary_index] - committed[boundary_index - 1])
     @test jump_smoothed < jump_raw
 end

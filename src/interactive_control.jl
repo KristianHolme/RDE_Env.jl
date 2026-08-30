@@ -177,7 +177,7 @@ function interactive_control(
     n_sections = is_vector_action ? action_strat.n_sections : 1
 
     # action_obs holds current action(s) in [0, u_pmax]
-    init_action_value = mean(env.prob.method.cache.u_p_current)
+    init_action_value = mean_u_p(env.prob.injection)
     action_obs = is_vector_action ? Observable(fill(init_action_value, n_sections)) : Observable(init_action_value)
 
     # Slider grid: action slider(s) + dt

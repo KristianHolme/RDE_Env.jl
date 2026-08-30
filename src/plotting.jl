@@ -233,7 +233,13 @@ function plot_policy_data!(
 
     if control_history
         metrics_action_layout_plots += 1
-        plot_s = !(norm(diff(ss)) ≈ 0)
+        plot_s = if isempty(ss)
+            false
+        elseif eltype(ss) <: AbstractVector
+            any(s -> s != ss[1], ss)
+        else
+            !(extrema(ss)[1] ≈ extrema(ss)[2])
+        end
 
         layout = metrics_action_layout::GridLayout
         ax_u_p = Axis(layout[metrics_action_layout_plots, 1], ylabel = L"u_p", yticklabelcolor = :royalblue)
@@ -250,22 +256,18 @@ function plot_policy_data!(
 
         if eltype(ss) <: AbstractVector && plot_s
             ax_s_local = ax_s::Axis
-            lines!.(Ref(ax_s_local), Ref(action_ts), eachrow(stack(ss)), color = :forestgreen)
+            lines!.(Ref(ax_s_local), Ref(state_ts), eachrow(stack(ss)), color = :forestgreen)
         elseif plot_s
             ax_s_local = ax_s::Axis
-            lines!(ax_s_local, action_ts, ss, color = :forestgreen)
+            lines!(ax_s_local, state_ts, ss, color = :forestgreen)
         end
 
         if eltype(u_ps) <: AbstractVector
-            stairs!.(Ref(ax_u_p), Ref(action_ts), eachrow(stack(u_ps)), color = :royalblue, step = :post)
-            for i in 1:length(u_ps[sparse_time_idx[]])
-                lines!(ax_u_p, [action_ts[end], state_ts[end]], [u_ps[end][i], u_ps[end][i]], color = :royalblue)
-                scatter!(ax_u_p, fine_time, @lift(u_ps[min($sparse_time_idx, length(u_ps))][i]), color = :royalblue)
-            end
+            lines!(ax_u_p, state_ts, mean.(u_ps), color = :royalblue)
+            scatter!(ax_u_p, fine_time, @lift(mean(u_ps[min($time_idx, length(u_ps))])), color = :royalblue)
         else
-            stairs!(ax_u_p, action_ts, u_ps, color = :royalblue, step = :post)
-            lines!(ax_u_p, [action_ts[end], state_ts[end]], [u_ps[end], u_ps[end]], color = :royalblue)
-            scatter!(ax_u_p, fine_time, @lift(u_ps[min($sparse_time_idx, length(u_ps))]), color = :royalblue)
+            lines!(ax_u_p, state_ts, u_ps, color = :royalblue)
+            scatter!(ax_u_p, fine_time, @lift(u_ps[min($time_idx, length(u_ps))]), color = :royalblue)
         end
 
         #Time indicator
@@ -297,29 +299,15 @@ function plot_policy_data!(
             limits = ((nothing, (-0.1, max(max_u_p * 1.1, 1.0e-3))))
         )
         if eltype(u_ps) <: AbstractVector
-            sections = env.action_strat.n_sections
-            section_size = N ÷ sections
-
-            # Raw u_p upsampled to full grid
-            raw_u_p_upsampled = @lift begin
-                raw_u_p = u_ps[min(length(u_ps), $sparse_time_idx + 1)]
-                reduce(vcat, [fill(raw_u_p[i], section_size) for i in 1:length(raw_u_p)])
+            u_p_t = @lift begin
+                field = u_ps[min(length(u_ps), $time_idx)]
+                circshift(field, -$plot_shift)
             end
-
-            # Two-stage shifting using Observable shifts:
-            # Stage 1: control_frame -> lab_frame (always if MovingFrameControlShift)
-            u_p_in_lab_frame = @lift(circshift($raw_u_p_upsampled, $control_to_lab_shift))
-            # Stage 2: lab_frame -> plot_frame (when toggle active, plot_shift is 0 otherwise)
-            u_p_t = @lift(circshift($u_p_in_lab_frame, -$plot_shift))
-
-
-            # Full grid x coordinates (always upsampled now)
-            u_p_pts = collect(1:N) / N * L
+            u_p_pts = collect(1:length(u_ps[1])) / length(u_ps[1]) * L
             lines!(ax_live_u_p, u_p_pts, u_p_t)
         else
-            stairs!(ax_live_u_p, action_ts, u_ps, color = :royalblue, step = :post)
-            lines!(ax_live_u_p, [action_ts[end], state_ts[end]], [u_ps[end], u_ps[end]], color = :royalblue)
-            scatter!(ax_live_u_p, fine_time, @lift(u_ps[min($sparse_time_idx, length(u_ps))]), color = :royalblue)
+            lines!(ax_live_u_p, state_ts, u_ps, color = :royalblue)
+            scatter!(ax_live_u_p, fine_time, @lift(u_ps[min($time_idx, length(u_ps))]), color = :royalblue)
         end
     end
 
@@ -445,58 +433,21 @@ function plot_shifted_history!(
                 title = L"u_p(\psi, t)",
                 u_ax_kwargs...
             )
-            points_per_section = length(x) ÷ length(u_ps[1])
-
-            # Upsample spatially: from coarse sections to fine grid (piecewise constant)
-            spatially_upsampled = map(u_ps) do u_p_coarse
-                # Each coarse value gets repeated points_per_section times
-                reduce(vcat, [fill(u_p_coarse[i], points_per_section) for i in 1:length(u_p_coarse)])
-            end
-
-            # For each fine timestep, find corresponding action timestep and shift appropriately
-            # This preserves the stationary nature of u_ps in the lab frame
-            upsampled_u_ps = map(enumerate(ts)) do (i, t)
-                # Find which action timestep this corresponds to (piecewise constant in time)
-                action_idx = searchsortedlast(action_ts, t)
-                action_idx = clamp(action_idx, 1, length(spatially_upsampled))
-                spatially_upsampled[action_idx]
-            end
-
-            @debug "upsampled_u_ps[]: $(length(upsampled_u_ps))"
-
-            # if we have a moving reference frame we shift u_p forwards to match u
-            static_ref_u_ps = deepcopy.(upsampled_u_ps)
-            if movingframe && !isnothing(control_shifts) && control_shifts[1] isa MovingFrameControlShift
-                control_ts = getproperty.(control_shifts, :t_last)
-                for i in eachindex(static_ref_u_ps)
-                    t = ts[i]
-                    control_ix = findlast(ct -> ct <= t, control_ts)
-                    if isnothing(control_ix)
-                        error("No control shift found for time $t, control_ts: $control_ts, i: $i, ts: $ts, action_ts: $action_ts")
-                    end
-                    shift_pos = RDE.get_control_shift(control_shifts[control_ix], x, t)
-                    shift = Int(round(shift_pos / dx))
-                    @debug "t: $(round(t, digits = 2)), control_ix: $control_ix, shift_pos: $(round(shift_pos, digits = 2)), shift: $shift"
-
-                    # Apply shifts
-                    if shift != 0
-                        circshift!(static_ref_u_ps[i], upsampled_u_ps[i], shift)
-                    end
+            fields = copy.(u_ps)
+            if length(fields) != length(ts)
+                aligned = Vector{eltype(fields)}(undef, length(ts))
+                for (i, t) in enumerate(ts)
+                    aligned[i] = fields[clamp(searchsortedlast(ts, t), 1, length(fields))]
                 end
-                c_at_action_ts = c[searchsortedlast.(Ref(ts), action_ts)]
-                @debug "c | control_speeds="
-                @debug display(hcat(c_at_action_ts, getproperty.(control_shifts, :velocity)))
+                fields = aligned
             end
-
-            # Now we shift u_p backwards, matching u
             if u_p_follow_u
-                shifted_u_ps = Array.(RDE.shift_inds(static_ref_u_ps, x, ts, c))
+                shifted_u_ps = Array.(RDE.shift_inds(fields, x, ts, c))
             else
-                shifted_u_ps = copy(static_ref_u_ps)
+                shifted_u_ps = fields
             end
             hm_u_ps = heatmap!(ax3, ts, x, stack(shifted_u_ps)'; u_p_hm_kwargs...)
             Colorbar(layout[end, 2], hm_u_ps)
-            # lines!.(Ref(ax3), Ref(action_ts), eachrow(stack(u_ps)), color = :royalblue)
             linkyaxes!(ax, ax3)
         else
             ax3 = Axis(
@@ -507,9 +458,7 @@ function plot_shifted_history!(
             if !isempty(u_ax_kwargs) && haskey(u_ax_kwargs, :xticks)
                 ax3.xticks = u_ax_kwargs[:xticks]
             end
-            stairs!(ax3, action_ts, u_ps, color = u_p_color, step = :post)
-
-            lines!(ax3, [action_ts[end], ts[end]], [u_ps[end], u_ps[end]], color = u_p_color)
+            lines!(ax3, ts, u_ps, color = u_p_color)
         end
         linkxaxes!(ax, ax3)
     end
@@ -567,10 +516,7 @@ function plot_shifted_history!(
         if eltype(u_ps) <: AbstractVector
             u_ps = mean.(u_ps)
         end
-        if saves_per_action > 1
-            u_ps = [u_ps[1]; repeat(u_ps[2:end], inner = saves_per_action)]
-        end
-        @assert length(u_ps) == length(counts) "length(u_ps) ($(length(u_ps))) != length(counts) ($(length(counts))), saves_per_action: $saves_per_action"
+        @assert length(u_ps) == length(counts) "length(u_ps) ($(length(u_ps))) != length(counts) ($(length(counts)))"
         speeds = RDE.predict_speed.(u_ps, counts)
         c = speeds[1:(end - 1)]
     end

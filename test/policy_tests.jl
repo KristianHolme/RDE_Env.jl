@@ -22,8 +22,8 @@
                 # Basic structure tests
                 @test data isa PolicyRunData
                 @test length(data.action_ts) > 0
-                @test length(data.ss) == length(data.action_ts)
-                @test length(data.u_ps) == length(data.action_ts)
+                @test length(data.ss) == length(data.state_ts)
+                @test length(data.u_ps) == length(data.state_ts)
                 @test length(data.rewards) == length(data.action_ts)
 
                 # Test state data length

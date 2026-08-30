@@ -49,8 +49,10 @@ using Observables: Observable, Observables, connect!, on
 using OrdinaryDiffEq: ODEProblem, OrdinaryDiffEq, ReturnCode, SciMLBase
 using PrecompileTools: @compile_workload, PrecompileTools
 using ProgressMeter: Progress, next!
-using RDE: AbstractControlShift, AbstractMethod, AbstractReset, RDE, RDEParam, RDEProblem,
-    RDE_RHS!, set_spatial_control_smoothing!
+using RDE: AbstractControlShift, AbstractInjectionProfile, AbstractMethod, AbstractReset,
+    RDE, RDEParam, RDEProblem, RDE_RHS!, commit_schedule!, commit_reset_injection!,
+    control_shift, current_u_p, default_spatial_injection, default_uniform_injection,
+    is_uniform_injection, mean_u_p, previous_u_p, update_injection!, wrap_injection
 using Random: Random
 using Statistics: Statistics, mean
 # using Polyester
@@ -74,7 +76,8 @@ export NoContextStrategy
 
 # Actions
 include("actions/actions.jl")
-export DirectScalarPressureAction, DirectVectorPressureAction, momentum
+export DirectScalarPressureAction, DirectVectorPressureAction, MultiStepPressureAction, momentum
+export commit_uniform_u_p!, commit_section_u_p!, fill_sections!
 
 # Control shift strategies
 include("control_shift.jl")

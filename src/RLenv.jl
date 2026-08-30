@@ -86,12 +86,12 @@ function RDEEnv(;
     # else
     #     control_shift_strategy = ZeroControlShift()
     # end
-    #TODO: remember to supply control shift strategy in kwargs if applicable
-    prob = RDEProblem(params; kwargs...)
-    if !isnothing(prob.method.cache)
-        method_cache = prob.method.cache::RDE.FVCache{T}
-        RDE.set_spatial_control_smoothing!(method_cache, spatial_kernel_width)
+    injection = if hasproperty(action_strat, :n_sections) && action_strat.n_sections > 1
+        default_spatial_injection(params, T(τ_smooth), spatial_kernel_width)
+    else
+        default_uniform_injection(params, T(τ_smooth))
     end
+    prob = RDEProblem(params; injection, kwargs...)
     initial_state = vcat(prob.u0, prob.λ0)
     ode_problem = ODEProblem{true, SciMLBase.FullSpecialize}(RDE_RHS!, initial_state, (zero(T), dt), prob)
 
@@ -117,7 +117,7 @@ function RDEEnv(;
 
     M = typeof(prob.method)
     RS = typeof(prob.reset_strategy)
-    C = typeof(prob.control_shift_strategy)
+    C = typeof(prob.injection)
 
     env = RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C}(
         prob, initial_state, init_observation,
@@ -217,7 +217,6 @@ function _act!(env::RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C}, action; saves_per
     prob = env.prob::RDEProblem{T}
     tmax = params.tmax
     t = env.t
-    method_cache = prob.method.cache
     env_cache = env.cache
     if t > tmax
         @warn "t > tmax! ($(t) > $(tmax))"
@@ -227,16 +226,12 @@ function _act!(env::RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C}, action; saves_per
     env_cache.prev_u .= @view env.state[1:N]
     env_cache.prev_λ .= @view env.state[(N + 1):end]
 
-    method_cache.control_time::T = t
-
     action_to_apply = action
     if env.action_strat isa AbstractScalarActionStrategy && action isa AbstractVector
         @assert length(action) == 1 "Expected scalar action as length-1 vector"
         action_to_apply = action[1]
     end
     apply_action!(env, action_to_apply, env.action_strat, env.cache.action_cache, env.cache.context)
-    RDE.apply_spatial_smoothing!(method_cache.u_p_current, method_cache)
-    RDE.apply_spatial_smoothing!(method_cache.s_current, method_cache)
     dt = env.dt
     t_span = (t, t + dt)::Tuple{T, T}
 
@@ -292,10 +287,8 @@ function _reset!(env::RDEEnv{T, A, O, RW, CS, V, OBS, M, RS, C}) where {T, A, O,
     compute_observation!(env.observation, env, env.observation_strat, env.cache.observation_cache, env.cache.context)
     env.info = Dict{String, Any}()
 
-    #reset method cache
-    RDE._reset_cache!(env.prob.method.cache, τ_smooth = env.τ_smooth, params = env.prob.params)
-    RDE.apply_spatial_smoothing!(env.prob.method.cache.u_p_current, env.prob.method.cache)
-    RDE.apply_spatial_smoothing!(env.prob.method.cache.s_current, env.prob.method.cache)
+    commit_reset_injection!(env.prob)
+    RDE._reset_cache!(env.prob.method.cache; params = env.prob.params)
     #reset caches
     reset_cache!(env.cache)
     on_reset!(env.cache.context, env.context_strat, env)
