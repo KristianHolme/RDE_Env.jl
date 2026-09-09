@@ -99,20 +99,23 @@ Optional:
 
 - `initialize_cache(action_strat, N, T)`, `reset_cache!`
 
-#### Control interface (`u_p` and `s`)
+#### Control interface (`env.prob.injection`)
 
-Action strategies are intended to control the underlying RDE solver by updating the control
-signals `u_p` and/or `s`. These live in the method cache at `env.prob.method.cache` as
-**length-`N` vectors over the spatial grid**:
+Action strategies install a new injection schedule on `env.prob.injection`. They do
+**not** write method-cache control fields. Smoothing is handled by the profile itself
+(`τ_smooth`, plus `spatial_kernel_width` when the constructor picks a spatial profile).
 
-- `u_p_current::Vector{T}`, `u_p_previous::Vector{T}`
-- `s_current::Vector{T}`, `s_previous::Vector{T}`
+Typical path:
 
-Smoothing uses `*_previous` and `*_current` together with `control_time` and `τ_smooth`, so a
-typical action strategy should **copy current to previous before updating current**, e.g.:
+- Read the live field at `env.t` with `current_u_p(env.prob.injection)` if you need the
+  previous target (for example momentum).
+- Commit a schedule for `[env.t, env.t + env.dt]`:
+  - `commit_uniform_u_p!(env, target)` for a uniform scalar
+  - `commit_section_u_p!(env, section_targets, dest)` for piecewise-constant sections
+  - or `commit_schedule!(env.prob.injection, t0, t1, target; s = s)` for the full RDE API
 
-- `copyto!(method_cache.u_p_previous, method_cache.u_p_current)`
-- write new targets into `method_cache.u_p_current` (scalar or piecewise-constant over sections)
+`RDEEnv` chooses `default_uniform_injection` unless the action strategy has
+`n_sections > 1`, in which case it uses `default_spatial_injection`.
 
 See [`src/actions/actions.jl`](src/actions/actions.jl) for the canonical implementations.
 
@@ -170,7 +173,8 @@ When implementing custom strategies, the most frequently used internals are:
 
 - `env.state`: the simulator state vector (layout is `u` then `λ`, each length `N`)
 - `env.cache`: environment cache, including strategy caches and `prev_u/prev_λ`
-- `env.prob.method.cache`: solver method cache, including the control buffers (`u_p_current`, `s_current`, etc.)
+- `env.prob.injection`: injection profile that holds the `u_p`/`s` schedule; actions commit here
+- `env.prob.method.cache`: solver method cache (RHS internals, not the action write path)
 - `env.info`: dictionary for diagnostics (rewards may set termination/truncation and store reasons here)
 
 ```mermaid
@@ -183,16 +187,14 @@ flowchart TD
 
   prob --> params
   prob --> method
+  prob --> injection
   prob --> reset_strategy
   prob --> control_shift_strategy
   prob --> sol
 
   method --> method_cache
-  method_cache --> u_p_current
-  method_cache --> u_p_previous
-  method_cache --> s_current
-  method_cache --> s_previous
-  method_cache --> control_time
+  injection --> u_p_schedule
+  injection --> s_schedule
 
   RDEEnvCache --> prev_u
   RDEEnvCache --> prev_lambda
@@ -276,10 +278,7 @@ function RDE_Env.apply_action!(
     ) where {T <: AbstractFloat, A <: TargetOffsetPressureAction, O, RW, CS, V, OBS, M, RS, C}
     offset = context isa TargetContext ? T(context.target) * T(0.01) : zero(T)
     u_p = clamp(action + offset, zero(T), env.u_pmax)
-    method_cache = env.prob.method.cache
-    copyto!(method_cache.u_p_previous, method_cache.u_p_current)
-    method_cache.u_p_current .= u_p
-    copyto!(method_cache.s_previous, method_cache.s_current)
+    commit_uniform_u_p!(env, u_p)
     return nothing
 end
 ```
