@@ -1,7 +1,9 @@
 using TestItemRunner
 
 @testitem "Code quality (Aqua.jl)" tags = [:quality] begin
-    using Aqua, Pkg, RDE_Env
+    using Aqua, RDE_Env
+    Pkg = Aqua.Pkg
+    PackageSpec = Aqua.PackageSpec
     # Aqua 0.8.16 swallows the wrapper's stderr (`Pkg.precompile(; io = devnull)`),
     # so a child crash is reported as a persistent-task failure with no cause.
     Aqua.test_all(RDE_Env; persistent_tasks = false)
