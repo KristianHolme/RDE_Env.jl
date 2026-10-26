@@ -24,7 +24,7 @@ Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 [compat]
 CircularArrays = "1"
 Colors = "0.13"
-DrillInterface = "0.1"
+DrillInterface = "0.1, 0.2"
 DiffEqCallbacks = "4.9"
 DomainSets = "0"
 LinearAlgebra = "1"
